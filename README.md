@@ -74,6 +74,8 @@ export FLASK_APP=app.py
 flask run
 ```
 
+Which will run the app in `localhost:5000`.
+
 ### Docker
 
 For now, no `compose.yml` file is provided. You can build:
@@ -88,7 +90,7 @@ And run:
 docker run --name scflows -d -p 8000:5000 --rm scflows:latest
 ```
 
-Which will expose the app in `localhost:8000`.
+Which will run the app in `localhost:8000`.
 
 If you want to run `autoschedule`, `forward`, `checks` from the beginning, you should uncomment from `app/boot.sh` the following:
 

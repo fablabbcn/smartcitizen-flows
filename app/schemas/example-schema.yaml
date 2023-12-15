@@ -1,0 +1,10 @@
+topic:
+    origin: 'topic/<origin-matcher>/more-topic'
+    target: '/topic/<target-matcher>'
+payload: 'keep'
+destination:
+    broker: '<broker>'
+    port: <port>
+    credentials:
+        username: '<username>'
+        password: '<password>'

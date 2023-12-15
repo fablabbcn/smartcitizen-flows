@@ -1,0 +1,6 @@
+python-crontab==2.5.1
+smartcitizen-connector
+scdata
+paho-mqtt
+gunicorn
+flask

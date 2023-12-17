@@ -4,9 +4,9 @@ from flask import Flask, request, render_template, redirect, url_for
 import json
 from os.path import join
 from os import getcwd
-from .config import config
-from .cron import parsetabfiles, validate, savetabfiles, triggercrontab
-from .extras import get_dpath
+from config import config
+from cron import parsetabfiles, validate, savetabfiles, triggercrontab
+from extras import get_dpath
 
 app = Flask(__name__)
 

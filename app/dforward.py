@@ -6,34 +6,23 @@ import os
 import sys
 import yaml
 import re
+from tools import std_out
 
-# TODO - Remove
-devices_hack = {
-    16865: "ebnawm",
-    16866: "a1ab97",
-    16869: "d7f78b",
-    16870: "ea70ac",
-    16867: "89a779",
-    16868: "491877"
-}
+from config import config
+config._out_level = 'DEBUG'
 
 def get_devices(tag):
     d = search_by_query(endpoint='devices',key='tags_name', search_matcher='eq', value=tag)
     return d
 
 def load_schema(schema_file):
+    std_out (f"Loading schema: {schema_file}")
     if os.path.exists(schema_file):
         with open(schema_file, 'r') as file:
             schema = yaml.safe_load(file)
         return schema
     else:
         return None
-
-def oneLine(msg):
-    enablePrint()
-    sys.stdout.write(msg)
-    sys.stdout.flush()
-    if not verbose: blockPrint()
 
 def blockPrint():
     sys.stdout = open(os.devnull, 'w')
@@ -66,7 +55,7 @@ class MessageHandler:
             # Payload
             self.out_msg.payload = self.convert_payload(self.in_msg.payload, schema['payload'])
 
-        return self.out_msg
+        return self.out_msg.topic
 
     def convert_topic(self, topic, topic_map):
         origin_pty = re.search('<(.*)>', topic_map['origin'])
@@ -83,6 +72,7 @@ class MessageHandler:
             target_value = None
             pass
 
+        # print (f'Target value: {target_value}')
         if target_value is None: return None
         return topic_map['target'].replace(target_pty.group(0), str(target_value))
 
@@ -96,20 +86,16 @@ class MessageHandler:
         return True
 
 def on_connect(client, userdata, flags, rc):
-    print("Connected with result code "+str(rc))
+    std_out("Connected with result code "+str(rc))
     client.subscribe("bridge/sc/device/sck/+/readings/raw")
+    std_out("Subscribed")
 
 def on_message(client, userdata, msg):
 
     m = MessageHandler(msg)
-    msg = m.convert(schema)
-
-    if m.out_msg.topic is not None:
-        print ('Original msg')
-        print('\t' + msg.topic+" "+str(msg.payload))
-        print ('Destination msg')
-        print('\t' + str(m.out_msg.topic)+" "+str(m.out_msg.payload))
-
+    if m.convert(schema) is not None:
+        std_out(f'Original msg: {str(msg.topic)} {str(msg.payload)}')
+        std_out(f'Destination msg: {str(m.out_msg.topic)} {str(m.out_msg.payload)}')
         # dclient.publish(m.out_msg.topic, payload=str(m.out_msg.payload))
 
 if __name__ == '__main__':
@@ -141,17 +127,18 @@ if __name__ == '__main__':
     client = mqtt.Client()
     client.on_connect = on_connect
     client.on_message = on_message
-    print (f"Source broker: {environ['BROKER']}:{environ['PORT']}")
-    print (f"\tSource user: {environ['USER']}")
+    std_out (f"Source broker: {environ['BROKER']}:{environ['PORT']}")
+    std_out (f"Source user: {environ['USER']}")
     client.username_pw_set(environ['USER'], password=None)
     # TODO - Enable SSL
     client.connect(environ['BROKER'], int(environ['PORT']), 60)
     schema = load_schema(schema_file)
-    # TODO - Return the token for admin queries
+    if schema is None:
+        std_out (f"Issue with schema!", "WARNING")
+        sys.exit()
     # Get devices from that tag
     devices = get_devices(tag)
     devices['id'] = devices.index
-    devices['token'] = devices['id'].map(devices_hack)
 
     # Destination client
     # dclient = mqtt.Client()
@@ -164,5 +151,5 @@ if __name__ == '__main__':
     # dclient.connect(schema['destination']['broker'], int(schema['destination']['port']), 60)
 
     if not dry_run:
-        print ('Looping')
+        std_out('Looping...')
         client.loop_forever()

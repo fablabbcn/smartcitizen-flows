@@ -1,15 +1,11 @@
 # internal imports
-from scdata._config import config
+from config import config
 from scdata import Device
 from scdata.utils import std_out
 import sys
+import asyncio
 
-# Config settings
-config._out_level = 'DEBUG'
-config._timestamp = True
-config._avoid_negative_conc = True
-
-def dprocess(device, dryrun = False):
+async def dprocess(device, dryrun = False):
     '''
         This function processes a device from SC API assuming there
         is postprocessing information in it and that it's valid for doing
@@ -17,22 +13,24 @@ def dprocess(device, dryrun = False):
     '''
     std_out(f'[SCFLOW] Processing instance for device {device}')
     # Create device from SC API
-    d = Device(descriptor = {'source': 'api', 'id': f'{device}'})
-    if d.validate():
+    d = Device(source={'type': 'api',
+                        'module': 'smartcitizen_connector',
+                        'handler': 'SCDevice'},
+                params={'id': f'{device}'})
+    if d.valid_for_processing:
         # Load only unprocessed
-        if d.load(only_unprocessed=True, options = {'resample': False},
-            max_amount=config._max_load_amount):
+        d.min_date = d.handler.postprocessing.latest_postprocessing
+        d.resample = False
+        d.frequency = '1Min'
+        if await d.load(max_amount=config._max_load_amount):
+            std_out(f'[SCFLOW] Device {device} loaded')
             # Process it
             d.process()
             # Post results
-            d.post_metrics(dry_run=dry_run,
-                max_retries = config._max_forward_retries)
-            # Forward it if requested
-            if d.forwarding_request is not None:
-                std_out(f'[SCFLOW] Forwarding {device}')
-                d.forward(dry_run=dry_run,
-                    max_retries = config._max_forward_retries)
-            d.update_postprocessing(dry_run=dry_run)
+            if await d.post(columns = 'metrics', dry_run=dry_run,
+                max_retries=config._max_http_retries,
+                with_postprocessing=True):
+                std_out(f'[SCFLOW] Device {device} posted')
     else:
         std_out(f'[SCFLOW] Device {device} not valid', 'ERROR')
     std_out(f'[SCFLOW] Concluded job for {device}')
@@ -49,6 +47,11 @@ if __name__ == '__main__':
     if '--dry-run' in sys.argv: dry_run = True
     else: dry_run = False
 
+    loop = asyncio.get_event_loop()
+
     if '--device' in sys.argv:
         device = int(sys.argv[sys.argv.index('--device')+1])
-        dprocess(device, dry_run)
+        loop.run_until_complete(dprocess(device, dry_run))
+        loop.close()
+    else:
+        std_out('Missing device', 'ERROR')

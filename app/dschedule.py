@@ -2,48 +2,59 @@ from os.path import join
 from os import makedirs
 import sys
 
-from scdata._config import config
 from scdata.utils import std_out
-from scdata.io.device_api import ScApiDevice
+from smartcitizen_connector import search_by_query
 from scdata import Device
-
-config._out_level = 'DEBUG'
-config._timestamp = True
+import asyncio
 
 from scheduler import Scheduler
 
-def dschedule(interval_hours, dry_run = False):
+async def check_device(device):
+    try:
+        d = Device(
+            source={
+                'type': 'api',
+                'module': 'smartcitizen_connector',
+                'handler': 'SCDevice'},
+            params={'id': f'{device}'})
+        valid = d.valid_for_processing
+    except:
+        std_out(f'Device {device} returned an error, ignoring', 'ERROR')
+        pass
+    else:
+        return (device, valid)
+    return (device, False)
+
+async def dschedule(interval_hours, dry_run = False):
     '''
         This function schedules processing SC API devices based
         on the result of a global query for data processing
         in the SC API
     '''
     try:
-        df = ScApiDevice.search_by_query(key="postprocessing_id",
-                                         value="not_null", full= True)
+        df = search_by_query(endpoint = 'devices',
+            key="postprocessing_id", search_matcher="eq", value="not_null")
     except:
         pass
         return None
 
     # Check devices to postprocess first
-    dl = []
+    tasks = []
 
     for device in df.index:
-        std_out(f'[SCFLOW] Checking postprocessing for {device}')
-        scd = Device(descriptor={'source': 'api', 'id': device})
-        # Avoid scheduling invalid devices
-        if scd.validate(): dl.append(device)
-        else: std_out(f'[SCFLOW] Device {device} not valid', 'ERROR')
+        tasks.append(asyncio.ensure_future(check_device(device)))
+    dl = await asyncio.gather(*tasks)
 
     for d in dl:
+        if not d[1]: continue
         # Set scheduler
         s = Scheduler()
         # Define task
-        task = f'{config._device_processor}.py --device {d}'
+        task = f'{config._device_processor}.py --device {d[0]}'
         #Create log output if not existing
-        dt = join(config.paths['tasks'], str(d))
+        dt = join(config.paths['tasks'], str(d[0]))
         makedirs(dt, exist_ok=True)
-        log = f"{join(dt, f'{config._device_processor}_{d}.log')}"
+        log = f"{join(dt, f'{config._device_processor}_{d[0]}.log')}"
         # Schedule task
         s.schedule_task(task = task,
                         log = log,
@@ -57,7 +68,7 @@ if __name__ == '__main__':
         print('dschedule: Schedule tasks for devices to process in SC API')
         print('USAGE:\n\rdschedule.py [options]')
         print('options:')
-        print('--interval-hours: taks execution interval in hours (default: scdata.config._postprocessing_interval_hours)')
+        print('--interval-hours: task execution interval in hours (default: config._postprocessing_interval_hours)')
         print('--dry-run: dry run')
         sys.exit()
 
@@ -69,4 +80,7 @@ if __name__ == '__main__':
     else:
         interval = config._postprocessing_interval_hours
 
-    dschedule(interval, dry_run)
+    loop = asyncio.get_event_loop()
+
+    loop.run_until_complete(dschedule(interval, dry_run))
+    loop.close()

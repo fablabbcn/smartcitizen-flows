@@ -14,4 +14,12 @@ class Config(object):
         'tasks': 'tasks'
     }
 
+    _default_tabfile = 'tabfile'
+    _tabfile = 'tabfile'
+    _out_level = 'DEBUG'
+    _timestamp = True
+    _avoid_negative_conc = True
+    _max_load_amount = 500
+    _max_http_retries = 3
+
 config = Config()

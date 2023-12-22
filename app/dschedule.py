@@ -1,29 +1,31 @@
-from os.path import join
+from os.path import join, abspath
 from os import makedirs
 import sys
-
-from scdata.utils import std_out
-from smartcitizen_connector import search_by_query
-from scdata import Device
 import asyncio
 
+from tools import std_out
+from config import config
+from smartcitizen_connector import search_by_query, check_postprocessing
 from scheduler import Scheduler
+from requests import get
 
-async def check_device(device):
-    try:
-        d = Device(
-            source={
-                'type': 'api',
-                'module': 'smartcitizen_connector',
-                'handler': 'SCDevice'},
-            params={'id': f'{device}'})
-        valid = d.valid_for_processing
-    except:
-        std_out(f'Device {device} returned an error, ignoring', 'ERROR')
-        pass
-    else:
-        return (device, valid)
-    return (device, False)
+async def check_and_schedule(id, postprocessing, interval_hours, dry_run):
+    _,_,status = check_postprocessing(postprocessing)
+    if not status: return
+    # Set scheduler
+    s = Scheduler()
+    # Define task
+    task = f'{config._device_processor}.py --device {id}'
+    #Create log output if not existing
+    dt = abspath(join(config.paths['tasks'], str(id)))
+    if not dry_run: makedirs(dt, exist_ok=True)
+    log = f"{join(dt, f'{config._device_processor}_{id}.log')}"
+    # Schedule task
+    s.schedule_task(task = task,
+                    log = log,
+                    interval = f'{interval_hours}H',
+                    dry_run = dry_run,
+                    load_balancing = True)
 
 async def dschedule(interval_hours, dry_run = False):
     '''
@@ -41,26 +43,13 @@ async def dschedule(interval_hours, dry_run = False):
     # Check devices to postprocess first
     tasks = []
 
-    for device in df.index:
-        tasks.append(asyncio.ensure_future(check_device(device)))
-    dl = await asyncio.gather(*tasks)
+    for d in df.index:
+        tasks.append(check_and_schedule(id=d,
+            postprocessing=df.loc[d, 'postprocessing'],
+            interval_hours=interval_hours,
+            dry_run=dry_run))
 
-    for d in dl:
-        if not d[1]: continue
-        # Set scheduler
-        s = Scheduler()
-        # Define task
-        task = f'{config._device_processor}.py --device {d[0]}'
-        #Create log output if not existing
-        dt = join(config.paths['tasks'], str(d[0]))
-        makedirs(dt, exist_ok=True)
-        log = f"{join(dt, f'{config._device_processor}_{d[0]}.log')}"
-        # Schedule task
-        s.schedule_task(task = task,
-                        log = log,
-                        interval = f'{interval_hours}H',
-                        dry_run = dry_run,
-                        load_balancing = True)
+    await asyncio.gather(*tasks)
 
 if __name__ == '__main__':
 
@@ -84,3 +73,4 @@ if __name__ == '__main__':
 
     loop.run_until_complete(dschedule(interval, dry_run))
     loop.close()
+    # dschedule(interval, dry_run)

@@ -2,12 +2,10 @@ from crontab import CronTab
 from os.path import join, realpath, dirname
 import sys
 import subprocess
-
-from scdata._config import config
-from scdata.utils import std_out
 from numpy import zeros, random, where
-config._out_level = 'DEBUG'
-config._timestamp = True
+
+from config import config
+from tools import std_out
 
 class Scheduler(object):
     """Wrapper class for CronTab Task Scheduling"""

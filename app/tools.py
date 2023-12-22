@@ -2,6 +2,15 @@ from os import environ
 from termcolor import colored
 from config import config
 from datetime import datetime
+import re
+
+def url_checker(string):
+    if string is not None:
+        regex = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
+        url = re.findall(regex,string)
+        return [x[0] for x in url]
+    else:
+        return []
 
 def load_env(env_file):
     try:

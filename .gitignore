@@ -157,3 +157,5 @@ app/schemas/*.yaml
 .pytest_cache/
 
 tests/local
+
+*.tab

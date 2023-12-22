@@ -73,4 +73,3 @@ if __name__ == '__main__':
 
     loop.run_until_complete(dschedule(interval, dry_run))
     loop.close()
-    # dschedule(interval, dry_run)

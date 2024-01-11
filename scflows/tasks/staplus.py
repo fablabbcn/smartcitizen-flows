@@ -6,11 +6,12 @@ from smartcitizen_connector.sensor import get_sensors
 from smartcitizen_connector.measurement import get_measurements
 
 from invoke import task
+from requests import post
+import os
 import random
 import paho.mqtt.client as mqtt
 
 from scflows.tasks.handlers import SchemaHandler, MappingHandler, MessageHandler
-from scflows.tasks.authorize import authorize
 from scflows.tools import std_out, load_env, find_by_field
 from scflows.config import config
 config._out_level = 'DEBUG'
@@ -208,13 +209,22 @@ def staplus_mqtt_forward(c, verbose=False, dry_run=False, schema_file=None, crea
                 std_out(f'Destination msg: {str(m.out_msg.topic)} {str(m.out_msg.payload)}')
                 dclient.publish(m.out_msg.topic, payload=m.out_msg.payload)
 
+    def service_authorize():
+        headers = {'Authorization':'Basic ' + os.environ['SECD_BEARER'],
+            'Content-type': 'application/x-www-form-urlencoded',
+            'accept': 'application/json'}
+
+        r = post('https://www.authenix.eu/oauth/token', headers=headers, data = "grant_type=client_credentials&scope=citiobs.secd.eu#create openid")
+
+        return r.json()
     if schema_file is None:
         raise ValueError('Need to specify a schema file')
 
     schema = SchemaHandler(schema_file)
 
     if schema.raw['destination']['broker']['credentials']['password'] == '<on-demand>':
-        destination_token, _ = authorize()
+        response = service_authorize()
+        destination_token = response['access_token']
     else:
         destination_token = schema.raw['destination']['broker']['credentials']['password']
 

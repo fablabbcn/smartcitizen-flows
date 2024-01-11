@@ -1,33 +1,35 @@
-from os.path import join, abspath
+from os.path import join, abspath, dirname
 from os import makedirs
 import sys
 import asyncio
-
-from tools import std_out
-from config import config
-from smartcitizen_connector import search_by_query, check_postprocessing
-from scheduler import Scheduler
 from requests import get
+from smartcitizen_connector import search_by_query, check_postprocessing
 
-async def check_and_schedule(id, postprocessing, interval_hours, dry_run):
+from scflows.tools import std_out
+from scflows.config import config
+from scflows.tasks.scheduler import Scheduler
+from scflows.worker import app
+
+async def check_and_schedule(id, postprocessing, interval_hours, dry_run, celery):
     _,_,status = check_postprocessing(postprocessing)
     if not status: return
     # Set scheduler
     s = Scheduler()
     # Define task
-    task = f'{config._device_processor}.py --device {id}'
+    task = f"{config._device_processor}.py --device {id}"
     #Create log output if not existing
-    dt = abspath(join(config.paths['tasks'], str(id)))
-    if not dry_run: makedirs(dt, exist_ok=True)
+    dt = abspath(join(config.paths['public'], 'tasks', 'log', str(id)))
+    makedirs(dt, exist_ok=True)
     log = f"{join(dt, f'{config._device_processor}_{id}.log')}"
     # Schedule task
     s.schedule_task(task = task,
                     log = log,
                     interval = f'{interval_hours}H',
                     dry_run = dry_run,
-                    load_balancing = True)
+                    load_balancing = True,
+                    celery = celery)
 
-async def dschedule(interval_hours, dry_run = False):
+async def dschedule(interval_hours, dry_run = False, celery = False):
     '''
         This function schedules processing SC API devices based
         on the result of a global query for data processing
@@ -47,9 +49,14 @@ async def dschedule(interval_hours, dry_run = False):
         tasks.append(check_and_schedule(id=d,
             postprocessing=df.loc[d, 'postprocessing'],
             interval_hours=interval_hours,
-            dry_run=dry_run))
+            dry_run=dry_run,
+            celery = celery))
 
     await asyncio.gather(*tasks)
+
+@app.task(track_started=True, name='scflows.tasks.dschedule_task')
+def dschedule_task(interval_hours, dry_run = False):
+    asyncio.run(dschedule(interval_hours, dry_run, celery = True))
 
 if __name__ == '__main__':
 
@@ -58,6 +65,7 @@ if __name__ == '__main__':
         print('USAGE:\n\rdschedule.py [options]')
         print('options:')
         print('--interval-hours: task execution interval in hours (default: config._postprocessing_interval_hours)')
+        print('--celery: task execution is managed via celery worker')
         print('--dry-run: dry run')
         sys.exit()
 
@@ -69,7 +77,10 @@ if __name__ == '__main__':
     else:
         interval = config._postprocessing_interval_hours
 
-    loop = asyncio.get_event_loop()
+    if '--celery' in sys.argv:
+        dschedule_task.delay(interval, dry_run)
+    else:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(dschedule(interval, dry_run))
+        loop.close()
 
-    loop.run_until_complete(dschedule(interval, dry_run))
-    loop.close()

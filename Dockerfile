@@ -4,13 +4,15 @@ RUN apt-get update && apt-get -y install cron
 
 COPY .env .cache/scdata/.env
 COPY requirements.txt requirements.txt
-RUN pip install -r requirements.txt
+COPY scflows scflows
+COPY setup.py setup.py
 
-COPY app app
-WORKDIR app
-RUN chmod a+x boot.sh
+RUN pip install -r requirements.txt
+RUN python setup.py install
+
+WORKDIR /scflows
+# RUN chmod a+x boot.sh
 
 ENV FLASK_APP app.py
-
-EXPOSE 5000
-ENTRYPOINT ["./boot.sh"]
+# EXPOSE 5000
+# ENTRYPOINT ["./boot.sh"]

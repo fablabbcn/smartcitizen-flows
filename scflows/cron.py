@@ -39,7 +39,9 @@ def parsetabfiles(path):
     except IOError:
         traceback.print_exc()
         pass
-    return "Unable to read file"
+    except FileNotFoundError:
+        pass
+    return {}
 
 def validate(schedule, who, task, log):
     c=CronTab(user=True)

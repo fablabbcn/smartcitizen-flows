@@ -2,38 +2,39 @@
 
 from flask import Flask, request, render_template, redirect, url_for
 import json
-from os.path import join
+from os.path import join, exists
 from os import getcwd
-from config import config
-from cron import parsetabfiles, validate, savetabfiles, triggercrontab
-from extras import get_dpath
+from scflows.config import config
+from scflows.cron import parsetabfiles, validate, savetabfiles, triggercrontab
+from scflows.tools import get_tabfile_dir
 
 app = Flask(__name__)
 
-dpath=None
-cronthread = {}
+tabfile_dir=None
+cronthread={}
 
 @app.route('/', methods = ['GET', 'POST'])
 def default():
-    global dpath
+    global tabfile_dir
     error = None
     if request.method == 'POST':
         request.get_data()
-        dpath = request.form['path-tab-file']
-        if not dpath: error = 'Not a valid path'
+        tabfile_dir = request.form['path-tab-file']
+        if not tabfile_dir or not exists(tabfile_dir):
+            error = 'Not a valid path'
     else:
-        if dpath == '' or dpath is None:
-            if config.paths['tasks'].startswith('/'):
+        if tabfile_dir == '' or tabfile_dir is None:
+            if config.paths['public'].startswith('/'):
                 prepend = ''
             else:
                 prepend = getcwd()
-            dpath=join(prepend, config.paths['tasks'])
-    tabfiles = parsetabfiles(path=dpath)
-    return render_template("jobs.html", tabfiles=tabfiles, defaultpath=dpath, error=error)
+            tabfile_dir=join(prepend, config.paths['public'])
+    tabfiles = parsetabfiles(path=tabfile_dir)
+    return render_template("jobs.html", tabfiles=tabfiles, defaultpath=tabfile_dir, error=error)
 
 @app.route('/editjob/<tabfile>-<cron>', methods = ['POST', 'GET'])
 def editjob(tabfile,cron,error=None):
-    tabfiles=parsetabfiles(path=dpath)
+    tabfiles=parsetabfiles(path=tabfile_dir)
     if request.method == 'POST':
         request.get_data()
         # Form input
@@ -52,7 +53,7 @@ def editjob(tabfile,cron,error=None):
         tabfiles[tabfile][cron]['who']=who
         # Check error
         if not error:
-            savetabfiles(tabfiles=tabfiles, path=dpath)
+            savetabfiles(tabfiles=tabfiles, path=tabfile_dir)
             return redirect(url_for("default"))
     # Overwrite schedule to cope with lists or normal strings options
     tabfiles[tabfile][cron]['schedule'] = str(tabfiles[tabfile][cron]['schedule'])
@@ -63,19 +64,19 @@ def editjob(tabfile,cron,error=None):
 @app.route('/triggerjob/<tabfile>-<cron>', methods = ['POST'])
 def triggerjob(tabfile,cron):
     global cronthread
-    tabfiles=parsetabfiles(path=dpath)
+    tabfiles=parsetabfiles(path=tabfile_dir)
     if request.method == 'POST':
-        cronthread[cron] = triggercrontab(dpath,tabfile,cron)
+        cronthread[cron] = triggercrontab(tabfile_dir,tabfile,cron)
         if cronthread[cron] == False:
             error = "Job could not run as it's not valid"
-            return render_template("jobs.html", tabfiles=tabfiles, defaultpath=dpath, error=error)
+            return render_template("jobs.html", tabfiles=tabfiles, defaultpath=tabfile_dir, error=error)
         else:
             return redirect(url_for("logfile", tabfile=tabfile, cron=cron))
 
 @app.route('/tabfiles/<tabfile>')
 def tabfile(tabfile):
-    tabfiles = parsetabfiles(path=dpath)
-    tabpath = f"{dpath}/{tabfile}.tab"
+    tabfiles = parsetabfiles(path=tabfile_dir)
+    tabpath = f"{tabfile_dir}/{tabfile}.tab"
     tab = []
     with open(tabpath, 'r') as file:
         _tab = file.readlines()
@@ -88,7 +89,7 @@ def tabfile(tabfile):
 @app.route('/logfiles/<tabfile>-<cron>')
 def logfile(tabfile, cron):
     global cronthread
-    tabfiles = parsetabfiles(path=dpath)
+    tabfiles = parsetabfiles(path=tabfile_dir)
     logfile = tabfiles[tabfile][cron]['logfile']
     log = []
     with open(logfile, 'r') as file:
@@ -114,7 +115,7 @@ def logfile(tabfile, cron):
 
 @app.route('/jobfiles/<tabfile>-<cron>')
 def taskfile(tabfile, cron):
-    tabfiles = parsetabfiles(path=dpath)
+    tabfiles = parsetabfiles(path=tabfile_dir)
     taskfile = tabfiles[tabfile][cron]['task'].split(' ')[0]
     task = []
     with open(taskfile, 'r') as file:
@@ -124,14 +125,6 @@ def taskfile(tabfile, cron):
         if line != '':
             task.append(line)
     return render_template("file_viewer.html", file_type='task', cron=cron, file=task)
-
-@app.route('/checks')
-def checks():
-    error = None
-    if dpath == '' or dpath is None:
-        dpath=join(config.paths['tasks'], config._default_tabfile)
-    tabfiles = parsetabfiles(path=dpath)
-    return render_template("checks.html", file_type='task', cron=cron, file=task)
 
 if __name__ == '__main__':
    app.run(debug = True)

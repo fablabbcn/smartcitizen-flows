@@ -7,14 +7,12 @@ class Config(object):
     # Tasks
     _postprocessing_interval_hours = 1
     _device_processor = 'dprocess'
-    # Defaults
-    _default_tabfile = 'tabfile.tab'
 
     paths = {
-        'tasks': 'tasks'
+        'tasks': 'tasks',
+        'public': 'public'
     }
 
-    _default_tabfile = 'tabfile'
     _tabfile = 'tabfile'
     _out_level = 'DEBUG'
     _timestamp = True

@@ -1,6 +1,9 @@
 import sys
-from os.path import join, exists
+from os.path import join, exists, abspath
 from os import makedirs
+
+from scflows.tasks.scheduler import Scheduler
+from scflows.config import config
 
 if __name__ == '__main__':
 
@@ -12,15 +15,13 @@ if __name__ == '__main__':
         print('--force-first-run: force first time running job')
         print('--overwrite: overwrite if it exists already')
         print('actions: auto-schedule or device-schedule')
-        print('auto-schedule --interval-days <interval-days> (config._postprocessing_interval_hours):')
+        print('auto-schedule --celery --interval-days <interval-days> (config._postprocessing_interval_hours):')
         print('\tschedule devices postproccesing check based on device postprocessing in platform')
         print('\tauto-schedule makes a global task for checking on interval-days interval and then the actual tasks are scheduled based on default intervals')
         print('manual-schedule --device <device> --interval-hours <interval-hours> (config._postprocessing_interval_hours) [--task-file <file>.py]:')
         print('\tschedule device processing manually')
         sys.exit()
 
-    from scheduler import Scheduler
-    from config import config
 
     if '--dry-run' in sys.argv: dry_run = True
     else: dry_run = False
@@ -37,13 +38,21 @@ if __name__ == '__main__':
         else:
             interval = config._scheduler_interval_days
 
+        if '--celery' in sys.argv:
+            celery = True
+        else:
+            celery = False
+
         s = Scheduler()
+        log = abspath(join(config.paths['public'], 'tasks', 'log'))
+        makedirs(log, exist_ok=True)
         s.schedule_task(task = f'{config._device_scheduler}.py',
-                        log = join(config.paths['tasks'], config._scheduler_log),
+                        log = join(log, config._scheduler_log),
                         interval = f'{interval}D',
                         force_first_run = force_first_run,
                         overwrite = overwrite,
-                        dry_run = dry_run)
+                        dry_run = dry_run,
+                        celery = True)
         sys.exit()
 
     if 'manual-schedule' in sys.argv:
@@ -79,6 +88,6 @@ if __name__ == '__main__':
         print ('forward is a WIP')
         print (config)
 
-    if 'checks' in sys.argv:
+    if 'test-schedule' in sys.argv:
         print ('schedule is a WIP')
         print (config)

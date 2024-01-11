@@ -1,11 +1,13 @@
 # internal imports
-from config import config
 from scdata import Device
 from scdata.utils import std_out
+
 import sys
 import asyncio
+from scflows.worker import app
+from scflows.config import config
 
-async def dprocess(device, dryrun = False):
+async def dprocess(device, dry_run = False):
     '''
         This function processes a device from SC API assuming there
         is postprocessing information in it and that it's valid for doing
@@ -35,12 +37,18 @@ async def dprocess(device, dryrun = False):
         std_out(f'[SCFLOW] Device {device} not valid', 'ERROR')
     std_out(f'[SCFLOW] Concluded job for {device}')
 
+@app.task(track_started=True, name='scflows.tasks.dprocess_task')
+def dprocess_task(device, dry_run=False):
+    asyncio.run(dprocess(device, dry_run))
+
 if __name__ == '__main__':
 
     if '-h' in sys.argv or '--help' in sys.argv or '-help' in sys.argv:
         print('dprocess: Process device of SC API')
         print('USAGE:\n\rdprocess.py --device <device-number> [options]')
         print('options:')
+        print('--device <device-number>: device to process')
+        print('--celery: task execution is managed via celery worker')
         print('--dry-run: dry run')
         sys.exit()
 
@@ -51,7 +59,15 @@ if __name__ == '__main__':
 
     if '--device' in sys.argv:
         device = int(sys.argv[sys.argv.index('--device')+1])
-        loop.run_until_complete(dprocess(device, dry_run))
-        loop.close()
     else:
         std_out('Missing device', 'ERROR')
+        sys.exit()
+
+    if '--celery' in sys.argv:
+        dprocess_task.delay(device, dry_run)
+    else:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(dprocess(device, dry_run))
+        loop.close()
+
+

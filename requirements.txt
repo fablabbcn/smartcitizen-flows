@@ -4,3 +4,12 @@ scdata
 paho-mqtt
 gunicorn
 flask
+invoke
+celery
+flower
+
+staplus-api-python-client@git+https://github.com/securedimensions/STAplus-Python-Client@STAplus
+oauth2-client@git+https://github.com/securedimensions/OAuth2Client.git
+cryptography==3.4.6
+PyJWT
+hookdns

@@ -1,18 +1,18 @@
 from crontab import CronTab
-from os.path import join, realpath, dirname
+from os.path import join, realpath, dirname, abspath
 import sys
 import subprocess
 from numpy import zeros, random, where
 
-from config import config
-from tools import std_out
+from scflows.config import config
+from scflows.tools import std_out
 
 class Scheduler(object):
     """Wrapper class for CronTab Task Scheduling"""
     def __init__(self, tabfile = None):
         self.cron = CronTab(user=True)
         if tabfile is None:
-            self.tabfile = join(config.paths['tasks'], f'{config._tabfile}.tab')
+            self.tabfile = join(config.paths['public'], 'tasks' ,f'{config._tabfile}.tab')
         else:
             self.tabfile = tabfile
 
@@ -35,7 +35,7 @@ class Scheduler(object):
         return random.choice(where(slots == slots.min())[0])
 
     def schedule_task(self, task, log, interval, force_first_run = False,\
-        overwrite = False, dry_run = False, load_balancing = False):
+        overwrite = False, dry_run = False, load_balancing = False, celery = False):
         std_out(f'Setting up {task}...')
 
         # Find if the task is already there
@@ -54,8 +54,11 @@ class Scheduler(object):
         if dry_run: _dry_run = '--dry-run'
         else: _dry_run = ''
 
+        if celery: _celery = '--celery'
+        else: _celery = ''
+
         # Make command
-        instruction = f'{dirname(realpath(__file__))}/{task} {_dry_run}'
+        instruction = f'{dirname(realpath(__file__))}/{task} {_celery} {_dry_run}'
         command = f"{sys.executable} {instruction} >> {log} 2>&1"
         print (command)
 
@@ -101,3 +104,6 @@ class Scheduler(object):
         else:
             std_out(f'{comment} not running')
             return False
+
+if __name__ == '__main__':
+    app.start()

@@ -5,7 +5,7 @@ app = Celery('scflows',
     backend=environ['CELERY_RESULTS_BACKEND'],
     broker=environ['CELERY_BROKER'],
     include=[
-        'scflows.tasks.dschedule',
+        # 'scflows.tasks.dschedule',
         'scflows.tasks.dprocess'])
 
 app.conf.timezone = environ['CELERY_TIMEZONE']

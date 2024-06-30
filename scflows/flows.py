@@ -18,10 +18,9 @@ if __name__ == '__main__':
         print('auto-schedule --celery --interval-days <interval-days> (config._postprocessing_interval_hours):')
         print('\tschedule devices postproccesing check based on device postprocessing in platform')
         print('\tauto-schedule makes a global task for checking on interval-days interval and then the actual tasks are scheduled based on default intervals')
-        print('manual-schedule --device <device> --interval-hours <interval-hours> (config._postprocessing_interval_hours) [--task-file <file>.py]:')
+        print('manual-schedule --device <device> --interval-hours <interval-hours> (config._postprocessing_interval_hours) [--task-file <file>.py] [--celery]:')
         print('\tschedule device processing manually')
         sys.exit()
-
 
     if '--dry-run' in sys.argv: dry_run = True
     else: dry_run = False
@@ -38,21 +37,21 @@ if __name__ == '__main__':
         else:
             interval = config._scheduler_interval_days
 
+        # Celery back-end
         if '--celery' in sys.argv:
-            celery = True
+            _celery = '--celery'
         else:
-            celery = False
+            _celery = ''
 
         s = Scheduler()
-        log = abspath(join(config.paths['public'], 'tasks', 'log'))
+        log = abspath(join(config.paths['log']))
         makedirs(log, exist_ok=True)
-        s.schedule_task(task = f'{config._device_scheduler}.py',
+        s.schedule_task(task = f'{config._device_scheduler}.py {_celery}',
                         log = join(log, config._scheduler_log),
                         interval = f'{interval}D',
                         force_first_run = force_first_run,
                         overwrite = overwrite,
-                        dry_run = dry_run,
-                        celery = True)
+                        dry_run = dry_run)
         sys.exit()
 
     if 'manual-schedule' in sys.argv:
@@ -70,24 +69,23 @@ if __name__ == '__main__':
                 sys.exit()
         else:
             task = f'{config._device_processor}.py'
+
+        # Celery back-end
+        if '--celery' in sys.argv:
+            _celery = '--celery'
+        else:
+            _celery = ''
+
         # Setup scheduler
         s = Scheduler()
         device = int(sys.argv[sys.argv.index('--device')+1])
-        dt = join(config.paths['tasks'], str(device))
+        dt = join(config.paths['log'], str(device))
         makedirs(dt, exist_ok=True)
 
-        s.schedule_task(task = f'{task} --device {device}',
+        s.schedule_task(task = f'{task} --device {device} {_celery}',
                         log = join(dt, f'{device}.log'),
                         interval = f'{interval}H',
                         force_first_run = force_first_run,
                         overwrite = overwrite,
                         dry_run = dry_run)
         sys.exit()
-
-    if 'forward' in sys.argv:
-        print ('forward is a WIP')
-        print (config)
-
-    if 'test-schedule' in sys.argv:
-        print ('schedule is a WIP')
-        print (config)

@@ -1,3 +1,4 @@
+import logging
 class Config(object):
 
     # Scheduler
@@ -10,11 +11,13 @@ class Config(object):
 
     paths = {
         'tasks': 'tasks',
-        'public': 'public'
+        'public': 'public',
+        'tabs': 'public/tasks',
+        'log': 'public/tasks/log'
     }
 
     _tabfile = 'tabfile'
-    _out_level = 'DEBUG'
+    _log_level = logging.INFO
     _timestamp = True
     _avoid_negative_conc = True
     _max_load_amount = 500

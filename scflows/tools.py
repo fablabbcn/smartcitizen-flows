@@ -3,6 +3,7 @@ from os.path import expanduser, join, isdir
 from termcolor import colored
 from datetime import datetime
 from scflows.config import config
+from scflows.custom_logger import logger
 import re
 import sys
 import json
@@ -28,7 +29,7 @@ class LazyCallable(object):
         self.f = None
     def __call__(self, *a, **k):
         if self.f is None:
-            std_out(f"Loading {self.n.rsplit('.', 1)[1]} from {self.n.rsplit('.', 1)[0]}")
+            logger.info(f"Loading {self.n.rsplit('.', 1)[1]} from {self.n.rsplit('.', 1)[0]}")
             modn, funcn = self.n.rsplit('.', 1)
             if modn not in sys.modules:
                 __import__(modn)
@@ -39,7 +40,7 @@ def find_by_field(models, value, field):
     try:
         item = next(model for _, model in enumerate(models) if model.__getattribute__(field) == value)
     except StopIteration:
-        std_out(f'Column {field} not in models')
+        logger.info(f'Column {field} not in models')
         pass
     else:
         return item
@@ -69,30 +70,6 @@ def load_env(env_file):
         return False
     else:
         return True
-
-def std_out(msg, mtype = None):
-    out_level = config._out_level
-    if config._timestamp == True:
-        stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    else:
-        stamp = ''
-    # Output levels:
-    # 'QUIET': nothing,
-    # 'NORMAL': warn, err
-    # 'DEBUG': info, warn, err, success
-    if out_level == 'QUIET': priority = 0
-    elif out_level == 'NORMAL': priority = 1
-    elif out_level == 'DEBUG': priority = 2
-
-
-    if mtype is None and priority>1:
-        print(f'[{stamp}] - ' + '[INFO] ' + msg)
-    elif mtype == 'SUCCESS' and priority>0:
-        print(f'[{stamp}] - ' + colored('[SUCCESS] ', 'green') + msg)
-    elif mtype == 'WARNING' and priority>0:
-        print(f'[{stamp}] - ' + colored('[WARNING] ', 'yellow') + msg)
-    elif mtype == 'ERROR' and priority>0:
-        print(f'[{stamp}] - ' + colored('[ERROR] ', 'red') + msg)
 
 def get_tabfile_dir():
 

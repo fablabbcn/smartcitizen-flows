@@ -9,15 +9,16 @@ services:
       - 5672:5672
       - 15672:15672
 
-  # flows:
-  #   build: ./
-  #   env_file:
-  #   - .env
-  #   command: python flows.py auto-schedule --dry-run --celery --force-first-run --overwrite
-  #   depends_on:
-  #   - celery
-  #   restart: unless-stopped
-  #   stop_grace_period: 3s
+  flows:
+    build: ./
+    env_file:
+      - .env
+    command: ["cron", "-f"]
+    # command: python flows.py auto-schedule --dry-run --celery --force-first-run --overwrite
+    depends_on:
+      - celery
+    volumes:
+      - ./scflows/public:/scflows/public
 
   web:
     build: ./
@@ -25,7 +26,7 @@ services:
       - rabbitmq
     env_file:
       - .env
-    command: gunicorn --workers 3 --bind 0.0.0.0:5000 -m 007 wsgi:app --error-logfile - --access-logfile -
+    command: gunicorn --workers 3 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
     # healthcheck:
     #   test: "${DOCKER_HEALTHCHECK_TEST:-curl localhost:18000/healthy}"
     #   interval: "60s"
@@ -33,7 +34,7 @@ services:
     #   start_period: "5s"
     #   retries: 3
     ports:
-      - 18000:5000
+      - 5000:5000
     restart: unless-stopped
     stop_grace_period: 3s
     volumes:
@@ -41,10 +42,10 @@ services:
 
   celery:
     build: ./
-    command: celery --app worker:app worker -l info
+    command: celery --app worker:app worker -l info --autoscale=4,2
     depends_on:
       - rabbitmq
-    user: nobody
+    # user: nobody
     env_file:
       - .env
     restart: unless-stopped
@@ -57,7 +58,6 @@ services:
     command: celery flower -l info -app worker:tasks
     depends_on:
       - celery
-      - rabbitmq
     user: nobody
     env_file:
       - .env
@@ -66,4 +66,4 @@ services:
     volumes:
       - ./scflows/public:/scflows/public
     ports:
-      - 15555:5555
+      - 5555:5555

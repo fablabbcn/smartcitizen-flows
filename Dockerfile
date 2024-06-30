@@ -1,18 +1,17 @@
-FROM python:3.9
+FROM python:3.11
 
-RUN apt-get update && apt-get -y install cron
+RUN apt-get update && apt-get -y install cron nano
 
-COPY .env .cache/scdata/.env
+# COPY .env .cache/scdata/.env
+COPY .env /etc/environment
 COPY requirements.txt requirements.txt
 COPY scflows scflows
 COPY setup.py setup.py
 
 RUN pip install -r requirements.txt
-RUN python setup.py install
+# RUN python setup.py install
+RUN pip install -e .
 
 WORKDIR /scflows
-# RUN chmod a+x boot.sh
 
-ENV FLASK_APP app.py
-# EXPOSE 5000
-# ENTRYPOINT ["./boot.sh"]
+# ENV FLASK_APP app.py

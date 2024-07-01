@@ -2,6 +2,8 @@ services:
 
   proxy:
     image: nginx:1-alpine
+    environment:
+      - DOMAIN
     command: “/bin/sh -c ‘while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \”daemon off;\”‘”
     volumes:
       - ./scflows/public/nginx/conf/:/etc/nginx/conf.d/:ro

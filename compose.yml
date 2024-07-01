@@ -2,11 +2,9 @@ services:
 
   proxy:
     image: nginx:1-alpine
-    environment:
-      - DOMAIN
-    command: “/bin/sh -c ‘while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \”daemon off;\”‘”
     volumes:
-      - ./scflows/public/nginx/conf/:/etc/nginx/conf.d/:ro
+      - ./scflows/public/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./scflows/public/nginx/conf/conf.d/:/etc/nginx/conf.d/:ro
       - ./scflows/public/nginx/auth/.htpasswd:/etc/nginx/.htpasswd:ro
       - ./scflows/public/certbot/www/:/var/www/certbot/:ro
     ports:
@@ -15,13 +13,6 @@ services:
     networks:
       - internal-network
     restart: always
-
-  certbot:
-    image: certbot/certbot:latest
-    entrypoint: “/bin/sh -c ‘trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'”
-    volumes:
-      - ./scflows/public/certbot/www/:/var/www/certbot/:rw
-      - ./scflows/public/certbot/conf/:/etc/letsencrypt/:rw
 
   rabbitmq:
     image: rabbitmq:latest
@@ -40,7 +31,6 @@ services:
     env_file:
       - .env
     command: ["cron", "-f"]
-    # command: python flows.py auto-schedule --dry-run --celery --force-first-run --overwrite
     depends_on:
       - celery
     volumes:
@@ -87,7 +77,7 @@ services:
 
   flower:
     build: ./
-    command: celery flower -l info -app worker:tasks
+    command: celery flower -l info -app worker:tasks -url-prefix=flower
     depends_on:
       - celery
     user: nobody

@@ -139,4 +139,6 @@ And then:
 python flows.py auto-schedule --celery
 ```
 
-You will see the
+### Deploying
+
+For actual deployment, you can use the provided `nginx` reverse proxy configuration.

@@ -1,4 +1,26 @@
 services:
+
+  proxy:
+    image: nginx:1-alpine
+    command: “/bin/sh -c ‘while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \”daemon off;\”‘”
+    volumes:
+      - ./scflows/public/nginx/conf/:/etc/nginx/conf.d/:ro
+      - ./scflows/public/nginx/auth/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./scflows/public/certbot/www/:/var/www/certbot/:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - internal-network
+    restart: always
+
+  certbot:
+    image: certbot/certbot:latest
+    entrypoint: “/bin/sh -c ‘trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'”
+    volumes:
+      - ./scflows/public/certbot/www/:/var/www/certbot/:rw
+      - ./scflows/public/certbot/conf/:/etc/letsencrypt/:rw
+
   rabbitmq:
     image: rabbitmq:latest
     env_file:
@@ -8,6 +30,8 @@ services:
     ports:
       - 5672:5672
       - 15672:15672
+    networks:
+      - internal-network
 
   flows:
     build: ./
@@ -19,6 +43,8 @@ services:
       - celery
     volumes:
       - ./scflows/public:/scflows/public
+    networks:
+      - internal-network
 
   web:
     build: ./
@@ -39,6 +65,8 @@ services:
     stop_grace_period: 3s
     volumes:
       - ./scflows/public:/scflows/public
+    networks:
+      - internal-network
 
   celery:
     build: ./
@@ -52,6 +80,8 @@ services:
     stop_grace_period: 3s
     volumes:
       - ./scflows/public:/scflows/public
+    networks:
+      - internal-network
 
   flower:
     build: ./
@@ -67,3 +97,8 @@ services:
       - ./scflows/public:/scflows/public
     ports:
       - 5555:5555
+    networks:
+      - internal-network
+
+networks:
+  internal-network:

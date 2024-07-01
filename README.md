@@ -2,6 +2,8 @@
 
 This repository contains a data processing application for loading, transforming and pushing data from various data streams from [scdata](https://github.com/fablabbcn/smartcitizen-data). `scdata` can connect to various custom API connectors (such as [smartcitizen-connector](https://github.com/fablabbcn/smartcitizen-connector)) among others. This data processing application allows to create tasks to process data, using periodic schedules, and workers based on [celery](https://docs.celeryq.dev/en/stable/getting-started/introduction.html). A small [flask](https://flask.palletsprojects.com/en/3.0.x/) application is used to manage the tasks, with a [gunicorn](https://gunicorn.org/) server.
 
+![](assets/flows.png)
+
 ## Tasks
 
 Tasks are managed by the `flows.py` script. This file manages various task routines such as periodic schedules (via cron). The script can program tasks in a automated or manual way. If done automatically, it can schedule them `@daily`, `@hourly` and `@minute`, with optional load balancing (not scheduling them all at the same time, but randomly in low load times).
@@ -77,7 +79,6 @@ FLOWER_PORT=5555
 # FLASK
 FLASK_ENV=production
 FLASK_APP=scflows
-FLOWER_BASIC_AUTH=user:pass
 FLASK_DEBUG=1
 SQLALCHEMY_DATABASE_URI=sqlite:///db.sqlite
 FLASK_SECRET_KEY=holaholahola
@@ -113,6 +114,14 @@ celery --app worker:app worker -l info
 celery flower -l info -app worker:tasks
 ```
 
+![](assets/flower.png)
+
+Note that you need to add the [url-prefix](https://flower.readthedocs.io/en/latest/config.html#url-prefix) to run behind the proxy:
+
+```
+celery flower -l info -app worker:tasks -url-prefix=flower
+```
+
 ### Running with Docker
 
 You can build:
@@ -133,7 +142,7 @@ Which will run the `flask` app in `localhost:5000` and `flower` in `localhost:55
 doco exec -it flows bash
 ```
 
-And then:
+You should see in the IP address. Then:
 
 ```
 python flows.py auto-schedule --celery
@@ -141,4 +150,42 @@ python flows.py auto-schedule --celery
 
 ### Deploying
 
-For actual deployment, you can use the provided `nginx` reverse proxy configuration.
+For actual deployment, you can use the provided `nginx` reverse proxy configuration. Before that, you need to create SSL certificates.
+
+#### SSL certificates
+
+```
+apt install certbot
+```
+
+And run for your domain:
+
+```
+certbot certonly -d flows.smartcitizen.me
+```
+
+For certificates to be picked up, you need to run certbot normally, but make a `post` `renewal-hook` in `/etc/letsencrypt/renewal-hooks/post` (see `scflows/public/certbot/flows.sh`):
+
+```
+#!/bin/bash
+set -eou pipefail
+
+DOMAIN=domain.domain
+
+echo 'Copying certificates to volume...'
+cp -L -r /etc/letsencrypt/live/$DOMAIN/*.pem /root/smartcitizen-flows/scflows/public/certbot/www/
+cp /etc/letsencrypt/ssl-dhparams.pem /root/smartcitizen-flows/scflows/public/certbot/www/
+cp /etc/letsencrypt/options-ssl-nginx.conf /root/smartcitizen-flows/scflows/public/certbot/www/
+
+echo 'Done'
+```
+
+Then, anytime the renewal run, nginx will pick the new certificates via the declared volume.
+
+#### NGINX
+
+If all good, you can run:
+
+```
+docker compose up -d proxy
+```

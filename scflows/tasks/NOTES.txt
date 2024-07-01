@@ -1,0 +1,9 @@
+https://www.authenix.eu/OpenAPI#/Introspection/oauth2Introspection
+
+https://citiobs.demo.secure-dimensions.de/staplustest/v1.1/Parties
+
+https://www.authenix.eu/users/clients/e2e29758-c0ac-4c9a-8276-509b0776edc8 (github)
+
+Count:
+
+https://citiobs.demo.secure-dimensions.de/staplustest/v1.1/Parties('e2e29758-c0ac-4c9a-8276-509b0776edc8')/ObservationGroups?$count=true&$top=0

@@ -1,0 +1,28 @@
+topic:
+    origin: 'topic/<origin-matcher>/more-topic'
+    target: '/topic/<target-matcher>'
+payload: 'keep'
+destination:
+    broker: '<broker>'
+    port: <port>
+    credentials:
+        username: '<username>'
+        password: '<password>'
+
+
+origin:
+    topic: 'bridge/sc/device/sck/<device_token>/readings/raw'
+    topic: '/461704569/IAACdevice/attrs/<id>'
+    broker: 'mqtt-staging.smartcitizen.me'
+    port: 1883
+    credentials:
+        username: scdashboard123
+        password:
+destination:
+    topic: '/461704569/IAACdevice/attrs/<id>'
+    broker: 'b23841e6.online-server.cloud'
+    port: 1883
+    credentials:
+        username: twinair@thowl
+        password: twinairthowl
+    payload: 'keep'

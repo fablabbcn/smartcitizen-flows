@@ -93,6 +93,8 @@ class MessageHandler:
             # Payload
             self.out_msg.payload = self.convert_payload()
 
+        if self.out_msg.payload is None:
+            self.out_msg.topic = None
         return self.out_msg.topic
 
     def convert_topic(self):
@@ -159,56 +161,68 @@ class MessageHandler:
     def convert_payload(self):
         # TODO add other options
         payload_process = self.schema.raw['destination']['payload']['process']
-        if payload_process == 'keep':
-            return self.in_msg.payload.decode()
-        elif payload_process == 'sc-staplus-transform':
 
+        try:
             json_payload = parse_sc_json(self.in_msg.payload.decode())
+        except:
+            std_out(f'Invalid json', 'ERROR')
+            # logger.exception('Invalid json received')
+            return None
+        else:
+            if payload_process == 'keep':
+                # Fix the payload
+                fixed_payload = {}
 
-            result = dict()
-            observations = list()
+                for key, item in json_payload.items():
+                    fixed_payload[str(key)] = item
+                return fixed_payload
 
-            # Find the device
-            inbound_origin_pty = re.search('<(.*)>', self.schema.raw['source']['topic']['in'])
-            # print (f'Origin property: {inbound_origin_pty}')
-            inbound_matcher = self.schema.raw['source']['topic']['in'].replace('<', '(?P<').replace('>', '>\w+)')
-            # print (f'Matcher: {inbound_matcher}')
-            inbound_origin_value = re.match(inbound_matcher, self.in_msg.topic)
-            # print (f'Inbound origin value: {inbound_origin_value}')
-            # print (f'Inbound origin value group: {inbound_origin_value.group(1)}')
-            inbound_target_pty = 'device_id'
-            # print (f'Target property: {inbound_target_pty}')
-            if inbound_target_pty is not None:
-                try:
-                    inbound_target_value = self.inbound_mapping.result.loc[self.inbound_mapping.result[inbound_origin_pty.group(1)]==inbound_origin_value.group(1)][inbound_target_pty].values[0]
-                except:
-                    inbound_target_value = None
-                    pass
+            elif payload_process == 'sc-staplus-transform':
 
-            if inbound_target_value is not None:
-                device_id = inbound_target_value
+                result = dict()
+                observations = list()
 
-                for key, value in json_payload.items():
-                    if key == "t": continue
-                    # TODO Check why this fails
-                    if int(key) in self.payload_mapping['devices'][inbound_target_value]['sensors']:
-                        ds_id = self.payload_mapping['devices'][inbound_target_value]['sensors'][int(key)]
+                # Find the device
+                inbound_origin_pty = re.search('<(.*)>', self.schema.raw['source']['topic']['in'])
+                # print (f'Origin property: {inbound_origin_pty}')
+                inbound_matcher = self.schema.raw['source']['topic']['in'].replace('<', '(?P<').replace('>', '>\w+)')
+                # print (f'Matcher: {inbound_matcher}')
+                inbound_origin_value = re.match(inbound_matcher, self.in_msg.topic)
+                # print (f'Inbound origin value: {inbound_origin_value}')
+                # print (f'Inbound origin value group: {inbound_origin_value.group(1)}')
+                inbound_target_pty = 'device_id'
+                # print (f'Target property: {inbound_target_pty}')
+                if inbound_target_pty is not None:
+                    try:
+                        inbound_target_value = self.inbound_mapping.result.loc[self.inbound_mapping.result[inbound_origin_pty.group(1)]==inbound_origin_value.group(1)][inbound_target_pty].values[0]
+                    except:
+                        inbound_target_value = None
+                        pass
 
-                        observation = {
-                            "phenomenonTime": json_payload['t'],
-                            "resultTime": json_payload['t'],
-                            "result": float(value),
-                            "Datastream": {"@iot.id": ds_id}
-                        }
-                        observations.append(observation)
+                if inbound_target_value is not None:
+                    device_id = inbound_target_value
 
-                result ={
-                    "creationTime": json_payload['t'],
-                    "endTime": json_payload['t'],
-                    "name": f"Observations at {json_payload['t']}",
-                    "description": "",
-                    "Party": {"@iot.id": self.payload_mapping['party']},
-                    "Observations": observations
-                }
+                    for key, value in json_payload.items():
+                        if key == "t": continue
+                        # TODO Check why this fails
+                        if int(key) in self.payload_mapping['devices'][inbound_target_value]['sensors']:
+                            ds_id = self.payload_mapping['devices'][inbound_target_value]['sensors'][int(key)]
 
-                return json.dumps(result)
+                            observation = {
+                                "phenomenonTime": json_payload['t'],
+                                "resultTime": json_payload['t'],
+                                "result": float(value),
+                                "Datastream": {"@iot.id": ds_id}
+                            }
+                            observations.append(observation)
+
+                    result ={
+                        "creationTime": json_payload['t'],
+                        "endTime": json_payload['t'],
+                        "name": f"Observations at {json_payload['t']}",
+                        "description": "",
+                        "Party": {"@iot.id": self.payload_mapping['party']},
+                        "Observations": observations
+                    }
+
+                    return json.dumps(result)

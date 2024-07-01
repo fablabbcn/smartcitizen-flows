@@ -8,6 +8,7 @@ import re
 from scflows.tools import std_out, load_env, LazyCallable
 from scflows.tasks.handlers import MessageHandler, SchemaHandler, Message, MappingHandler
 from invoke import task
+import random
 
 import traceback
 from scflows.config import config
@@ -29,6 +30,9 @@ def mqtt_forward(c, verbose=False, dry_run=False, schema_file=None):
     Forwards data from one MQTT-stream to another
     """
 
+    # TODO - Remove
+    load_env('/home/oscar/Documents/projects/fablab/smartcitizen/repositories/data/smartcitizen-flows/.env')
+
     def on_connect_source(client, userdata, flags, rc):
 
         client.subscribe(schema.source_topic_std)
@@ -46,7 +50,10 @@ def mqtt_forward(c, verbose=False, dry_run=False, schema_file=None):
             std_out(f'Destination msg: {str(m.out_msg.topic)} {str(m.out_msg.payload)}')
             # TODO - These could be multiple messages
             # m.out_msg could be a list of tuples
-            # dclient.publish(m.out_msg.topic, payload=str(m.out_msg.payload))
+            try:
+                dclient.publish(m.out_msg.topic, payload=str(m.out_msg.payload))
+            except:
+                pass
 
     if schema_file is None:
         raise ValueError('Need to specify a schema file')
@@ -97,12 +104,11 @@ def mqtt_forward(c, verbose=False, dry_run=False, schema_file=None):
     client.connect(schema.raw['source']['broker'], int(schema.raw['source']['port']), 60)
 
     # Destination client
-    dclient = mqtt.Client()
+    dclient = mqtt.Client(f'python-mqtt-{random.randint(0, 1000)}')
     dclient.on_connect = on_connect_destination
     std_out (f"Destination broker: {schema.raw['destination']['broker']}:{int(schema.raw['destination']['port'])}")
-    std_out (f"\tDestination user: {schema.raw['destination']['credentials']}")
-    dclient.username_pw_set(username = schema.raw['destination']['credentials']['username'], password = schema.raw['destination']['credentials']['password']
-    )
+    std_out (f"Destination user: {schema.raw['destination']['credentials']}")
+    dclient.username_pw_set(username = schema.raw['destination']['credentials']['username'], password = schema.raw['destination']['credentials']['password'])
     std_out(f'Connecting to destination broker...')
     dclient.connect(schema.raw['destination']['broker'], int(schema.raw['destination']['port']), 60)
 

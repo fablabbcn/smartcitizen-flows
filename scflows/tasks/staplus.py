@@ -64,11 +64,11 @@ def staplus_mqtt_forward(c, verbose=False, dry_run=False, schema_file=None, crea
             raise ValueError('Device is None')
 
         # Check thing
-        sta_location = staplus.Location(name=device.data['location']['city'],
+        sta_location = staplus.Location(name=device.loc['location']['city'],
             # TODO - What to put in location.description
             description="A beautiful, beautiful place",
-            location=Point((device.loc['data']['location']['latitude'],
-                device.loc['data']['location']['longitude'])),
+            location=Point((device.loc['location']['latitude'],
+                device.loc['location']['longitude'])),
             encoding_type='application/geo+json')
 
         result = service.parties().query().filter("authId eq '" + sta_party.auth_id + "'").expand('Things').list()
@@ -124,7 +124,8 @@ def staplus_mqtt_forward(c, verbose=False, dry_run=False, schema_file=None, crea
             data_result = {'thing_id': str(sta_thing.id), 'sensors': dict()}
 
             for sc_sensor in sc_device.data['sensors']:
-                sc_measurement_id = sc_sensor['measurement_id']
+                print (sc_sensor)
+                sc_measurement_id = sc_sensor['measurement']['id']
                 sc_measurement = find_by_field(sc_measurements, sc_measurement_id, 'id')
 
                 sta_observed_property = staplus.ObservedProperty(sc_measurement.name,
@@ -205,8 +206,8 @@ def staplus_mqtt_forward(c, verbose=False, dry_run=False, schema_file=None, crea
         m = MessageHandler(msg, schema, inbound_mapping, outbound_mapping, payload_map)
         if m.convert() is not None:
             if m.out_msg.payload is not None:
-                std_out(f'Original msg: {str(msg.topic)} {str(msg.payload.decode())}')
-                std_out(f'Destination msg: {str(m.out_msg.topic)} {str(m.out_msg.payload)}')
+                # std_out(f'Original msg: {str(msg.topic)} {str(msg.payload.decode())}')
+                # std_out(f'Destination msg: {str(m.out_msg.topic)} {str(m.out_msg.payload)}')
                 dclient.publish(m.out_msg.topic, payload=m.out_msg.payload)
 
     def service_authorize():
@@ -217,11 +218,16 @@ def staplus_mqtt_forward(c, verbose=False, dry_run=False, schema_file=None, crea
         r = post('https://www.authenix.eu/oauth/token', headers=headers, data = "grant_type=client_credentials&scope=citiobs.secd.eu#create openid")
 
         return r.json()
+
+    # TODO - Remove
+    load_env('/home/oscar/Documents/projects/fablab/smartcitizen/repositories/data/smartcitizen-flows/.env')
+
     if schema_file is None:
         raise ValueError('Need to specify a schema file')
 
     schema = SchemaHandler(schema_file)
 
+    # TODO On disconnect, this should create a new token
     if schema.raw['destination']['broker']['credentials']['password'] == '<on-demand>':
         response = service_authorize()
         destination_token = response['access_token']

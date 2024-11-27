@@ -68,7 +68,10 @@ class Scheduler(object):
             # If load balancing, add in low slot
             if load_balancing: job.hour.on(self.check_slots('daily'))
         elif interval.endswith('H'):
-            job.every(int(interval[:-1])).hours()
+            jobs_on=[item for item in range(random.randint(0, int(interval[:-1])-1),24,int(interval[:-1]))]
+            # job.every(int(interval[:-1])).hours()
+            job.hour.on(items[0])
+            for job_on in jobs_on[1:]: job.hour.also.on(job_on)
             # If load balancing, add in low slot
             if load_balancing: job.minute.on(self.check_slots('hourly'))
         elif interval.endswith('M'):

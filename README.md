@@ -122,6 +122,14 @@ Note that you need to add the [url-prefix](https://flower.readthedocs.io/en/late
 celery flower -l info -app worker:tasks -url-prefix=flower
 ```
 
+In addition, you will need to protect `flower` if running behind a proxy (see [proxy](#NGINX)). In the `scflows/public/nginx/auth/` run:
+
+```
+htpasswd -b .htpasswd <user> <password>
+```
+
+To have `nginx` secure the flower via http basic auth. More info in the [flower docs](https://flower.readthedocs.io/en/latest/auth.html).
+
 ### Running with Docker
 
 You can build:

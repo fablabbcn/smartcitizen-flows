@@ -5,8 +5,9 @@ class Config(object):
     _scheduler_interval_days = 1
     _device_scheduler = 'dschedule'
     _scheduler_log = 'scheduler.log'
+
     # Tasks
-    _postprocessing_interval_hours = 1
+    _postprocessing_interval_hours = 3
     _device_processor = 'dprocess'
 
     paths = {

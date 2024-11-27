@@ -1,43 +1,10 @@
-# Remove
-data/export/*
-data/raw/*
-data/processed/20*/
-data/reports/*
-data/interim/development/*
-data/interim/deliveries/*
-data/interim/tests/*
-models/*
-notebooks/*/
-work
-working_tasks
-notebooks/working_*.ipynb
-wip*.ipynb
-Untitled*.ipynb
-notebooks/00_done
-wip*.py
-notebooks/wip*.*
-notebooks/src_ipynb
-reports/*.html
-reports/*.pdf
-scr.egg-info/*
-scr.egg-info
-connectors/clean.py
-connectors/sensors.py
-references
-notebooks/delivery_report_template.ipynb
-
+.htpasswd
 TODO.md
 secrets.py
-hardware/hardware-destinations.txt
 
 # Data types
 *.xls*
 *.bak
-
-# Notebook
-notebooks/temp-plot.html
-notebooks/cheatsheet.ipynb
-.ipynb_checkpoints* 
 
 # MAC stuff
 */.DS_Store
@@ -139,19 +106,6 @@ ENV/
 
 # Schemas
 app/schemas/*.yaml
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
 
 # pytest
 .pytest_cache/

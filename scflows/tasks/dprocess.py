@@ -13,58 +13,65 @@ async def dprocess(device, dry_run = False):
         is postprocessing information in it and that it's valid for doing
         so
     '''
+    task_log = []
 
-    result = []
+    def logger_handler(msg, level='info'):
+        if level == 'info':
+            logger.info(msg)
+        elif level == 'warning':
+            logger.warning(msg)
+        elif level == 'error':
+            logger.error(msg)
+        return f'{level}: {msg}'
 
-    logger.info(f'Processing instance for device {device}')
+    logger_handler(f'Processing instance for device {device}')
 
     # Create device from SC API
     d = sc.Device(params=sc.APIParams(id=device))
+
     if d:
-        result.append(f'Device {device} Initialized')
-        logger.info(f'Device {device} Initialized')
+        task_log.append(logger_handler(f'Device {device} Initialized'))
 
-    if d.handler.postprocessing['latest_postprocessing'] is not None:
-        d.options.min_date = d.handler.postprocessing['latest_postprocessing']
-        result.append(f'Setting min_date as: {d.options.min_date }')
-        logger.info(f'Setting min_date as: {d.options.min_date }')
+        if d.handler.postprocessing['latest_postprocessing'] is not None:
+            d.options.min_date = d.handler.postprocessing['latest_postprocessing']
+            task_log.append(logger_handler(f'Setting min_date as: {d.options.min_date }'))
 
-    if d.valid_for_processing:
-        logger.info('Device is valid for processing. Attempting load')
-        result.append('Device is valid for processing. Attempting load')
+        # Only load data that is used in the metrics
+        d.options.channels = sorted([item for item in set([metric.kwargs['channel'] for metric in d.metrics if 'channel' in metric.kwargs]) if item is not None])
+        d.options.limit = 500
 
-        # TODO Decide if this should be done for all, or just some
-        # Maybe reduce to daily calculations
-        # if await d.load(max_amount=config._max_load_amount):
-        if await d.load():
-            logger.info(f'Device was loaded: {d.loaded}')
-            result.append(f'Device was loaded: {d.loaded}')
-            # Process it
-            d.process()
-            logger.info(f'Device was processed: {d.processed}')
-            result.append(f'Device was processed: {d.processed}')
-            # TODO Add checks here?
-            # Post results
-            if await d.post(columns = 'metrics', dry_run=dry_run,
-                max_retries=config._max_http_retries,
-                with_postprocessing=True):
-                logger.info(f'Device {device} was posted')
-                result.append(f'Device was posted')
+        if d.valid_for_processing:
+            task_log.append(logger_handler('Device is valid for processing. Attempting load'))
+
+            if await d.load():
+                task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
+
+                # Process it
+                d.process()
+                task_log.append(logger_handler(f'Device was processed: {d.processed}'))
+
+                # Update postprocessing date
+                d.update_postprocessing_date()
+
+                # Post results
+                if d.postprocessing_updated:
+                    if await d.post(columns = 'metrics', dry_run=dry_run, max_retries=3, with_postprocessing=True):
+                        task_log.append(logger_handler(f'Device {device} was posted'))
+                else:
+                    task_log.append(logger_handler(f'Device {device} was not posted', 'warning'))
             else:
-                logger.info(f'Device {device} was not posted')
-                result.append(f'Device {device} was not posted')
-        else:
-            result.append(f'Device {device} was not loaded')
-            logger.info(f'Device {device} was not loaded')
-            if d.data.empty:
-                result.append(f'Device {device} data is empty. Nothing to do')
-                logger.info(f'Device {device} data is empty. Nothing to do')
-    else:
-        logger.error(f'Device {device} not valid')
-        result.append(f'Device {device} not valid')
-    logger.info(f'Concluded job for {device}')
+                task_log.append(logger_handler(f'Device {device} was not loaded', 'warning'))
 
-    return result
+                if d.data.empty:
+                    task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))
+        else:
+            task_log.append(logger_handler(f'Device {device} not valid for processing', 'error'))
+    else:
+        task_log.append(logger_handler(f'Device {device} not valid', 'error'))
+
+    task_log.append(logger_handler(f'Concluded job for {device}'))
+
+    return task_log
 
 @app.task(track_started=True, name='scflows.tasks.dprocess_task')
 def dprocess_task(device, dry_run=False):

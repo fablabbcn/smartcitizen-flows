@@ -38,7 +38,7 @@ async def dprocess(device, dry_run = False):
 
         # Only load data that is used in the metrics
         d.options.channels = sorted([item for item in set([metric.kwargs['channel'] for metric in d.metrics if 'channel' in metric.kwargs]) if item is not None])
-        d.options.limit = 500
+        d.options.limit = config._max_load_amount
 
         if d.valid_for_processing:
             task_log.append(logger_handler('Device is valid for processing. Attempting load'))

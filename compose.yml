@@ -44,7 +44,7 @@ services:
       - rabbitmq
     env_file:
       - .env
-    command: gunicorn --workers 3 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
+    command: gunicorn --workers 1 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
     # healthcheck:
     #   test: "${DOCKER_HEALTHCHECK_TEST:-curl localhost:18000/healthy}"
     #   interval: "60s"

@@ -8,7 +8,6 @@ services:
       - ./scflows/public/nginx/auth/.htpasswd:/etc/nginx/.htpasswd:ro
       - ./scflows/public/certbot/www/:/var/www/certbot/:ro
     ports:
-      - "80:80"
       - "443:443"
     networks:
       - internal-network

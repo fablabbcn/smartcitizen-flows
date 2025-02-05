@@ -7,35 +7,55 @@ from smartcitizen_connector import search_by_query
 from smartcitizen_connector.device import check_postprocessing
 
 from scflows.config import config
-from scflows.tasks.scheduler import Scheduler
+from scflows.tasks.scheduler import Scheduler, Task
 from scflows.worker import app
 from scflows.custom_logger import logger
 
-async def check_and_schedule(id, postprocessing, interval_hours, dry_run, celery):
-    _,_,status = check_postprocessing(postprocessing)
+async def check_and_schedule(device, interval_hours, dry_run, celery):
+    _,_,status = check_postprocessing(device.postprocessing)
 
     if not status:
-        logger.warning(f'Device {id} has no valid postprocessing')
+        logger.warning(f'Device {device._name} has no valid postprocessing')
         return
+
+    # Define task
+    task_options = [f'--device {device._name}']
+
+    if celery: task_options.append('--celery')
+    if dry_run: task_options.append('--dry-run')
+
+    t = Task(script = f'{config._device_processor}.py', options=task_options)
 
     # Set scheduler
     s = Scheduler()
 
-    # Define task
-    if celery: _celery = ' --celery'
-    else: _celery = ''
-    task = f"{config._device_processor}.py --device {id} {_celery}"
-
     #Create log output if not existing
-    dt = abspath(join(config.paths['public'], 'tasks', 'log', str(id)))
+    dt = abspath(join(config.paths['public'], 'tasks', 'log', str(device._name)))
     makedirs(dt, exist_ok=True)
-    log = f"{join(dt, f'{config._device_processor}_{id}.log')}"
-    # Schedule task
-    s.schedule_task(task = task,
-                    log = log,
-                    interval = f'{interval_hours}H',
-                    dry_run = dry_run,
-                    load_balancing = True)
+    log = f"{join(dt, f'{config._device_processor}_{device._name}.log')}"
+
+    if device.last_reading_at is None:
+        logger.warning(f'Device {device._name} has no readings yet')
+        s.remove_task(t)
+        return
+    else:
+        if device.postprocessing['latest_postprocessing'] is None:
+            to_process = True
+        else:
+            if device.postprocessing['latest_postprocessing'] > device.last_reading_at:
+                logger.warning(f'Device {device._name} has nothing to process. Remove')
+                s.remove_task(t)
+                return
+            else:
+                to_process = True
+
+    if to_process:
+        # Schedule task
+        s.schedule_task(task = t,
+                       log = log,
+                       interval = f'{interval_hours}H',
+                       load_balancing = True)
+    return
 
 async def dschedule(interval_hours, dry_run = False, celery = False):
     '''
@@ -44,7 +64,7 @@ async def dschedule(interval_hours, dry_run = False, celery = False):
         in the SC API
     '''
     df = search_by_query(endpoint='devices',
-                        search_items=[{
+                         search_items=[{
                             'key': 'postprocessing_id',
                             'value': 'not_null',
                             'full': True
@@ -55,8 +75,7 @@ async def dschedule(interval_hours, dry_run = False, celery = False):
     tasks = []
 
     for d in df.index:
-        tasks.append(check_and_schedule(id=d,
-            postprocessing=df.loc[d, 'postprocessing'],
+        tasks.append(check_and_schedule(device=df.loc[d,: ],
             interval_hours=interval_hours,
             dry_run=dry_run,
             celery = celery))

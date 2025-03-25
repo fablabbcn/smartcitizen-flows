@@ -6,6 +6,8 @@ from scflows.worker import app
 from scflows.config import config
 from scflows.custom_logger import logger
 from celery.result import AsyncResult
+from celery.exceptions import Ignore
+from celery import states
 
 async def dprocess(device, dry_run = False):
     '''
@@ -28,6 +30,7 @@ async def dprocess(device, dry_run = False):
 
     # Create device from SC API
     d = sc.Device(params=sc.APIParams(id=device))
+    task_state = [None, None]
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
@@ -38,6 +41,9 @@ async def dprocess(device, dry_run = False):
 
         # Only load data that is used in the metrics
         d.options.channels = sorted([item for item in set([metric.kwargs['channel'] for metric in d.metrics if 'channel' in metric.kwargs]) if item is not None])
+        # Add channels that need to be eager loaded because they are potentially needed
+        d.options.channels += [item for sublist in [metric.kwargs['eager_channels'] for metric in d.metrics if 'eager_channels' in metric.kwargs] for item in sublist if item is not None]
+
         d.options.limit = config._max_load_amount
 
         if d.valid_for_processing:
@@ -47,37 +53,58 @@ async def dprocess(device, dry_run = False):
                 task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
                 # Process it
-                d.process()
-                task_log.append(logger_handler(f'Device was processed: {d.processed}'))
+                if d.process():
+                    task_log.append(logger_handler(f'Device was processed: {d.processed}'))
 
-                # Update postprocessing date
-                d.update_postprocessing_date()
+                    # Update postprocessing date
+                    d.update_postprocessing_date()
 
-                # Post results
-                if d.postprocessing_updated:
-                    if await d.post(columns = 'metrics', dry_run=dry_run, max_retries=3, with_postprocessing=True):
-                        task_log.append(logger_handler(f'Device {device} was posted'))
+                    # Post results
+                    if d.postprocessing_updated:
+                        if await d.post(columns = 'metrics', dry_run=dry_run, max_retries=3, with_postprocessing=True):
+                            task_log.append(logger_handler(f'Device {device} was posted'))
+                            task_state = ['SUCCESS', 'PROCESSED AND UPLOADED']
+                        else:
+                            task_state = ['FAILED', 'DATA_POSTING_FAILED']
+                    else:
+                        task_log.append(logger_handler(f'Device {device} was not posted', 'warning'))
+                        task_state = ['ABORTED', 'POSTPROCESSING_UPDATE_FAILED']
                 else:
-                    task_log.append(logger_handler(f'Device {device} was not posted', 'warning'))
+                    task_state = ['ABORTED', 'PROCESSING_FAILED']
             else:
                 task_log.append(logger_handler(f'Device {device} was not loaded', 'warning'))
 
                 if d.data.empty:
                     task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))
+                    task_state = ['ABORTED', 'EMPTY_DATA']
         else:
             task_log.append(logger_handler(f'Device {device} not valid for processing', 'error'))
+            task_state = ['ABORTED', 'NOT_VALID_FOR_PROCESSING']
     else:
         task_log.append(logger_handler(f'Device {device} not valid', 'error'))
+        task_state = ['ABORTED', 'DEVICE_NOT_VALID']
 
     task_log.append(logger_handler(f'Concluded job for {device}'))
 
-    return task_log
+    return task_log, task_state
 
-@app.task(track_started=True, name='scflows.tasks.dprocess_task')
-def dprocess_task(device, dry_run=False):
-    result = asyncio.run(dprocess(device, dry_run))
+@app.task(bind=True,track_started=True, name='scflows.tasks.dprocess_task')
+def dprocess_task(self, device, dry_run=False):
+    result, state = asyncio.run(dprocess(device, dry_run))
     logger.info('dprocess')
     logger.info(result)
+    logger.info(state)
+
+    # Raise custom state
+    if state[0] != 'SUCCESS':
+
+        self.update_state(
+            state=state[0],
+            meta={'message': state[1]})
+        with self.app.events.default_dispatcher() as dispatcher:
+            dispatcher.send('task-custom_state', field1='value1', field2='value2')
+
+        raise Ignore()
     return result
 
 if __name__ == '__main__':
@@ -106,7 +133,7 @@ if __name__ == '__main__':
 
     if '--celery' in sys.argv:
         logger.info(f'Using celery backend...')
-        task_id = dprocess_task.delay(device, dry_run)
+        task_id = dprocess_task.s().delay(device = device, dry_run = dry_run)
         logger.info(f'Task ID: {task_id}')
 
         # Wait for result

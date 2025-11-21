@@ -16,10 +16,10 @@ if __name__ == '__main__':
         print('--overwrite: overwrite if it exists already')
         print('actions: auto-schedule, manual-schedule')
         print('---')
-        print('auto-schedule --celery --interval-days <interval-days> (config._postprocessing_interval_hours):')
+        print('auto-schedule --celery --interval-days <interval-days> (config._scheduler_interval_days):')
         print('\tschedule devices postproccesing check based on device postprocessing in platform')
         print('\tauto-schedule makes a global task for checking on interval-days interval and then the actual tasks are scheduled based on default intervals')
-        print('manual-schedule --device <device> --interval-hours <interval-hours> (config._postprocessing_interval_hours) [--task-file <file>.py] [--celery]:')
+        print('manual-schedule --device <device> --interval-hours <interval-hours> (config._default_task_exec_interval_hours) [--task-file <file>.py] [--celery]:')
         print('\tschedule device processing manually')
         sys.exit()
 
@@ -64,7 +64,7 @@ if __name__ == '__main__':
         if '--interval-hours' in sys.argv:
             interval = int(sys.argv[sys.argv.index('--interval-hours')+1])
         else:
-            interval = config._postprocessing_interval_hours
+            interval = config._default_task_exec_interval_hours
 
         if '--task-file' in sys.argv:
             task = sys.argv[sys.argv.index('--task-file')+1]

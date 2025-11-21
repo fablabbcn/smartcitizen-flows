@@ -111,7 +111,7 @@ if __name__ == '__main__':
 
     if '-h' in sys.argv or '--help' in sys.argv or '-help' in sys.argv:
         print('dprocess: Process device of SC API')
-        print('USAGE:\n\rdprocess.py --device <device-number> [options]')
+        print('USAGE:\n\rdprocess.py [options]')
         print('options:')
         print('--device <device-number>: device to process')
         print('--celery: task execution is managed via celery worker')

@@ -7,3 +7,4 @@ flask-sqlalchemy
 flask-login
 celery
 flower
+awswrangler

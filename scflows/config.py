@@ -7,8 +7,14 @@ class Config(object):
     _scheduler_log = 'scheduler.log'
 
     # Tasks
-    _postprocessing_interval_hours = 3
+    _default_task_exec_interval_hours = 24
+
     _device_processor = 'dprocess'
+    _postprocessing_task_exec_interval_hours = 3
+
+    _device_storer = 'dbackup'
+    _backup_task_exec_interval_hours = 6
+    _backup_interval_days = 20
 
     paths = {
         'tasks': 'tasks',

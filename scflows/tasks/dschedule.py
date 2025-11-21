@@ -11,7 +11,7 @@ from scflows.tasks.scheduler import Scheduler, Task
 from scflows.worker import app
 from scflows.custom_logger import logger
 
-async def check_and_schedule(device, interval_hours, dry_run, celery):
+async def check_and_schedule(device, interval_hours, task, dry_run, celery):
     _,_,status = check_postprocessing(device.postprocessing)
 
     if not status:
@@ -22,9 +22,13 @@ async def check_and_schedule(device, interval_hours, dry_run, celery):
     task_options = [f'--device {device._name}']
 
     if celery: task_options.append('--celery')
-    if dry_run: task_options.append('--dry-run')
 
-    t = Task(script = f'{config._device_processor}.py', options=task_options)
+    if task == 'process':
+        script = f'{config._device_processor}.py'
+        if dry_run: task_options.append('--dry-run')
+    elif task == 'backup':
+        script = f'{config._device_storer}.py'
+    t = Task(script = script, options=task_options)
 
     # Set scheduler
     s = Scheduler()
@@ -57,7 +61,7 @@ async def check_and_schedule(device, interval_hours, dry_run, celery):
                        load_balancing = True)
     return
 
-async def dschedule(interval_hours, dry_run = False, celery = False):
+async def dschedule(interval_hours, task = 'process', dry_run = False, celery = False):
     '''
         This function schedules processing SC API devices based
         on the result of a global query for data processing
@@ -77,6 +81,7 @@ async def dschedule(interval_hours, dry_run = False, celery = False):
     for d in df.index:
         tasks.append(check_and_schedule(device=df.loc[d,: ],
             interval_hours=interval_hours,
+            task = task,
             dry_run=dry_run,
             celery = celery))
 
@@ -88,7 +93,8 @@ if __name__ == '__main__':
         print('dschedule: Schedule tasks for devices to process in SC API')
         print('USAGE:\n\rdschedule.py [options]')
         print('options:')
-        print('--interval-hours: task execution interval in hours (default: config._postprocessing_interval_hours)')
+        print('--interval-hours [interval]: task execution interval in hours (default: config._default_task_exec_interval_hours)')
+        print('--task [type]: task type. Either \'process\' or \'backup\'')
         print('--celery: subtask execution is managed via celery worker')
         print('--dry-run: dry run')
         sys.exit()
@@ -96,10 +102,20 @@ if __name__ == '__main__':
     if '--dry-run' in sys.argv: dry_run = True
     else: dry_run = False
 
+    if '--task' in sys.argv:
+        task = sys.argv[sys.argv.index('--task')+1]
+    else:
+        task = 'process'
+
     if '--interval-hours' in sys.argv:
         interval = int(sys.argv[sys.argv.index('--interval-hours')+1])
     else:
-        interval = config._postprocessing_interval_hours
+        if task == 'process':
+            interval = config._postprocessing_task_exec_interval_hours
+        elif task == 'backup':
+            interval = config._backup_task_exec_interval_hours
+        else:
+            interval = config._default_task_exec_interval_hours
 
     if '--celery' in sys.argv:
         celery = True
@@ -109,6 +125,6 @@ if __name__ == '__main__':
     logger.info(f'Parsing task with following arguments: dry_run={dry_run}, interval-hours={interval}, celery={celery}')
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(dschedule(interval_hours=interval, dry_run=dry_run, celery=celery))
+    loop.run_until_complete(dschedule(interval_hours=interval, task = task, dry_run=dry_run, celery=celery))
     loop.close()
 

@@ -31,10 +31,10 @@ async def dbackup(device):
             logger.error(msg)
         return f'{level}: {msg}'
 
-    logger_handler(f'Processing instance for device {device}')
+    logger_handler(f'Backup instance for device {device}')
 
     # Create device from SC API
-    d = sc.Device(params=sc.APIParams(id=device))
+    d = sc.Device(blueprint='sc_air', params=sc.APIParams(id=device))
     s3 = boto3.resource('s3')
     task_state = [None, None]
 

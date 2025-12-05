@@ -21,12 +21,13 @@ class Task(object):
 class Scheduler(object):
     """Wrapper class for CronTab Task Scheduling"""
     def __init__(self, tabfile = None):
-        self.cron = CronTab(user=True)
 
         if tabfile is None:
             self.tabfile = join(config.paths['tabs'] ,f'{config._tabfile}.tab')
         else:
             self.tabfile = tabfile
+
+        self.cron = CronTab(tabfile=self.tabfile)
 
     def check_slots(self, frequency = 'hourly'):
         # Check frequency
@@ -46,10 +47,36 @@ class Scheduler(object):
         # Return a random slot
         return random.choice(where(slots == slots.min())[0])
 
-    def remove_task(self, task):
-        tasks = self.cron.find_comment(task.name)
-        for _task in tasks: self.cron.remove(_task)
-        self.cron.write(self.tabfile)
+    def list_tasks(self):
+        tasks = []
+        for task in self.cron.comments:
+            logger.info(f'Found task: {task}')
+            tasks.append(task)
+
+        return tasks
+
+    def remove_task(self, task=None, task_name=''):
+
+        if task is None:
+            _tn = task_name
+        else:
+            _tn = task.name
+
+        logger.info(f'Removing: {_tn}')
+
+        if not _tn:
+            logger.error('No task provided')
+            return
+
+        if self.cron.remove_all(comment=_tn):
+            logger.info(f'Removed')
+            self.write()
+        else:
+            logger.error(f'Task not found: {_tn}')
+
+    def clear_tasks(self):
+        self.cron.remove_all()
+        self.write()
 
     def check_existing_task(self, task):
         l = []
@@ -59,8 +86,12 @@ class Scheduler(object):
             logger.info(f'{task.name} already running')
             return True
         else:
-            logger.info(f'{task.name} not running')
+            logger.info(f'{task.name} not found')
             return False
+
+    def write(self):
+        self.cron.write_to_user(user=True)
+        self.cron.write(self.tabfile)
 
     def schedule_task(self, task, log, interval, force_first_run = False,\
         overwrite = False, load_balancing = False):
@@ -104,10 +135,11 @@ class Scheduler(object):
         elif interval.endswith('M'):
             job.every(int(interval[:-1])).minutes()
             # No load balance for minutes
-        self.cron.write(self.tabfile)
+
+        self.write()
 
         # Workaround for macos?
-        subprocess.call(['crontab', self.tabfile])
+        # subprocess.call(['crontab', self.tabfile])
 
         if force_first_run:
             logger.info('Running task for first time. This could take a while')

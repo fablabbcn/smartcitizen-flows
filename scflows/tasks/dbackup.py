@@ -41,6 +41,7 @@ async def dbackup(device):
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
         skip = False
+        error = False
 
         try:
             metadata = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json").get()
@@ -52,7 +53,12 @@ async def dbackup(device):
                 mode = 'overwrite'
             else:
                 # Something else has gone wrong.
-                logger_handler(e.response)
+                logger_handler(e.response, 'error')
+                error = True
+        except botocore.exceptions.ClientError as e:
+            # Something else has gone wrong.
+            logger_handler(e.response, 'error')
+            error = True
         else:
             # The object does exist.
             task_log.append(logger_handler('Already requested data...'))
@@ -75,33 +81,37 @@ async def dbackup(device):
             else:
                 skip = True
 
-        if not skip:
-            task_log.append(logger_handler(f'Min date: {d.options.min_date}'))
-            task_log.append(logger_handler(f'Max date: {d.options.max_date}'))
+        if not error:
+            if not skip:
+                task_log.append(logger_handler(f'Min date: {d.options.min_date}'))
+                task_log.append(logger_handler(f'Max date: {d.options.max_date}'))
 
-            if await d.load():
-                task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
+                if await d.load():
+                    task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
-                # Back it up it
-                if d.backup(mode=mode):
+                    # Back it up it
+                    if d.backup(mode=mode):
 
-                    s3object = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json")
-                    s3object.put(
-                        Body=(bytes(json.dumps({"last_requested_data": d.options.max_date.isoformat()}).encode('UTF-8')))
-                    )
-                    task_state = ['SUCCESS', 'BACKUP_DONE']
-                    task_log.append(logger_handler(f'Device was backed-up'))
+                        s3object = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json")
+                        s3object.put(
+                            Body=(bytes(json.dumps({"last_requested_data": d.options.max_date.isoformat()}).encode('UTF-8')))
+                        )
+                        task_state = ['SUCCESS', 'BACKUP_DONE']
+                        task_log.append(logger_handler(f'Device was backed-up'))
+                    else:
+                        task_state = ['ABORTED', 'BACKUP_FAILED']
                 else:
-                    task_state = ['ABORTED', 'BACKUP_FAILED']
-            else:
-                task_log.append(logger_handler(f'Device {device} was not loaded', 'warning'))
+                    task_log.append(logger_handler(f'Device {device} was not loaded', 'warning'))
 
-                if d.data.empty:
-                    task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))
-                    task_state = ['ABORTED', 'EMPTY_DATA']
+                    if d.data.empty:
+                        task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))
+                        task_state = ['ABORTED', 'EMPTY_DATA']
+            else:
+                task_log.append(logger_handler(f'Device {device} has no new data. Nothing to do', 'warning'))
+                task_state = ['ABORTED', 'NO_NEW_DATA']
         else:
-            task_log.append(logger_handler(f'Device {device} has no new data. Nothing to do', 'warning'))
-            task_state = ['ABORTED', 'NO_NEW_DATA']
+            task_log.append(logger_handler(f'Error while connecting to S3 for {device}', 'error'))
+            task_state = ['ABORTED', 'UNHANDLED ERROR']
 
     else:
         task_log.append(logger_handler(f'Device {device} not valid', 'error'))

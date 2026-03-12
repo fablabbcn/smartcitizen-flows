@@ -49,6 +49,7 @@ async def dbackup(device):
             if e.response['Error']['Code'] == "NoSuchKey":
                 # The object does not exist.
                 task_log.append(logger_handler('No last date available'))
+                # This is a shot in the dark - we don't have a way to know if data is going to be available
                 d.options.max_date = d.handler.json.created_at + datetime.timedelta(days=config._backup_interval_days)
                 mode = 'overwrite'
             else:
@@ -105,6 +106,11 @@ async def dbackup(device):
 
                     if d.data.empty:
                         task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))
+                        # Even if there is no data, we still store the key
+                        s3object = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json")
+                        s3object.put(
+                            Body=(bytes(json.dumps({"last_requested_data": d.options.max_date.isoformat()}).encode('UTF-8')))
+                        )
                         task_state = ['ABORTED', 'EMPTY_DATA']
             else:
                 task_log.append(logger_handler(f'Device {device} has no new data. Nothing to do', 'warning'))
@@ -124,9 +130,8 @@ async def dbackup(device):
 @app.task(bind=True, track_started=True, name='scflows.tasks.dbackup_task')
 def dbackup_task(self, device):
     result, state = asyncio.run(dbackup(device))
-    logger.info('dbackup')
-    logger.info(result)
-    logger.info(state)
+    logger.info(f'dbackup_task result: {result}')
+    logger.info(f'dbackup_task state: {state}')
 
     # Raise custom state
     if state[0] != 'SUCCESS':
@@ -134,10 +139,8 @@ def dbackup_task(self, device):
         self.update_state(
             state=state[0],
             meta={'message': state[1]})
-        with self.app.events.default_dispatcher() as dispatcher:
-            dispatcher.send('task-custom_state', field1='value1', field2='value2')
-
         raise Ignore()
+
     return result
 
 if __name__ == '__main__':

@@ -33,8 +33,14 @@ celery --app worker:app worker -l info
 
 If you want to `dry-run` for checking if your workflow works, `force-first-run` and `overwrite` the tasks:
 
+- For running processing tasks:
 ```
-python flows.py auto-schedule --dry-run --force-first-run --overwrite
+python flows.py auto-schedule --task process --dry-run --force-first-run --overwrite
+```
+
+- For running backup tasks:
+```
+python flows.py auto-schedule --task backup --dry-run --force-first-run --overwrite
 ```
 
 #### Logs

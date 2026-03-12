@@ -13,7 +13,7 @@ from scflows.worker import app
 from scflows.config import config
 from scflows.custom_logger import logger
 from celery.result import AsyncResult
-from celery.exceptions import Ignore
+from celery.exceptions import Ignore, TimeoutError
 from celery import states
 
 async def dbackup(device):
@@ -172,7 +172,10 @@ if __name__ == '__main__':
 
         # Wait for result
         result = AsyncResult(task_id, app=app)
-        result.wait(timeout=60)
+        try:
+            result.wait(timeout=60)
+        except TimeoutError:
+            logger.error(f'Timed out')
 
         logger.info('Task result:')
         for res in result.get():

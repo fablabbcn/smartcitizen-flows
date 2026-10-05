@@ -1,6 +1,6 @@
 python-crontab==3.3.0
-smartcitizen-connector
-scdata
+smartcitizen-connector==1.5.0
+scdata==1.5.0
 gunicorn
 flask
 flask-sqlalchemy

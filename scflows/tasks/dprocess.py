@@ -39,10 +39,10 @@ async def dprocess(device, dry_run = False):
             d.options.min_date = d.handler.postprocessing['latest_postprocessing']
             task_log.append(logger_handler(f'Setting min_date as: {d.options.min_date }'))
 
-        # Only load data that is used in the metrics
-        d.options.channels = sorted([item for item in set([metric.kwargs['channel'] for metric in d.metrics if 'channel' in metric.kwargs]) if item is not None])
+        # Only load data that is used in the calculated channels
+        d.options.channels = sorted([item for item in set([channel.kwargs['channel'] for channel in d.channels if 'channel' in channel.kwargs]) if item is not None])
         # Add channels that need to be eager loaded because they are potentially needed
-        d.options.channels += [item for sublist in [metric.kwargs['eager_channels'] for metric in d.metrics if 'eager_channels' in metric.kwargs] for item in sublist if item is not None]
+        d.options.channels += [item for sublist in [channel.kwargs['eager_channels'] for channel in d.channels if 'eager_channels' in channel.kwargs] for item in sublist if item is not None]
 
         d.options.limit = config._max_load_amount
 
@@ -61,7 +61,7 @@ async def dprocess(device, dry_run = False):
 
                     # Post results
                     if d.postprocessing_updated:
-                        if await d.post(columns = 'metrics', dry_run=dry_run, max_retries=3, with_postprocessing=True):
+                        if await d.post(columns = 'channels', dry_run=dry_run, max_retries=3, with_postprocessing=True):
                             task_log.append(logger_handler(f'Device {device} was posted'))
                             task_state = ['SUCCESS', 'PROCESSED AND UPLOADED']
                         else:

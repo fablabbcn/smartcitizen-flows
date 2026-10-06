@@ -90,6 +90,8 @@ services:
     command: celery --app worker:app worker -l info --autoscale=4,2
     depends_on:
       - rabbitmq
+      # Processing reads blueprints, hardware and calibrations from flows (BASE_POSTPROCESSING_URL)
+      - web
     # user: nobody
     env_file:
       - .env

@@ -92,3 +92,25 @@ def get_tabfile_dir():
 
 def check_path(path):
     return isdir(path)
+
+# Last refresh of scdata metadata (monotonic seconds)
+_metadata_refreshed_at = None
+METADATA_MAX_AGE = 300
+
+
+def refresh_metadata(max_age=METADATA_MAX_AGE):
+    '''
+    Reloads scdata blueprints and calibrations (from BASE_POSTPROCESSING_URL), at most every max_age seconds.
+    Workers are long running: without it, changes made in flows would only apply after a restart.
+    Returns True if reloaded
+    '''
+    import time
+    from scdata._config import config as scdata_config
+
+    global _metadata_refreshed_at
+    now = time.monotonic()
+    if _metadata_refreshed_at is not None and now - _metadata_refreshed_at < max_age:
+        return False
+    scdata_config.get_meta_data()
+    _metadata_refreshed_at = now
+    return True

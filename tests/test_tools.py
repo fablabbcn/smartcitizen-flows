@@ -29,3 +29,24 @@ def test_load_env(tmp_path, monkeypatch):
     assert load_env(str(env)) is True
     assert os.environ.pop('SCFLOWS_TEST_KEY') == 'value=with=equals'
     assert load_env(str(tmp_path / 'missing')) is False
+
+
+def test_refresh_metadata_at_most_every_max_age(monkeypatch):
+    import time
+
+    import scflows.tools as tools
+    from scdata._config import config as scdata_config
+
+    calls = []
+    now = [1000.0]
+    monkeypatch.setattr(scdata_config, 'get_meta_data', lambda: calls.append(now[0]))
+    monkeypatch.setattr(time, 'monotonic', lambda: now[0])
+    monkeypatch.setattr(tools, '_metadata_refreshed_at', None)
+
+    assert tools.refresh_metadata(max_age=300) is True
+    now[0] += 100
+    assert tools.refresh_metadata(max_age=300) is False
+    now[0] += 300
+    assert tools.refresh_metadata(max_age=300) is True
+
+    assert calls == [1000.0, 1400.0]

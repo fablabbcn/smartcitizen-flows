@@ -12,6 +12,7 @@ import botocore
 from scflows.worker import app
 from scflows.config import config
 from scflows.custom_logger import logger
+from scflows.tools import refresh_metadata
 from celery.result import AsyncResult
 from celery.exceptions import Ignore, TimeoutError
 from celery import states
@@ -34,6 +35,9 @@ async def dbackup(device):
     logger_handler(f'Backup instance for device {device}')
 
     # Create device from SC API
+    # Changes made in flows (calibrations, blueprints) apply without restarting the worker
+    refresh_metadata()
+
     d = sc.Device(blueprint='sc_air', params=sc.APIParams(id=device))
     s3 = boto3.resource('s3')
     task_state = [None, None]

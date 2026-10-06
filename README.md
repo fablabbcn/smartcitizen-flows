@@ -70,9 +70,15 @@ python flows.py manual-schedule --device <device> --dry-run --force-first-run --
 
 You can deploy via `docker` or by running the different components separately.
 
+### Installation
+
+```
+pip install -e ".[dev]"
+```
+
 ### Environment variables
 
-Modify the `env.example` and copy it in `.env`. Then source the `.env` file:
+Copy `env.example` to `.env` and fill it in. `.env` is never committed nor copied into the docker image: `compose.yml` loads it at runtime.
 
 ```
 #TOKENS
@@ -87,7 +93,20 @@ FLASK_ENV=production
 FLASK_APP=scflows
 FLASK_DEBUG=1
 SQLALCHEMY_DATABASE_URI=sqlite:///db.sqlite
-FLASK_SECRET_KEY=holaholahola
+FLASK_SECRET_KEY=change-me
+# BACKUPS
+S3_DATA_BUCKET=bucket-name
+AWS_ACCESS_KEY_ID=key-id
+AWS_SECRET_ACCESS_KEY=secret-key
+AWS_DEFAULT_REGION=eu-west-1
+```
+
+Generate `FLASK_SECRET_KEY` with `python -c "import secrets; print(secrets.token_hex(32))"`.
+
+### Tests
+
+```
+pytest
 ```
 
 ### Flask app
@@ -128,10 +147,10 @@ Note that you need to add the [url-prefix](https://flower.readthedocs.io/en/late
 celery flower -l info -app worker:tasks -url-prefix=flower
 ```
 
-In addition, you will need to protect `flower` if running behind a proxy (see [proxy](#NGINX)). In the `scflows/public/nginx/auth/` run:
+In addition, you will need to protect `flower` if running behind a proxy (see [proxy](#NGINX)). In the `scflows/public/nginx/auth/` run (the file is not committed):
 
 ```
-htpasswd -b .htpasswd <user> <password>
+htpasswd -c -b .htpasswd <user> <password>
 ```
 
 To have `nginx` secure the flower via http basic auth. More info in the [flower docs](https://flower.readthedocs.io/en/latest/auth.html).
@@ -150,7 +169,7 @@ And run:
 docker compose up -d rabbitmq flows celery flower web
 ```
 
-Which will run the `flask` app in `localhost:5000` and `flower` in `localhost:5555`. You can jump into the flows `docker` `flows` container and run the `auto-schedule`, to start processing tasks.
+Which will run the `flask` app in `localhost:5000` and `flower` in `localhost:5555`. The `flows` container runs `cron`, which does not inherit the container environment: its entrypoint writes it to `/etc/environment` on start. You can jump into the flows `docker` `flows` container and run the `auto-schedule`, to start processing tasks.
 
 ```
 doco exec -it flows bash

@@ -20,20 +20,19 @@
                                 Home
                             </a>
                             {% if current_user.is_authenticated %}
+                            {% if current_user.role == 'admin' %}
                             <a href="{{ url_for('main.default') }}" class="navbar-item">
                                 Tasks
                             </a>
+                            {% endif %}
                             <a href="{{ url_for('auth.logout') }}" class="navbar-item">
-                                Logout
+                                Logout ({{ current_user.username }})
                             </a>
                             {% endif %}
 
                             {% if not current_user.is_authenticated %}
                             <a href="{{ url_for('auth.login') }}" class="navbar-item">
                                 Login
-                            </a>
-                            <a href="{{ url_for('auth.signup') }}" class="navbar-item">
-                                Sign Up
                             </a>
                             {% endif %}
                         </div>

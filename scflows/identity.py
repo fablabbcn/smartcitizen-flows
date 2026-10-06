@@ -116,3 +116,22 @@ def requires_role(*roles):
             return view(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def sign_in(username, password):
+    '''
+    Signs in with Smart Citizen credentials (POST {API_URL}sessions).
+    Returns the Identity, or None if the credentials are wrong
+    '''
+    try:
+        response = requests.post(f"{current_app.config['SC_API_URL']}sessions",
+                                 json={'username': username, 'password': password}, timeout=30)
+    except requests.RequestException:
+        abort(503, 'Cannot sign in: the Smart Citizen API is not reachable')
+
+    if response.status_code != 200:
+        if response.status_code >= 500:
+            abort(503, f'Cannot sign in: the Smart Citizen API answered {response.status_code}')
+        return None
+
+    return verify_token(response.json()['access_token'])

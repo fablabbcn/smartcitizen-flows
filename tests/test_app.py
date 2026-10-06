@@ -1,23 +1,25 @@
-from types import SimpleNamespace
-
 import pytest
 
-import scflows.auth as auth_module
+import scflows.identity as identity
+
+from conftest import MeResponse
+
+PASSWORDS = {'admin': 'admin-token', 'researcher': 'researcher-token', 'citizen': 'citizen-token'}
 
 
 @pytest.fixture
-def sc_api(monkeypatch):
-    ''' Replaces the SC API session and user requests '''
-    def respond(status_code=200, role='admin'):
-        monkeypatch.setattr(auth_module.requests, 'post',
-                            lambda **kwargs: SimpleNamespace(status_code=status_code))
-        monkeypatch.setattr(auth_module.requests, 'get',
-                            lambda **kwargs: SimpleNamespace(json=lambda: {'role': role}))
-    return respond
+def sc_sessions(monkeypatch, sc_me):
+    ''' Replaces POST {API_URL}sessions: password "secret" for the users in PASSWORDS '''
+    import requests
 
+    def post(url, json=None, timeout=None):
+        if json['username'] == 'down':
+            raise requests.ConnectionError('unreachable')
+        if json['username'] in PASSWORDS and json['password'] == 'secret':
+            return MeResponse(200, {'access_token': PASSWORDS[json['username']]})
+        return MeResponse(422, {'password': 'is incorrect'})
 
-def signup(client, name='admin', password='secret'):
-    return client.post('/signup', data={'name': name, 'password': password})
+    monkeypatch.setattr(identity.requests, 'post', post)
 
 
 def login(client, name='admin', password='secret'):
@@ -35,28 +37,61 @@ def test_tasks_require_login(client):
     assert '/login' in response.headers['Location']
 
 
-def test_signup_and_login_admin(client, sc_api):
-    sc_api(role='admin')
+def test_admin_signs_in(client, sc_sessions):
+    response = login(client)
 
-    assert '/login' in signup(client).headers['Location']
-    assert '/tasks' in login(client).headers['Location']
-
-
-def test_signup_rejects_non_admin(client, sc_api):
-    sc_api(role='researcher')
-
-    assert '/signup' in signup(client).headers['Location']
-    assert '/login' in login(client).headers['Location']
+    assert '/tasks' in response.headers['Location']
+    assert client.get('/tasks').status_code == 200
+    page = client.get('/').get_data(as_text=True)
+    assert 'Logout (admin)' in page
+    assert 'href="/tasks"' in page
 
 
-def test_signup_rejects_invalid_credentials(client, sc_api):
-    sc_api(status_code=422)
+def test_researcher_cannot_see_tasks(client, sc_sessions):
+    assert login(client, 'researcher').headers['Location'] == '/'
 
-    assert '/signup' in signup(client).headers['Location']
+    assert client.get('/tasks').status_code == 403
+    assert 'href="/tasks"' not in client.get('/').get_data(as_text=True)
 
 
-def test_login_with_wrong_password(client, sc_api):
-    sc_api(role='admin')
-    signup(client)
+def test_citizen_cannot_sign_in(client, sc_sessions):
+    response = login(client, 'citizen')
 
+    assert '/login' in response.headers['Location']
+    assert client.get('/tasks').status_code == 302
+    assert 'Only Smart Citizen admins and researchers' in client.get('/login').get_data(as_text=True)
+
+
+def test_wrong_password(client, sc_sessions):
     assert '/login' in login(client, password='wrong').headers['Location']
+    assert client.get('/tasks').status_code == 302
+
+
+def test_api_unreachable(client, sc_sessions):
+    assert login(client, 'down').status_code == 503
+
+
+def test_session_keeps_identity_not_token(app, client, sc_sessions):
+    login(client)
+
+    with client.session_transaction() as session:
+        assert session['identity'] == {'id': 1, 'username': 'admin', 'role': 'admin'}
+        assert 'admin-token' not in str(dict(session))
+        assert session.permanent
+
+
+def test_logout(client, sc_sessions):
+    login(client)
+
+    assert client.get('/logout').status_code == 302
+    assert client.get('/tasks').status_code == 302
+
+
+def test_secure_cookie_with_https_public_url(monkeypatch, tmp_path):
+    from scflows import create_app
+
+    monkeypatch.setenv('PUBLIC_URL', 'https://flows.smartcitizen.me')
+    app = create_app({'SQLALCHEMY_DATABASE_URI': f"sqlite:///{tmp_path / 'db.sqlite'}"})
+
+    assert app.config['SESSION_COOKIE_SECURE'] is True
+    assert app.config['SESSION_COOKIE_SAMESITE'] == 'Lax'

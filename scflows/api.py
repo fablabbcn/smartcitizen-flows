@@ -14,7 +14,7 @@ from werkzeug.exceptions import HTTPException
 
 from . import db, editing
 from .identity import ADMIN, EDITORS, current_identity, requires_role
-from .models import Blueprint as BlueprintModel, Calibration, Hardware
+from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun
 from .validation import check_hardware
 
 api = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -236,3 +236,37 @@ def delete_calibration(sensor_id):
 def get_revisions(kinds, key):
     kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration'}[kinds]
     return jsonify([revision.to_json() for revision in editing.revisions(kind, key_of(key))])
+
+
+# Jobs and runs: admins
+
+@api.get('/jobs')
+@requires_role(ADMIN)
+def list_jobs():
+    query = db.select(Job).order_by(Job.task, Job.device_id)
+    if request.args.get('task'):
+        query = query.filter_by(task=request.args['task'])
+    if request.args.get('device_id', '').isdigit():
+        query = query.filter_by(device_id=int(request.args['device_id']))
+    return jsonify([job.to_json() for job in db.session.execute(query).scalars()])
+
+
+@api.get('/jobs/<int:job_id>')
+@requires_role(ADMIN)
+def get_job(job_id):
+    job = db.session.get(Job, job_id) or abort(404)
+    return jsonify(job.to_json())
+
+
+@api.get('/jobs/<int:job_id>/runs')
+@requires_role(ADMIN)
+def get_job_runs(job_id):
+    job = db.session.get(Job, job_id) or abort(404)
+    return jsonify([run.to_json() for run in job.runs.limit(100)])
+
+
+@api.get('/runs/<int:run_id>')
+@requires_role(ADMIN)
+def get_run(run_id):
+    run = db.session.get(JobRun, run_id) or abort(404)
+    return jsonify(run.to_json(log=True))

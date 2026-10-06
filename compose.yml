@@ -18,27 +18,27 @@ services:
       - internal-network
     restart: always
 
-  rabbitmq:
-    image: rabbitmq:latest
-    env_file:
-      - .env
+  # Celery broker and locks. Not published: only reachable by the other services
+  redis:
+    image: redis:7-alpine
     restart: unless-stopped
     stop_grace_period: 3s
-    ports:
-      - 5672:5672
-      - 15672:15672
+    volumes:
+      - redis_data:/data
     networks:
       - internal-network
 
-  flows:
+  # Schedules the jobs (one instance only)
+  beat:
     build: ./
     env_file:
       - .env
-    command: ["cron-entrypoint.sh"]
+    command: celery --app scflows.worker:app beat -l info --schedule /tmp/celerybeat-schedule
     depends_on:
-      - celery
-    volumes:
-      - ./scflows/public:/scflows/public
+      - redis
+      - web
+    restart: unless-stopped
+    stop_grace_period: 3s
     networks:
       - internal-network
 
@@ -60,8 +60,6 @@ services:
   web:
     build: ./
     depends_on:
-      rabbitmq:
-        condition: service_started
       postgres:
         condition: service_healthy
     env_file:
@@ -70,14 +68,7 @@ services:
     working_dir: /
     # Apply database migrations before serving
     command: sh -c "flask --app scflows db upgrade && exec gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -"
-    # healthcheck:
-    #   test: "${DOCKER_HEALTHCHECK_TEST:-curl localhost:18000/healthy}"
-    #   interval: "60s"
-    #   timeout: "3s"
-    #   start_period: "5s"
-    #   retries: 3
-    ports:
-      - 5000:5000
+    # Served through the proxy. For local use, publish 5000:5000 in a compose.override.yml
     restart: unless-stopped
     stop_grace_period: 3s
     volumes:
@@ -87,9 +78,9 @@ services:
 
   celery:
     build: ./
-    command: celery --app worker:app worker -l info --autoscale=4,2
+    command: celery --app scflows.worker:app worker -l info --autoscale=4,2
     depends_on:
-      - rabbitmq
+      - redis
       # Processing reads blueprints, hardware and calibrations from flows (BASE_POSTPROCESSING_URL)
       - web
     # user: nobody
@@ -104,7 +95,7 @@ services:
 
   flower:
     build: ./
-    command: celery flower -l info -app worker:tasks -url-prefix=flower
+    command: celery --app scflows.worker:app flower --url_prefix=flower
     depends_on:
       - celery
     user: nobody
@@ -112,10 +103,7 @@ services:
       - .env
     restart: unless-stopped
     stop_grace_period: 3s
-    volumes:
-      - ./scflows/public:/scflows/public
-    ports:
-      - 5555:5555
+    # Served through the proxy (with basic auth) only
     networks:
       - internal-network
 
@@ -126,3 +114,4 @@ volumes:
   caddy_data:
   caddy_config:
   postgres_data:
+  redis_data:

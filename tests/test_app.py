@@ -30,8 +30,8 @@ def test_index(client):
     assert client.get('/').status_code == 200
 
 
-def test_tasks_require_login(client):
-    response = client.get('/tasks')
+def test_jobs_require_login(client):
+    response = client.get('/jobs/')
 
     assert response.status_code == 302
     assert '/login' in response.headers['Location']
@@ -40,31 +40,31 @@ def test_tasks_require_login(client):
 def test_admin_signs_in(client, sc_sessions):
     response = login(client)
 
-    assert '/tasks' in response.headers['Location']
-    assert client.get('/tasks').status_code == 200
+    assert '/jobs/' in response.headers['Location']
+    assert client.get('/jobs/').status_code == 200
     page = client.get('/').get_data(as_text=True)
     assert 'Logout (admin)' in page
-    assert 'href="/tasks"' in page
+    assert 'href="/jobs/"' in page
 
 
-def test_researcher_cannot_see_tasks(client, sc_sessions):
+def test_researcher_cannot_see_jobs(client, sc_sessions):
     assert login(client, 'researcher').headers['Location'] == '/'
 
-    assert client.get('/tasks').status_code == 403
-    assert 'href="/tasks"' not in client.get('/').get_data(as_text=True)
+    assert client.get('/jobs/').status_code == 403
+    assert 'href="/jobs/"' not in client.get('/').get_data(as_text=True)
 
 
 def test_citizen_cannot_sign_in(client, sc_sessions):
     response = login(client, 'citizen')
 
     assert '/login' in response.headers['Location']
-    assert client.get('/tasks').status_code == 302
+    assert client.get('/jobs/').status_code == 302
     assert 'Only Smart Citizen admins and researchers' in client.get('/login').get_data(as_text=True)
 
 
 def test_wrong_password(client, sc_sessions):
     assert '/login' in login(client, password='wrong').headers['Location']
-    assert client.get('/tasks').status_code == 302
+    assert client.get('/jobs/').status_code == 302
 
 
 def test_api_unreachable(client, sc_sessions):
@@ -84,7 +84,7 @@ def test_logout(client, sc_sessions):
     login(client)
 
     assert client.get('/logout').status_code == 302
-    assert client.get('/tasks').status_code == 302
+    assert client.get('/jobs/').status_code == 302
 
 
 def test_secure_cookie_with_https_public_url(monkeypatch, tmp_path):

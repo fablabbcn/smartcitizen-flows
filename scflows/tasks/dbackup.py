@@ -9,13 +9,9 @@ import awswrangler as wr
 import datetime
 import botocore
 
-from scflows.worker import app
 from scflows.config import config
 from scflows.custom_logger import logger
 from scflows.tools import refresh_metadata
-from celery.result import AsyncResult
-from celery.exceptions import Ignore, TimeoutError
-from celery import states
 
 async def dbackup(device):
     '''
@@ -131,62 +127,13 @@ async def dbackup(device):
 
     return task_log, task_state
 
-@app.task(bind=True, track_started=True, name='scflows.tasks.dbackup_task')
-def dbackup_task(self, device):
-    result, state = asyncio.run(dbackup(device))
-    logger.info(f'dbackup_task result: {result}')
-    logger.info(f'dbackup_task state: {state}')
-
-    # Raise custom state
-    if state[0] != 'SUCCESS':
-
-        self.update_state(
-            state=state[0],
-            meta={'message': state[1]})
-        raise Ignore()
-
-    return result
 
 if __name__ == '__main__':
+    import argparse
 
-    if '-h' in sys.argv or '--help' in sys.argv or '-help' in sys.argv:
-        print('dbackup: Backup device of SC API into custom storage')
-        print('USAGE:\n\rdbackup.py [options]')
-        print('options:')
-        print('--device <device-number>: device to backup')
-        # TODO Add custom storage
-        # print('--dest <type>: backup destination')
-        print('--celery: task execution is managed via celery worker')
-        sys.exit()
+    parser = argparse.ArgumentParser(description='Back up a device of the Smart Citizen API')
+    parser.add_argument('--device', type=int, required=True)
+    args = parser.parse_args()
 
-    loop = asyncio.get_event_loop()
-
-    if '--device' in sys.argv:
-        device = int(sys.argv[sys.argv.index('--device')+1])
-    else:
-        logger.error('Missing device')
-        sys.exit()
-
-    logger.info(f'Backing up device: {device}')
-
-    if '--celery' in sys.argv:
-        logger.info(f'Using celery backend...')
-        task_id = dbackup_task.s().delay(device = device)
-        logger.info(f'Task ID: {task_id}')
-
-        # Wait for result
-        result = AsyncResult(task_id, app=app)
-        try:
-            result.wait(timeout=60)
-        except TimeoutError:
-            logger.error(f'Timed out')
-
-        logger.info('Task result:')
-        for res in result.get():
-            logger.info(res)
-    else:
-        loop.run_until_complete(dbackup(device))
-
-    loop.close()
-
-
+    log, state = asyncio.run(dbackup(args.device))
+    logger.info(f'Result: {state}')

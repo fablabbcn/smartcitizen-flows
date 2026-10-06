@@ -21,8 +21,8 @@
                             </a>
                             {% if current_user.is_authenticated %}
                             {% if current_user.role == 'admin' %}
-                            <a href="{{ url_for('main.default') }}" class="navbar-item">
-                                Tasks
+                            <a href="{{ url_for('jobs_ui.index') }}" class="navbar-item">
+                                Jobs
                             </a>
                             {% endif %}
                             <a href="{{ url_for('ui.index') }}" class="navbar-item">

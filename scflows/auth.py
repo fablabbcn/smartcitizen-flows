@@ -75,7 +75,7 @@ def login_post():
     session.permanent = True
     login_user(SessionUser(identity))
     if identity.role == ADMIN:
-        return redirect(url_for('main.default'))
+        return redirect(url_for('jobs_ui.index'))
     return redirect(url_for('main.index'))
 
 

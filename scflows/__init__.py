@@ -56,7 +56,13 @@ def create_app(config=None):
     from .ui import ui as ui_blueprint
     app.register_blueprint(ui_blueprint)
 
+    # device jobs interface (admins)
+    from .jobs_ui import jobs_ui as jobs_ui_blueprint
+    app.register_blueprint(jobs_ui_blueprint)
+
     from .metadata import metadata_cli
     app.cli.add_command(metadata_cli)
+    from .jobs import jobs_cli
+    app.cli.add_command(jobs_cli)
 
     return app

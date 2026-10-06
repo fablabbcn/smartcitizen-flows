@@ -2,7 +2,7 @@
 
 Clients send "Authorization: Bearer <token>", the same token they use with the
 Smart Citizen API. The token is checked against {API_URL}me and the result is
-cached for a few minutes.
+cached (see TOKEN_TTL).
 '''
 import hashlib
 import threading
@@ -17,8 +17,10 @@ ADMIN = 'admin'
 RESEARCHER = 'researcher'
 EDITORS = (ADMIN, RESEARCHER)
 
-# Seconds to keep a verified token, and an invalid one
-TOKEN_TTL = 300
+# {API_URL}me embeds all the devices visible to the user: for admins it can take
+# more than 30 seconds. Verified tokens are kept for an hour, invalid ones for a minute
+ME_TIMEOUT = 60
+TOKEN_TTL = 3600
 INVALID_TOKEN_TTL = 60
 
 REQUEST_KEY = 'scflows.identity'
@@ -67,7 +69,9 @@ def verify_token(token):
 
     try:
         response = requests.get(f"{current_app.config['SC_API_URL']}me",
-                                headers={'Authorization': f'Bearer {token}'}, timeout=10)
+                                headers={'Authorization': f'Bearer {token}'}, timeout=ME_TIMEOUT)
+    except requests.Timeout:
+        abort(503, f'Cannot verify the token: the Smart Citizen API did not answer in {ME_TIMEOUT} seconds')
     except requests.RequestException:
         abort(503, 'Cannot verify the token: the Smart Citizen API is not reachable')
 

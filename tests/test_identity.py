@@ -52,3 +52,10 @@ def test_bearer_scheme_required(client, sc_me):
 
     assert response.status_code == 401
     assert sc_me == []
+
+
+def test_api_timeout(client, sc_me):
+    response = client.put('/api/v1/calibrations/1', json={}, headers=auth('slow'))
+
+    assert response.status_code == 503
+    assert f'did not answer in {identity.ME_TIMEOUT} seconds' in response.get_json()['message']

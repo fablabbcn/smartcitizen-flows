@@ -93,7 +93,7 @@ flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/
 
 ### Editing metadata
 
-Admins and researchers of the Smart Citizen platform can create and update metadata, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for 5 minutes.
+Admins and researchers of the Smart Citizen platform can create and update metadata, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for an hour. That call returns all the devices visible to the user: for admins it can take 30 seconds, so the first request with a token is slow.
 
 | Endpoint | Who | |
 |---|---|---|

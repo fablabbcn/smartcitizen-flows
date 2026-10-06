@@ -56,7 +56,7 @@ class MeResponse:
 
 @pytest.fixture
 def sc_me(monkeypatch):
-    ''' Replaces GET {API_URL}me: tokens in USERS are valid, "down" fails, others are rejected '''
+    ''' Replaces GET {API_URL}me: tokens in USERS are valid, "down" and "slow" fail, others are rejected '''
     import requests
 
     import scflows.identity as identity
@@ -68,6 +68,8 @@ def sc_me(monkeypatch):
         calls.append((url, token))
         if token == 'down':
             raise requests.ConnectionError('unreachable')
+        if token == 'slow':
+            raise requests.Timeout('timeout')
         if token in USERS:
             return MeResponse(200, USERS[token])
         return MeResponse(401, {'message': 'Invalid OAuth2 Params'})

@@ -38,7 +38,7 @@ dev = ["pytest>=8"]
 packages = ["scflows", "scflows.tasks"]
 
 [tool.setuptools.package-data]
-scflows = ["templates/*.html", "static/*", "static/**/*", "migrations/*", "migrations/versions/*.py"]
+scflows = ["templates/*.html", "templates/**/*.html", "static/*", "static/**/*", "migrations/*", "migrations/versions/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

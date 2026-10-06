@@ -147,13 +147,13 @@ Note that you need to add the [url-prefix](https://flower.readthedocs.io/en/late
 celery flower -l info -app worker:tasks -url-prefix=flower
 ```
 
-In addition, you will need to protect `flower` if running behind a proxy (see [proxy](#NGINX)). In the `scflows/public/nginx/auth/` run (the file is not committed):
+In addition, you will need to protect `flower` when running behind the proxy (see [Deploying](#deploying)). Create the basic auth credentials (the file is not committed):
 
 ```
-htpasswd -c -b .htpasswd <user> <password>
+scflows/public/caddy/flower_auth.sh <user> <password>
 ```
 
-To have `nginx` secure the flower via http basic auth. More info in the [flower docs](https://flower.readthedocs.io/en/latest/auth.html).
+More info in the [flower docs](https://flower.readthedocs.io/en/latest/auth.html).
 
 ### Running with Docker
 
@@ -183,42 +183,11 @@ python flows.py auto-schedule --celery
 
 ### Deploying
 
-For actual deployment, you can use the provided `nginx` reverse proxy configuration. Before that, you need to create SSL certificates.
-
-#### SSL certificates
+The `proxy` service runs [Caddy](https://caddyserver.com/) with `scflows/public/caddy/Caddyfile`. It requests and renews the TLS certificates for `DOMAIN` (set in `.env`) automatically, redirects HTTP to HTTPS and protects `/flower` with basic auth. Ports 80 and 443 must be reachable and `DOMAIN` must point to the server.
 
 ```
-apt install certbot
-```
-
-And run for your domain:
-
-```
-certbot certonly -d flows.smartcitizen.me
-```
-
-For certificates to be picked up, you need to run certbot normally, but make a `post` `renewal-hook` in `/etc/letsencrypt/renewal-hooks/post` (see `scflows/public/certbot/flows.sh`):
-
-```
-#!/bin/bash
-set -eou pipefail
-
-DOMAIN=domain.domain
-
-echo 'Copying certificates to volume...'
-cp -L -r /etc/letsencrypt/live/$DOMAIN/*.pem /root/smartcitizen-flows/scflows/public/certbot/www/
-cp /etc/letsencrypt/ssl-dhparams.pem /root/smartcitizen-flows/scflows/public/certbot/www/
-cp /etc/letsencrypt/options-ssl-nginx.conf /root/smartcitizen-flows/scflows/public/certbot/www/
-
-echo 'Done'
-```
-
-Then, anytime the renewal run, nginx will pick the new certificates via the declared volume.
-
-#### NGINX
-
-If all good, you can run:
-
-```
+scflows/public/caddy/flower_auth.sh <user> <password>
 docker compose up -d proxy
 ```
+
+Certificates are stored in the `caddy_data` volume.

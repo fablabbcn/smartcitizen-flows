@@ -1,5 +1,7 @@
 .htpasswd
-scflows/public/certbot/www
+scflows/public/caddy/flower_auth
+# Old certbot certificates on servers (no longer used)
+scflows/public/certbot/
 TODO.md
 secrets.py
 

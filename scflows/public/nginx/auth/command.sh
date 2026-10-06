@@ -1,1 +1,1 @@
-htpasswd -b .htpasswd user password
+htpasswd -c -b .htpasswd "$1" "$2"

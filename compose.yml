@@ -29,7 +29,7 @@ services:
     build: ./
     env_file:
       - .env
-    command: ["cron", "-f"]
+    command: ["cron-entrypoint.sh"]
     depends_on:
       - celery
     volumes:

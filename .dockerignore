@@ -1,0 +1,11 @@
+.git
+.env
+.DS_Store
+**/__pycache__
+*.egg-info
+build
+dist
+instance
+tests
+scflows/public
+*.log

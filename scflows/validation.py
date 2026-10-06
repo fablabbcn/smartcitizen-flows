@@ -34,8 +34,8 @@ def slot_channels(slot, sensor_id):
 def check_hardware(body):
     '''
     Checks a hardware description.
-    Errors make processing fail (invalid structure, unknown slots or sensor codes, overlapping versions).
-    Warnings are gaps that can be fixed later (blueprint or calibrations not in flows).
+    Errors make processing fail (invalid structure, blueprint not in flows, unknown slots or sensor codes,
+    overlapping versions). Warnings are gaps that can be fixed later (calibrations, channels in the blueprint).
     '''
     from smartcitizen_connector._config import config as connector_config
 
@@ -51,11 +51,9 @@ def check_hardware(body):
     name = hardware.blueprint_name
     blueprint = db.session.execute(db.select(Blueprint).filter_by(name=name)).scalar_one_or_none() if name else None
     if name is None:
-        check.warnings.append('blueprint: no blueprint')
-    elif blueprint is None and hardware.blueprint:
-        check.errors.append(f'blueprint: {name} is not in flows')
+        check.errors.append('blueprint: required, the name of a blueprint in flows')
     elif blueprint is None:
-        check.warnings.append(f'blueprint_url: blueprint {name} is not in flows')
+        check.errors.append(f'blueprint: {name} is not in flows')
     blueprint_channels = {channel['name'] for channel in blueprint.body.get('channels', [])} if blueprint else set()
 
     sensor_ids = {sensor_id for version in hardware.versions for sensor_id in version.ids.values()}

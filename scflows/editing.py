@@ -3,8 +3,6 @@
 Callers commit the session.
 '''
 from datetime import date
-from os.path import basename, splitext
-from urllib.parse import urlparse
 
 from . import db
 from .models import Blueprint, Calibration, Hardware, HardwareVersion, Revision
@@ -15,10 +13,6 @@ KINDS = {
     'hardware': (Hardware, 'name'),
     'calibration': (Calibration, 'sensor_id'),
 }
-
-
-def name_of(url):
-    return splitext(basename(urlparse(str(url)).path))[0]
 
 
 def find(kind, key):
@@ -47,27 +41,37 @@ def save_blueprint(name, body, identity=None, action=None):
         item = Blueprint(name=name)
         db.session.add(item)
     item.body = body
-    # Link hardware that refers to this blueprint by url
-    for hardware in db.session.execute(db.select(Hardware).filter_by(blueprint_id=None)).scalars():
-        if hardware.blueprint_url and name_of(hardware.blueprint_url) == name:
-            hardware.blueprint = item
-            hardware.blueprint_url = None
     record('blueprint', name, action or (Revision.UPDATE if before else Revision.CREATE), before, body, identity)
     return item, before is None
 
 
+class BlueprintNotInFlows(ValueError):
+    pass
+
+
+class BlueprintInUse(Exception):
+    def __init__(self, hardware):
+        self.hardware = hardware
+        super().__init__(f'Used by hardware: {", ".join(hardware)}')
+
+
 def save_hardware(name, hardware, identity=None, action=None):
-    ''' Creates or replaces a hardware description from a HardwareIn '''
+    '''
+    Creates or replaces a hardware description from a HardwareIn.
+    Raises BlueprintNotInFlows if its blueprint is not in flows
+    '''
     if not isinstance(hardware, HardwareIn):
         hardware = HardwareIn.model_validate(hardware)
+    blueprint = find('blueprint', hardware.blueprint_name) if hardware.blueprint_name else None
+    if blueprint is None:
+        raise BlueprintNotInFlows(f'blueprint {hardware.blueprint_name} is not in flows' if hardware.blueprint_name
+                                  else 'no blueprint')
     item = find('hardware', name)
     before = item.to_json() if item else None
     if item is None:
         item = Hardware(name=name)
         db.session.add(item)
-    item.blueprint = find('blueprint', hardware.blueprint_name) if hardware.blueprint_name else None
-    # The url is only kept when the blueprint is not in flows
-    item.blueprint_url = None if item.blueprint else hardware.blueprint_url
+    item.blueprint = blueprint
     item.description = hardware.description
     item.comment = hardware.comment
     item.forwarding = hardware.forwarding
@@ -94,10 +98,15 @@ def save_calibration(sensor_id, data, identity=None, action=None):
 
 
 def delete(kind, key, identity=None):
-    ''' Deletes an item. Returns False if it does not exist '''
+    ''' Deletes an item. Returns False if it does not exist. Raises BlueprintInUse for blueprints in use '''
     item = find(kind, key)
     if item is None:
         return False
+    if kind == 'blueprint':
+        used_by = list(db.session.execute(db.select(Hardware.name).filter_by(blueprint=item)
+                                          .order_by(Hardware.name)).scalars())
+        if used_by:
+            raise BlueprintInUse(used_by)
     record(kind, key, Revision.DELETE, item.to_json(), None, identity)
     db.session.delete(item)
     return True

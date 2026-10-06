@@ -55,15 +55,25 @@ def test_unknown_slot_and_sensor_code(hardware):
     ]
 
 
-def test_missing_calibration_and_blueprint(hardware):
-    hardware['blueprint_url'] = 'https://example.com/blueprints/other.json'
+def test_missing_calibration(hardware):
     hardware['versions'][0]['ids'] = {'AS_48_32': '212999999'}
 
     check = check_hardware(hardware)
 
     assert check.valid
-    assert check.warnings == ['blueprint_url: blueprint other is not in flows',
-                              'versions.0.ids.AS_48_32: no calibration for 212999999']
+    assert check.warnings == ['versions.0.ids.AS_48_32: no calibration for 212999999',
+                              'versions.0.ids.AS_48_32: channels not in blueprint test_air: NO2_AE']
+
+
+@pytest.mark.parametrize('change, error', [
+    ({'blueprint_url': None}, 'blueprint: required, the name of a blueprint in flows'),
+    ({'blueprint_url': 'https://example.com/blueprints/other.json'}, 'blueprint: other is not in flows'),
+    ({'blueprint_url': None, 'blueprint': 'other'}, 'blueprint: other is not in flows'),
+])
+def test_blueprint_must_be_in_flows(hardware, change, error):
+    hardware.update(change)
+
+    assert check_hardware(hardware).errors == [error]
 
 
 def test_overlapping_versions(hardware):

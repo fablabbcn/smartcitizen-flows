@@ -121,14 +121,41 @@ def test_check_hardware_is_public(client):
     assert response.get_json()['valid'] is True
 
 
-def test_new_blueprint_links_hardware(client):
+def test_hardware_requires_blueprint_in_flows(client):
+    hardware = {key: value for key, value in HARDWARE.items() if key != 'blueprint_url'}
+
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=hardware, headers=auth('admin-token'))
+    assert response.status_code == 422
+    assert response.get_json()['errors'] == ['blueprint: required, the name of a blueprint in flows']
+
+    github = 'https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/blueprints/sck_21.json'
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint_url=github),
+                          headers=auth('admin-token'))
+    assert response.status_code == 422
+    assert response.get_json()['errors'] == ['blueprint: sck_21 is not in flows']
+
+
+def test_new_blueprint_can_be_used(client):
     blueprint = client.get('/api/v1/blueprints/test_air').get_json()
+    assert client.put('/api/v1/blueprints/other', json=blueprint, headers=auth('researcher-token')).status_code == 201
 
-    response = client.put('/api/v1/blueprints/missing', json=blueprint, headers=auth('researcher-token'))
+    response = client.put('/api/v1/hardware/SCAS_TEST2', json=dict(HARDWARE, blueprint_url=None, blueprint='other'),
+                          headers=auth('researcher-token'))
 
-    assert response.status_code == 201
-    hardware = {item['name']: item['blueprint'] for item in client.get('/api/v1/hardware').get_json()}
-    assert hardware['SCAS_TEST2'] == 'missing'
+    assert response.status_code == 200
+    assert response.get_json()['data']['blueprint_url'] == 'http://localhost/api/v1/blueprints/other.json'
+
+
+def test_blueprint_in_use_cannot_be_deleted(client):
+    response = client.delete('/api/v1/blueprints/test_air', headers=auth('admin-token'))
+
+    assert response.status_code == 409
+    assert response.get_json()['message'] == 'The blueprint is used by hardware: SCAS_TEST1, SCAS_TEST2'
+    assert client.get('/api/v1/blueprints/test_air').status_code == 200
+
+    for name in ['SCAS_TEST1', 'SCAS_TEST2']:
+        client.delete(f'/api/v1/hardware/{name}', headers=auth('admin-token'))
+    assert client.delete('/api/v1/blueprints/test_air', headers=auth('admin-token')).status_code == 204
 
 
 def test_invalid_blueprint(client):
@@ -148,7 +175,8 @@ def test_delete_requires_admin(client):
 
     revisions = client.get('/api/v1/hardware/SCAS_TEST1/revisions').get_json()
     assert [item['action'] for item in revisions] == ['delete', 'import']
-    assert revisions[0]['before'] == dict(served_hardware(HARDWARE, 'test_air'), blueprint_url=None)
+    assert revisions[0]['before'] == {key: value for key, value in served_hardware(HARDWARE).items()
+                                      if key != 'blueprint_url'}
     assert revisions[0]['after'] is None
 
 

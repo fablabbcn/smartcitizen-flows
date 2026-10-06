@@ -41,7 +41,7 @@ def test_hardware_links_blueprint_in_flows(client):
 
 
 def test_hardware_optional_keys(client):
-    # No comment in the file: no comment key. Blueprint not in flows: url kept
+    # No comment in the file: no comment key
     assert client.get('/api/v1/hardware/SCAS_TEST2.json').get_json() == \
         served_hardware(source_json('hardware', 'SCAS_TEST2.json'))
 
@@ -75,7 +75,7 @@ def test_hardware_list(client):
     assert client.get('/api/v1/hardware').get_json() == [
         {'name': 'SCAS_TEST1', 'description': '1SEN55-2ELEC-AFE', 'blueprint': 'test_air',
          'url': 'http://localhost/api/v1/hardware/SCAS_TEST1.json'},
-        {'name': 'SCAS_TEST2', 'description': 'Forwarded kit', 'blueprint': None,
+        {'name': 'SCAS_TEST2', 'description': 'Forwarded kit', 'blueprint': 'test_air',
          'url': 'http://localhost/api/v1/hardware/SCAS_TEST2.json'},
     ]
 

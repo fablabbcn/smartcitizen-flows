@@ -35,7 +35,7 @@ def blueprint_url(name):
 
 def hardware_json(item):
     ''' Hardware, with the url of its blueprint in flows '''
-    return item.to_json(blueprint_url=blueprint_url(item.blueprint.name) if item.blueprint else None)
+    return item.to_json(blueprint_url=blueprint_url(item.blueprint.name))
 
 
 def get_by_name(model, name, field='name'):
@@ -102,7 +102,7 @@ def list_hardware():
     hardware = db.session.execute(db.select(Hardware).order_by(Hardware.name)).scalars()
     return jsonify([{'name': item.name,
                      'description': item.description,
-                     'blueprint': item.blueprint.name if item.blueprint else None,
+                     'blueprint': item.blueprint.name,
                      'url': external_url('api.get_hardware', name=f'{item.name}.json')}
                     for item in hardware])
 
@@ -204,7 +204,11 @@ def put_calibration(sensor_id):
 
 
 def delete_item(kind, key):
-    if not editing.delete(kind, key_of(key), identity=current_identity()):
+    try:
+        deleted = editing.delete(kind, key_of(key), identity=current_identity())
+    except editing.BlueprintInUse as error:
+        abort(409, f'The blueprint is used by hardware: {", ".join(error.hardware)}')
+    if not deleted:
         abort(404)
     db.session.commit()
     return '', 204

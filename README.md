@@ -76,7 +76,7 @@ Flows serves the processing metadata (blueprints, hardware and calibrations) tha
 | `GET /api/v1/blueprints` | List of blueprints |
 | `GET /api/v1/blueprints/<name>[.json]` | Blueprint |
 | `GET /api/v1/hardware` | List of hardware |
-| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json`, plus `blueprint` (name). When the blueprint is in flows, `blueprint_url` links to it |
+| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json`, plus `blueprint` (name). `blueprint_url` links to the blueprint in flows |
 | `GET /api/v1/calibrations` (or `/calibrations/calibrations.json`) | All calibrations. Filter with `?kind=alphasense_sensor` or `?kind=afe_board` |
 | `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
 | `GET /api/v1/health` | Health check |
@@ -90,7 +90,7 @@ flask --app scflows metadata verify /tmp/smartcitizen-data
 flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/
 ```
 
-`import` keeps items that already exist, unless `--overwrite` is passed. `verify` compares hardware by blueprint name, as flows links the blueprints it has instead of the GitHub urls.
+`import` keeps items that already exist, unless `--overwrite` is passed. `verify` compares hardware by blueprint name, as flows links its own blueprints instead of the GitHub urls. Every hardware must use a blueprint in flows: import blueprints first, hardware whose blueprint is not in flows is not imported.
 
 ### Editing metadata
 
@@ -105,7 +105,7 @@ Admins and researchers of the Smart Citizen platform can create and update metad
 | `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
 | `GET /api/v1/<blueprints\|hardware\|calibrations>/<name>/revisions` | anyone | History of changes |
 
-Hardware is checked before saving. Errors reject it: invalid structure or dates, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: blueprint not in flows, sensors without calibration, slots without channels in the blueprint.
+Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint. Blueprints used by hardware cannot be deleted.
 
 ```
 curl -X PUT https://flows.smartcitizen.me/api/v1/calibrations/212830246 \

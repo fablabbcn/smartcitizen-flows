@@ -130,6 +130,30 @@ def queue_run(device_id, task, job=None, dry_run=False, username=None):
     return run
 
 
+def find_job(device_id, task):
+    return db.session.execute(db.select(Job).filter_by(device_id=device_id, task=task)).scalar_one_or_none()
+
+
+def add_manual_job(device_id, task):
+    ''' Adds a job requested by an admin (the sync does not disable it). Returns (job, created) '''
+    job = find_job(device_id, task)
+    if job is not None:
+        return job, False
+    interval = INTERVALS[task]
+    job = Job(device_id=device_id, task=task, source=Job.MANUAL, enabled=True, interval_hours=interval,
+              next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1)))
+    db.session.add(job)
+    db.session.commit()
+    return job, True
+
+
+def set_paused(job, paused):
+    job.paused = paused
+    db.session.commit()
+    logger.info(f'Job {job.task} {job.device_id} {"paused" if paused else "resumed"}')
+    return job
+
+
 def dispatch_due_jobs():
     ''' Queues the runs of active jobs that are due. Returns the queued runs '''
     at = now()

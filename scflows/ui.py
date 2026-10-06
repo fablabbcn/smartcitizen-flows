@@ -2,21 +2,21 @@
 
 Uses the same checks and history as the API. Forms are plain html (no javascript needed).
 '''
-import secrets
-
-from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from pydantic import ValidationError
 
 from . import db, editing
 from .api import KEY_PATTERN
 from .auth import admin_required, requires_ui_role
+from .forms import protect
 from .identity import EDITORS
 from .models import Blueprint as BlueprintModel, Calibration, Hardware
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
 
 ui = Blueprint('ui', __name__, url_prefix='/metadata')
+protect(ui)
 
 editors_required = requires_ui_role(*EDITORS)
 
@@ -26,25 +26,6 @@ CALIBRATION_FIELDS = {
 }
 OPTIONAL_CALIBRATION_FIELDS = {name for schema in (AlphasenseCalibration, AfeCalibration)
                                for name, info in schema.model_fields.items() if not info.is_required()}
-
-
-# Forms are protected with a token kept in the session
-
-def csrf_token():
-    if 'csrf' not in session:
-        session['csrf'] = secrets.token_urlsafe(32)
-    return session['csrf']
-
-
-@ui.app_context_processor
-def template_helpers():
-    return {'csrf_token': csrf_token}
-
-
-@ui.before_request
-def check_csrf():
-    if request.method == 'POST' and request.form.get('csrf') != session.get('csrf'):
-        abort(400, 'The form expired, reload the page')
 
 
 def get_or_404(kind, key):

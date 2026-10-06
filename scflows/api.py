@@ -270,3 +270,58 @@ def get_job_runs(job_id):
 def get_run(run_id):
     run = db.session.get(JobRun, run_id) or abort(404)
     return jsonify(run.to_json(log=True))
+
+
+def run_options(task):
+    body = request.get_json(silent=True) or {}
+    dry_run = bool(body.get('dry_run', False))
+    if dry_run and task != Job.PROCESS:
+        abort(400, 'dry_run is only available for process')
+    return dry_run
+
+
+@api.post('/jobs')
+@requires_role(ADMIN)
+def post_job():
+    ''' Adds a manual job: {"device_id": 123, "task": "process"} '''
+    from .jobs import add_manual_job
+    body = json_body()
+    if not isinstance(body.get('device_id'), int) or body.get('task') not in Job.TASKS:
+        abort(400, f'Send {{"device_id": <int>, "task": <{" or ".join(Job.TASKS)}>}}')
+    job, created = add_manual_job(body['device_id'], body['task'])
+    if not created:
+        abort(409, f'Job {job.id} already exists for this device and task')
+    return jsonify(job.to_json()), 201
+
+
+@api.patch('/jobs/<int:job_id>')
+@requires_role(ADMIN)
+def patch_job(job_id):
+    ''' Pauses or resumes a job: {"paused": true} '''
+    from .jobs import set_paused
+    job = db.session.get(Job, job_id) or abort(404)
+    body = json_body()
+    if not isinstance(body.get('paused'), bool):
+        abort(400, 'Send {"paused": true} or {"paused": false}')
+    return jsonify(set_paused(job, body['paused']).to_json())
+
+
+@api.post('/jobs/<int:job_id>/run')
+@requires_role(ADMIN)
+def post_job_run(job_id):
+    ''' Runs a job now. Optional body: {"dry_run": true} (process) '''
+    from .jobs import queue_run
+    job = db.session.get(Job, job_id) or abort(404)
+    run = queue_run(job.device_id, job.task, job=job, dry_run=run_options(job.task),
+                    username=current_identity().username)
+    return jsonify(run.to_json()), 202
+
+
+@api.post('/devices/<int:device_id>/<any(process, backup):task>/run')
+@requires_role(ADMIN)
+def post_device_run(device_id, task):
+    ''' Runs a task for a device now, with or without a job. Optional body: {"dry_run": true} (process) '''
+    from .jobs import find_job, queue_run
+    run = queue_run(device_id, task, job=find_job(device_id, task), dry_run=run_options(task),
+                    username=current_identity().username)
+    return jsonify(run.to_json()), 202

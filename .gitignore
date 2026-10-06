@@ -1,5 +1,5 @@
 .htpasswd
-scflows/public/certbot/www
+scflows/public/caddy/flower_auth
 TODO.md
 secrets.py
 

@@ -1,0 +1,18 @@
+# Certificates are requested and renewed automatically for {$DOMAIN}.
+# HTTP is redirected to HTTPS.
+{$DOMAIN} {
+	encode gzip
+
+	@flower path /flower /flower/*
+	handle @flower {
+		basic_auth {
+			# "<user> <bcrypt hash>" lines, see flower_auth.sh
+			import /etc/caddy/flower_auth
+		}
+		reverse_proxy flower:5555
+	}
+
+	handle {
+		reverse_proxy web:5000
+	}
+}

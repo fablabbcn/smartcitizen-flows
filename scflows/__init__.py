@@ -15,7 +15,6 @@ def create_app(config=None):
 
     app.config['SECRET_KEY'] = environ['FLASK_SECRET_KEY']
     app.config['SQLALCHEMY_DATABASE_URI'] = environ['SQLALCHEMY_DATABASE_URI']
-    app.config['EXPLAIN_TEMPLATE_LOADING']=True
     # Smart Citizen API, used to verify tokens. Same variable as smartcitizen-connector
     app.config['SC_API_URL'] = environ.get('API_URL', 'https://api.smartcitizen.me/v0/').rstrip('/') + '/'
     app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
@@ -52,6 +51,10 @@ def create_app(config=None):
     # public metadata api
     from .api import api as api_blueprint
     app.register_blueprint(api_blueprint)
+
+    # metadata editing interface
+    from .ui import ui as ui_blueprint
+    app.register_blueprint(ui_blueprint)
 
     from .metadata import metadata_cli
     app.cli.add_command(metadata_cli)

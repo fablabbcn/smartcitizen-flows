@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container" id="main-container">
+    <p><a href="{{ url_for('ui.index') }}">Metadata</a> / {{ label }} {{ key }}</p>
+    <h1>History of {{ label | lower }} {{ key }}</h1>
+    <table class="table">
+        <thead><tr><th>Date (UTC)</th><th>Action</th><th>User</th><th>Content</th></tr></thead>
+        <tbody>
+        {% for revision in revisions %}
+            <tr>
+                <td>{{ revision.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{{ revision.action }}</td>
+                <td>{{ revision.username or '' }}</td>
+                <td>
+                    {% if revision.before is not none %}<details><summary>Before</summary><pre>{{ revision.before | tojson(indent=2) }}</pre></details>{% endif %}
+                    {% if revision.after is not none %}<details><summary>After</summary><pre>{{ revision.after | tojson(indent=2) }}</pre></details>{% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="4">No changes recorded</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

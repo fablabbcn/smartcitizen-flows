@@ -27,7 +27,7 @@ class Config(object):
     _log_level = logging.INFO
     _timestamp = True
     _avoid_negative_conc = True
-    _max_load_amount = 500
+    _max_load_amount = 1000
     _max_http_retries = 3
 
 config = Config()

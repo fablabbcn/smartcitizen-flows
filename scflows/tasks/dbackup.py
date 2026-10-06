@@ -91,7 +91,7 @@ async def dbackup(device):
                     task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
                     # Back it up it
-                    if d.backup(mode=mode):
+                    if d.backup_to_storage(mode=mode):
 
                         s3object = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json")
                         s3object.put(

@@ -39,14 +39,17 @@ async def dprocess(device, dry_run = False):
             d.options.min_date = d.handler.postprocessing['latest_postprocessing']
             task_log.append(logger_handler(f'Setting min_date as: {d.options.min_date }'))
 
-        # Only load data that is used in the metrics
-        d.options.channels = sorted([item for item in set([metric.kwargs['channel'] for metric in d.metrics if 'channel' in metric.kwargs]) if item is not None])
-        # Add channels that need to be eager loaded because they are potentially needed
-        d.options.channels += [item for sublist in [metric.kwargs['eager_channels'] for metric in d.metrics if 'eager_channels' in metric.kwargs] for item in sublist if item is not None]
+        # Only load the sensors that the blueprint channels need
+        d.options.channels = d.required_sensors
+        task_log.append(logger_handler(f'Sensors to load: {d.options.channels}'))
 
         d.options.limit = config._max_load_amount
 
-        if d.valid_for_processing:
+        if not d.options.channels:
+            # An empty list would make the handler load all sensors
+            task_log.append(logger_handler(f'Device {device} has no sensors needed by its blueprint', 'error'))
+            task_state = ['ABORTED', 'NO_SENSORS_TO_LOAD']
+        elif d.valid_for_processing:
             task_log.append(logger_handler('Device is valid for processing. Attempting load'))
 
             if await d.load():
@@ -61,7 +64,7 @@ async def dprocess(device, dry_run = False):
 
                     # Post results
                     if d.postprocessing_updated:
-                        if await d.post(columns = 'metrics', dry_run=dry_run, max_retries=3, with_postprocessing=True):
+                        if await d.post(columns = 'channels', dry_run=dry_run, max_retries=3, with_postprocessing=True):
                             task_log.append(logger_handler(f'Device {device} was posted'))
                             task_state = ['SUCCESS', 'PROCESSED AND UPLOADED']
                         else:

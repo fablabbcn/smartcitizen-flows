@@ -6,7 +6,9 @@ Paths follow the layout of the smartcitizen-data repository, so that
 '''
 import re
 
-from flask import Blueprint, abort, jsonify, request, url_for
+from importlib.metadata import PackageNotFoundError, version
+
+from flask import Blueprint, abort, current_app, jsonify, request, url_for
 from pydantic import ValidationError
 from werkzeug.exceptions import HTTPException
 
@@ -18,6 +20,22 @@ from .validation import check_hardware
 api = Blueprint('api', __name__, url_prefix='/api/v1')
 
 CACHE_CONTROL = 'public, max-age=300'
+
+
+def external_url(endpoint, **values):
+    ''' Absolute url, using PUBLIC_URL when set '''
+    if current_app.config['PUBLIC_URL']:
+        return current_app.config['PUBLIC_URL'] + url_for(endpoint, **values)
+    return url_for(endpoint, _external=True, **values)
+
+
+def blueprint_url(name):
+    return external_url('api.get_blueprint', name=f'{name}.json')
+
+
+def hardware_json(item):
+    ''' Hardware, with the url of its blueprint in flows '''
+    return item.to_json(blueprint_url=blueprint_url(item.blueprint.name) if item.blueprint else None)
 
 
 def get_by_name(model, name, field='name'):
@@ -43,6 +61,25 @@ def json_error(error):
     return jsonify({'error': error.name, 'message': error.description}), error.code
 
 
+@api.get('/')
+def index():
+    try:
+        package_version = version('scflows')
+    except PackageNotFoundError:
+        package_version = None
+    return {
+        'name': 'Smart Citizen Flows',
+        'version': package_version,
+        'documentation': 'https://github.com/fablabbcn/smartcitizen-flows#processing-metadata',
+        'links': {
+            'blueprints': external_url('api.list_blueprints'),
+            'hardware': external_url('api.list_hardware'),
+            'calibrations': external_url('api.list_calibrations'),
+            'health': external_url('api.health'),
+        },
+    }
+
+
 @api.get('/health')
 def health():
     db.session.execute(db.text('SELECT 1'))
@@ -52,9 +89,7 @@ def health():
 @api.get('/blueprints')
 def list_blueprints():
     blueprints = db.session.execute(db.select(BlueprintModel).order_by(BlueprintModel.name)).scalars()
-    return jsonify([{'name': blueprint.name,
-                     'url': url_for('api.get_blueprint', name=f'{blueprint.name}.json', _external=True)}
-                    for blueprint in blueprints])
+    return jsonify([{'name': blueprint.name, 'url': blueprint_url(blueprint.name)} for blueprint in blueprints])
 
 
 @api.get('/blueprints/<name>')
@@ -68,17 +103,17 @@ def list_hardware():
     return jsonify([{'name': item.name,
                      'description': item.description,
                      'blueprint': item.blueprint.name if item.blueprint else None,
-                     'url': url_for('api.get_hardware', name=f'{item.name}.json', _external=True)}
+                     'url': external_url('api.get_hardware', name=f'{item.name}.json')}
                     for item in hardware])
 
 
 @api.get('/hardware/<name>')
 def get_hardware(name):
-    return jsonify(get_by_name(Hardware, name).to_json())
+    return jsonify(hardware_json(get_by_name(Hardware, name)))
 
 
+@api.get('/calibrations/calibrations.json', endpoint='calibrations_file')
 @api.get('/calibrations')
-@api.get('/calibrations/calibrations.json')
 def list_calibrations():
     ''' All calibrations as {sensor_id: data}, optionally filtered with ?kind= '''
     query = db.select(Calibration).order_by(Calibration.sensor_id)
@@ -121,8 +156,8 @@ def validation_errors(error):
     return [f"{'.'.join(str(part) for part in item['loc']) or 'body'}: {item['msg']}" for item in error.errors()]
 
 
-def saved(item, created, warnings=None):
-    response = jsonify({'data': item.to_json(), 'warnings': warnings or []})
+def saved(data, created, warnings=None):
+    response = jsonify({'data': data, 'warnings': warnings or []})
     response.status_code = 201 if created else 200
     return response
 
@@ -135,7 +170,7 @@ def put_blueprint(name):
     except ValidationError as error:
         unprocessable(validation_errors(error))
     db.session.commit()
-    return saved(item, created)
+    return saved(item.to_json(), created)
 
 
 @api.put('/hardware/<name>')
@@ -147,7 +182,7 @@ def put_hardware(name):
         unprocessable(check.errors)
     item, created = editing.save_hardware(key, check.hardware, identity=current_identity())
     db.session.commit()
-    return saved(item, created, check.warnings)
+    return saved(hardware_json(item), created, check.warnings)
 
 
 @api.post('/hardware/<name>/check')
@@ -165,7 +200,7 @@ def put_calibration(sensor_id):
     except ValidationError as error:
         unprocessable(validation_errors(error))
     db.session.commit()
-    return saved(item, created)
+    return saved(item.to_json(), created)
 
 
 def delete_item(kind, key):

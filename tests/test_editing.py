@@ -6,7 +6,7 @@ import pytest
 
 from scflows.metadata import import_metadata
 
-from conftest import DATA, auth
+from conftest import DATA, auth, served_hardware
 
 with open(join(DATA, 'hardware', 'SCAS_TEST1.json')) as file:
     HARDWARE = json.load(file)
@@ -76,7 +76,7 @@ def test_put_hardware_with_warnings(client):
     assert body['data']['description'] == 'Updated'
     assert body['warnings'] == ['versions.0.ids.AS_48_32: channels not in blueprint test_air: NO2_AE',
                                 'versions.0.ids.PT_49_23: channels not in blueprint test_air: ASPT1000, PT1000_POS']
-    assert client.get('/api/v1/hardware/SCAS_TEST1.json').get_json() == hardware
+    assert client.get('/api/v1/hardware/SCAS_TEST1.json').get_json() == served_hardware(hardware, 'test_air')
 
 
 def test_invalid_hardware_is_not_saved(client):
@@ -87,7 +87,31 @@ def test_invalid_hardware_is_not_saved(client):
 
     assert response.status_code == 422
     assert response.get_json()['errors'] == ['versions.0.ids.AS_48_32: unknown Alphasense sensor code 730']
-    assert client.get('/api/v1/hardware/SCAS_TEST1').get_json() == HARDWARE
+    assert client.get('/api/v1/hardware/SCAS_TEST1').get_json() == served_hardware(HARDWARE, 'test_air')
+
+
+def test_put_hardware_round_trip(client):
+    # What flows serves can be sent back as is
+    served = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
+
+    response = client.put('/api/v1/hardware/SCAS_TEST1', json=served, headers=auth('admin-token'))
+
+    assert response.status_code == 200
+    assert response.get_json()['data'] == served
+
+
+def test_put_hardware_by_blueprint_name(client):
+    hardware = {key: value for key, value in HARDWARE.items() if key != 'blueprint_url'}
+
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint='test_air'),
+                          headers=auth('admin-token'))
+    assert response.status_code == 201
+    assert response.get_json()['data']['blueprint_url'] == 'http://localhost/api/v1/blueprints/test_air.json'
+
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint='missing'),
+                          headers=auth('admin-token'))
+    assert response.status_code == 422
+    assert response.get_json()['errors'] == ['blueprint: missing is not in flows']
 
 
 def test_check_hardware_is_public(client):
@@ -124,7 +148,8 @@ def test_delete_requires_admin(client):
 
     revisions = client.get('/api/v1/hardware/SCAS_TEST1/revisions').get_json()
     assert [item['action'] for item in revisions] == ['delete', 'import']
-    assert revisions[0]['before'] == HARDWARE and revisions[0]['after'] is None
+    assert revisions[0]['before'] == dict(served_hardware(HARDWARE, 'test_air'), blueprint_url=None)
+    assert revisions[0]['after'] is None
 
 
 @pytest.mark.parametrize('path', ['/api/v1/hardware/bad%20name', '/api/v1/calibrations/a.b'])

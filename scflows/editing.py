@@ -47,10 +47,11 @@ def save_blueprint(name, body, identity=None, action=None):
         item = Blueprint(name=name)
         db.session.add(item)
     item.body = body
-    # Link hardware that refers to this blueprint
+    # Link hardware that refers to this blueprint by url
     for hardware in db.session.execute(db.select(Hardware).filter_by(blueprint_id=None)).scalars():
         if hardware.blueprint_url and name_of(hardware.blueprint_url) == name:
             hardware.blueprint = item
+            hardware.blueprint_url = None
     record('blueprint', name, action or (Revision.UPDATE if before else Revision.CREATE), before, body, identity)
     return item, before is None
 
@@ -64,8 +65,9 @@ def save_hardware(name, hardware, identity=None, action=None):
     if item is None:
         item = Hardware(name=name)
         db.session.add(item)
-    item.blueprint_url = hardware.blueprint_url
-    item.blueprint = find('blueprint', name_of(hardware.blueprint_url)) if hardware.blueprint_url else None
+    item.blueprint = find('blueprint', hardware.blueprint_name) if hardware.blueprint_name else None
+    # The url is only kept when the blueprint is not in flows
+    item.blueprint_url = None if item.blueprint else hardware.blueprint_url
     item.description = hardware.description
     item.comment = hardware.comment
     item.forwarding = hardware.forwarding

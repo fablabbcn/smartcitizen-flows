@@ -74,3 +74,10 @@ def test_overlapping_versions(hardware):
 
     hardware['versions'][0]['to'] = '2025-01-01'
     assert check_hardware(hardware).valid
+
+
+def test_blueprint_and_url_must_match(hardware):
+    hardware['blueprint'] = 'other'
+
+    assert check_hardware(hardware).errors == [
+        'body: Value error, "blueprint" and "blueprint_url" refer to different blueprints']

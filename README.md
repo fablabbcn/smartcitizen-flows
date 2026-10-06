@@ -72,15 +72,16 @@ Flows serves the processing metadata (blueprints, hardware and calibrations) tha
 
 | Endpoint | Content |
 |---|---|
+| `GET /api/v1/` | Links to the endpoints |
 | `GET /api/v1/blueprints` | List of blueprints |
 | `GET /api/v1/blueprints/<name>[.json]` | Blueprint |
 | `GET /api/v1/hardware` | List of hardware |
-| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json` |
+| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json`, plus `blueprint` (name). When the blueprint is in flows, `blueprint_url` links to it |
 | `GET /api/v1/calibrations` (or `/calibrations/calibrations.json`) | All calibrations. Filter with `?kind=alphasense_sensor` or `?kind=afe_board` |
 | `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
 | `GET /api/v1/health` | Health check |
 
-The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it:
+Links use `PUBLIC_URL` (e.g. `https://flows.smartcitizen.me`), or the request host when it is not set. The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it:
 
 ```
 git clone --depth 1 https://github.com/fablabbcn/smartcitizen-data.git /tmp/smartcitizen-data
@@ -89,7 +90,7 @@ flask --app scflows metadata verify /tmp/smartcitizen-data
 flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/
 ```
 
-`import` keeps items that already exist, unless `--overwrite` is passed.
+`import` keeps items that already exist, unless `--overwrite` is passed. `verify` compares hardware by blueprint name, as flows links the blueprints it has instead of the GitHub urls.
 
 ### Editing metadata
 
@@ -98,7 +99,7 @@ Admins and researchers of the Smart Citizen platform can create and update metad
 | Endpoint | Who | |
 |---|---|---|
 | `PUT /api/v1/blueprints/<name>` | admin, researcher | Create or replace a blueprint (validated with `scdata`) |
-| `PUT /api/v1/hardware/<name>` | admin, researcher | Create or replace a hardware description, same structure as the hardware files |
+| `PUT /api/v1/hardware/<name>` | admin, researcher | Create or replace a hardware description, same structure as the hardware files. Refer to the blueprint with `blueprint` (name of a blueprint in flows) or `blueprint_url` |
 | `PUT /api/v1/calibrations/<sensor_id>` | admin, researcher | Create or replace a calibration (Alphasense sensor or AFE board) |
 | `DELETE /api/v1/<blueprints\|hardware\|calibrations>/<name>` | admin | Delete |
 | `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
@@ -140,6 +141,7 @@ FLASK_APP=scflows
 FLASK_DEBUG=0
 SQLALCHEMY_DATABASE_URI=postgresql+psycopg://flows:change-me@postgres:5432/flows
 FLASK_SECRET_KEY=change-me
+PUBLIC_URL=https://flows.smartcitizen.me
 # POSTGRES
 POSTGRES_USER=flows
 POSTGRES_PASSWORD=change-me

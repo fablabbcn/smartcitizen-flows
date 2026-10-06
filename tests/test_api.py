@@ -5,7 +5,7 @@ import pytest
 
 from scflows.metadata import import_metadata
 
-from conftest import DATA
+from conftest import DATA, served_hardware
 
 
 def source_json(*path):
@@ -29,12 +29,46 @@ def test_hardware(client, path):
 
     assert response.status_code == 200
     assert response.headers['Cache-Control'] == 'public, max-age=300'
-    assert response.get_json() == source_json('hardware', 'SCAS_TEST1.json')
+    assert response.get_json() == served_hardware(source_json('hardware', 'SCAS_TEST1.json'), 'test_air')
+
+
+def test_hardware_links_blueprint_in_flows(client):
+    data = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
+
+    assert data['blueprint'] == 'test_air'
+    assert data['blueprint_url'] == 'http://localhost/api/v1/blueprints/test_air.json'
+    assert client.get(data['blueprint_url']).get_json() == source_json('blueprints', 'test_air.json')
 
 
 def test_hardware_optional_keys(client):
-    # No comment in the file: no comment key served
-    assert client.get('/api/v1/hardware/SCAS_TEST2.json').get_json() == source_json('hardware', 'SCAS_TEST2.json')
+    # No comment in the file: no comment key. Blueprint not in flows: url kept
+    assert client.get('/api/v1/hardware/SCAS_TEST2.json').get_json() == \
+        served_hardware(source_json('hardware', 'SCAS_TEST2.json'))
+
+
+def test_public_url(app, client):
+    app.config['PUBLIC_URL'] = 'https://flows.smartcitizen.me'
+
+    data = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
+
+    assert data['blueprint_url'] == 'https://flows.smartcitizen.me/api/v1/blueprints/test_air.json'
+    assert client.get('/api/v1/blueprints').get_json()[0]['url'] == \
+        'https://flows.smartcitizen.me/api/v1/blueprints/test_air.json'
+
+
+@pytest.mark.parametrize('path', ['/api/v1/', '/api/v1'])
+def test_index(client, path):
+    response = client.get(path, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert response.get_json()['links'] == {
+        'blueprints': 'http://localhost/api/v1/blueprints',
+        'hardware': 'http://localhost/api/v1/hardware',
+        'calibrations': 'http://localhost/api/v1/calibrations',
+        'health': 'http://localhost/api/v1/health',
+    }
+    for link in response.get_json()['links'].values():
+        assert client.get(link).status_code == 200
 
 
 def test_hardware_list(client):

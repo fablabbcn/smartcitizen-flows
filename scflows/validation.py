@@ -1,8 +1,6 @@
 ''' Checks of hardware descriptions against what processing needs '''
 from dataclasses import dataclass, field
 from datetime import date
-from os.path import basename, splitext
-from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
@@ -23,10 +21,6 @@ class HardwareCheck:
 
     def to_json(self):
         return {'valid': self.valid, 'errors': self.errors, 'warnings': self.warnings}
-
-
-def blueprint_name(url):
-    return splitext(basename(urlparse(url).path))[0] if url else None
 
 
 def slot_channels(slot, sensor_id):
@@ -54,10 +48,12 @@ def check_hardware(body):
         return check
 
     hardware = check.hardware
-    name = blueprint_name(hardware.blueprint_url)
+    name = hardware.blueprint_name
     blueprint = db.session.execute(db.select(Blueprint).filter_by(name=name)).scalar_one_or_none() if name else None
     if name is None:
-        check.warnings.append('blueprint_url: no blueprint')
+        check.warnings.append('blueprint: no blueprint')
+    elif blueprint is None and hardware.blueprint:
+        check.errors.append(f'blueprint: {name} is not in flows')
     elif blueprint is None:
         check.warnings.append(f'blueprint_url: blueprint {name} is not in flows')
     blueprint_channels = {channel['name'] for channel in blueprint.body.get('channels', [])} if blueprint else set()

@@ -82,3 +82,11 @@ def sc_me(monkeypatch):
 
 def auth(token):
     return {'Authorization': f'Bearer {token}'}
+
+
+def served_hardware(source, blueprint=None, base='http://localhost'):
+    ''' A hardware file as flows serves it: blueprints in flows are linked by name and flows url '''
+    served = {'blueprint': blueprint,
+              'blueprint_url': f'{base}/api/v1/blueprints/{blueprint}.json' if blueprint else source['blueprint_url']}
+    served.update({key: value for key, value in source.items() if key != 'blueprint_url'})
+    return served

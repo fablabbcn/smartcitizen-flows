@@ -18,6 +18,8 @@ def create_app(config=None):
     # Smart Citizen API, used to verify tokens. Same variable as smartcitizen-connector
     app.config['SC_API_URL'] = environ.get('API_URL', 'https://api.smartcitizen.me/v0/').rstrip('/') + '/'
     app.config['MAX_CONTENT_LENGTH'] = 1024 * 1024
+    # Public address used in links (e.g. https://flows.smartcitizen.me). Defaults to the request host
+    app.config['PUBLIC_URL'] = environ.get('PUBLIC_URL', '').rstrip('/') or None
     if config is not None:
         app.config.update(config)
     # Keep the key order of the stored json

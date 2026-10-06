@@ -42,16 +42,21 @@ class Hardware(TimestampMixin, db.Model):
     description = db.Column(db.Text)
     comment = db.Column(db.Text)
     forwarding = db.Column(db.String(64))
-    # Served as stored. blueprint_id links it when the blueprint is in flows
+    # Blueprint in flows. blueprint_url is only kept for blueprints that are not in flows
     blueprint_url = db.Column(db.Text)
     blueprint_id = db.Column(db.Integer, db.ForeignKey('blueprint.id', ondelete='SET NULL'))
     blueprint = db.relationship('Blueprint')
     versions = db.relationship('HardwareVersion', back_populates='hardware', cascade='all, delete-orphan',
                                order_by='HardwareVersion.from_date')
 
-    def to_json(self):
-        ''' Same structure as the hardware files: optional keys are left out when empty '''
-        result = {'blueprint_url': self.blueprint_url, 'description': self.description}
+    def to_json(self, blueprint_url=None):
+        '''
+        Same structure as the hardware files, plus the blueprint name. Optional keys are left out when empty.
+        blueprint_url: url of the linked blueprint in flows (built by the API)
+        '''
+        result = {'blueprint': self.blueprint.name if self.blueprint else None,
+                  'blueprint_url': blueprint_url if self.blueprint and blueprint_url else self.blueprint_url,
+                  'description': self.description}
         if self.comment is not None:
             result['comment'] = self.comment
         if self.forwarding is not None:

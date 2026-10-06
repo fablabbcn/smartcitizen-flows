@@ -1,8 +1,16 @@
 ''' Validation of metadata sent to the API '''
 from datetime import date
+from os.path import basename, splitext
 from typing import Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+def url_name(url):
+    ''' Name of a file from its url: .../blueprints/sc_air.json -> sc_air '''
+    return splitext(basename(urlparse(str(url)).path))[0]
+
 
 # Values in calibrations.json are numbers or numeric strings, sometimes empty
 CalibrationValue = Union[float, int, str]
@@ -23,14 +31,27 @@ class HardwareVersionIn(BaseModel):
 
 
 class HardwareIn(BaseModel):
-    ''' Same structure as the hardware files of smartcitizen-data '''
+    ''' Same structure as the hardware files of smartcitizen-data, plus the blueprint name '''
     model_config = ConfigDict(extra='forbid')
 
+    # Name of a blueprint in flows. blueprint_url is accepted too (e.g. from the hardware files)
+    blueprint: Optional[str] = Field(default=None, pattern=r'^[A-Za-z0-9_-]{1,64}$')
     blueprint_url: Optional[str] = None
     description: Optional[str] = None
     comment: Optional[str] = None
     forwarding: Optional[str] = None
     versions: List[HardwareVersionIn] = []
+
+    @model_validator(mode='after')
+    def check_blueprint(self):
+        if self.blueprint and self.blueprint_url and url_name(self.blueprint_url) != self.blueprint:
+            raise ValueError('"blueprint" and "blueprint_url" refer to different blueprints')
+        return self
+
+    @property
+    def blueprint_name(self):
+        ''' Name of the referenced blueprint, from blueprint or blueprint_url '''
+        return self.blueprint or (url_name(self.blueprint_url) if self.blueprint_url else None)
 
 
 class AlphasenseCalibration(BaseModel):

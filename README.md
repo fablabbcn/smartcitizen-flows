@@ -137,7 +137,7 @@ FLOWER_PORT=5555
 # FLASK
 FLASK_ENV=production
 FLASK_APP=scflows
-FLASK_DEBUG=1
+FLASK_DEBUG=0
 SQLALCHEMY_DATABASE_URI=postgresql+psycopg://flows:change-me@postgres:5432/flows
 FLASK_SECRET_KEY=change-me
 # POSTGRES

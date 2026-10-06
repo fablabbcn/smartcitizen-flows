@@ -11,8 +11,8 @@ from flask import current_app
 from flask.cli import AppGroup
 from pydantic import ValidationError
 
-from . import db
-from .models import Blueprint, Calibration, Hardware, HardwareVersion
+from . import db, editing
+from .models import Blueprint, Hardware, Revision
 
 metadata_cli = AppGroup('metadata', help='Processing metadata (blueprints, hardware, calibrations)')
 
@@ -34,83 +34,40 @@ def name_of(path):
     return splitext(basename(urlparse(str(path)).path))[0]
 
 
-def validate_blueprint(body):
-    # Imported here: scdata loads its configuration on import
-    from scdata.models import Blueprint as BlueprintSchema
-    BlueprintSchema.model_validate(body)
-
-
-def validate_hardware(body):
-    from smartcitizen_connector.models import HardwarePostprocessing
-    HardwarePostprocessing.model_validate(body)
-
-
-def upsert(model, key, value, overwrite, report, kind):
-    ''' Returns the item to fill in, or None if it exists and should be kept '''
-    item = db.session.execute(db.select(model).filter_by(**{key: value})).scalar_one_or_none()
-    if item is None:
-        item = model(**{key: value})
-        db.session.add(item)
-        report.created[kind] += 1
-    elif overwrite:
-        report.updated[kind] += 1
-    else:
-        report.skipped[kind] += 1
-        return None
-    return item
-
-
 def import_metadata(path, overwrite=False):
     '''
     Imports blueprints, hardware and calibrations from a smartcitizen-data checkout.
-    Existing items are kept unless overwrite is set. Invalid files are reported and skipped.
+    Existing items are kept unless overwrite is set. Invalid items are reported and skipped.
     '''
     report = ImportReport()
 
-    for blueprint_path in sorted(glob(join(path, 'blueprints', '*.json'))):
-        body = load_json(blueprint_path)
+    def run(kind, counter, key, save, data, source):
+        if not overwrite and editing.find(kind, key) is not None:
+            report.skipped[counter] += 1
+            return
         try:
-            validate_blueprint(body)
-        except ValidationError as error:
-            report.errors.append(f'{blueprint_path}: {error}')
-            continue
-        item = upsert(Blueprint, 'name', name_of(blueprint_path), overwrite, report, 'blueprints')
-        if item is not None:
-            item.body = body
+            _, created = save(key, data, action=Revision.IMPORT)
+        except (ValidationError, ValueError) as error:
+            report.errors.append(f'{source}: {error}')
+            return
+        (report.created if created else report.updated)[counter] += 1
+
+    for blueprint_path in sorted(glob(join(path, 'blueprints', '*.json'))):
+        run('blueprint', 'blueprints', name_of(blueprint_path), editing.save_blueprint,
+            load_json(blueprint_path), blueprint_path)
     db.session.flush()
 
-    blueprints = {blueprint.name: blueprint for blueprint in db.session.execute(db.select(Blueprint)).scalars()}
-
     for hardware_path in sorted(glob(join(path, 'hardware', '*.json'))):
-        body = load_json(hardware_path)
-        try:
-            validate_hardware(body)
-            versions = [HardwareVersion(ids=version['ids'],
-                                        from_date=HardwareVersion.parse_date(version.get('from')),
-                                        to_date=HardwareVersion.parse_date(version.get('to')))
-                        for version in body.get('versions', [])]
-        except (ValidationError, ValueError, KeyError) as error:
-            report.errors.append(f'{hardware_path}: {error!r}')
-            continue
-        item = upsert(Hardware, 'name', name_of(hardware_path), overwrite, report, 'hardware')
-        if item is None:
-            continue
-        item.blueprint_url = body.get('blueprint_url')
-        item.blueprint = blueprints.get(name_of(item.blueprint_url)) if item.blueprint_url else None
-        item.description = body.get('description')
-        item.comment = body.get('comment')
-        item.forwarding = body.get('forwarding')
-        item.versions = versions
+        run('hardware', 'hardware', name_of(hardware_path), editing.save_hardware,
+            load_json(hardware_path), hardware_path)
 
     calibrations_path = join(path, 'calibrations', 'calibrations.json')
     for sensor_id, data in load_json(calibrations_path).items():
         if not isinstance(data, dict):
             report.errors.append(f'{calibrations_path}: {sensor_id} is not an object')
             continue
-        item = upsert(Calibration, 'sensor_id', sensor_id, overwrite, report, 'calibrations')
-        if item is not None:
-            item.kind = Calibration.kind_of(data)
-            item.data = data
+        run('calibration', 'calibrations', sensor_id, editing.save_calibration, data,
+            f'{calibrations_path} ({sensor_id})')
 
     db.session.commit()
     return report

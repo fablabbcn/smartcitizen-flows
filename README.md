@@ -91,6 +91,27 @@ flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/
 
 `import` keeps items that already exist, unless `--overwrite` is passed.
 
+### Editing metadata
+
+Admins and researchers of the Smart Citizen platform can create and update metadata, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for 5 minutes.
+
+| Endpoint | Who | |
+|---|---|---|
+| `PUT /api/v1/blueprints/<name>` | admin, researcher | Create or replace a blueprint (validated with `scdata`) |
+| `PUT /api/v1/hardware/<name>` | admin, researcher | Create or replace a hardware description, same structure as the hardware files |
+| `PUT /api/v1/calibrations/<sensor_id>` | admin, researcher | Create or replace a calibration (Alphasense sensor or AFE board) |
+| `DELETE /api/v1/<blueprints\|hardware\|calibrations>/<name>` | admin | Delete |
+| `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
+| `GET /api/v1/<blueprints\|hardware\|calibrations>/<name>/revisions` | anyone | History of changes |
+
+Hardware is checked before saving. Errors reject it: invalid structure or dates, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: blueprint not in flows, sensors without calibration, slots without channels in the blueprint.
+
+```
+curl -X PUT https://flows.smartcitizen.me/api/v1/calibrations/212830246 \
+  -H "Authorization: Bearer $SC_TOKEN" -H "Content-Type: application/json" \
+  -d @calibration.json
+```
+
 ## Local deployment
 
 You can deploy via `docker` or by running the different components separately.

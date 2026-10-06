@@ -97,3 +97,35 @@ class Calibration(TimestampMixin, db.Model):
 
     def to_json(self):
         return self.data
+
+
+class Revision(db.Model):
+    ''' History of changes to blueprints, hardware and calibrations '''
+    CREATE = 'create'
+    UPDATE = 'update'
+    DELETE = 'delete'
+    IMPORT = 'import'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # blueprint, hardware or calibration, and its name or sensor_id
+    kind = db.Column(db.String(32), nullable=False)
+    key = db.Column(db.String(64), nullable=False)
+    action = db.Column(db.String(16), nullable=False)
+    before = db.Column(JSONType)
+    after = db.Column(JSONType)
+    # Smart Citizen user, empty for imports
+    user_id = db.Column(db.Integer)
+    username = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (db.Index('ix_revision_kind_key', 'kind', 'key'),)
+
+    def to_json(self):
+        return {
+            'id': self.id,
+            'action': self.action,
+            'username': self.username,
+            'created_at': self.created_at.isoformat(),
+            'before': self.before,
+            'after': self.after,
+        }

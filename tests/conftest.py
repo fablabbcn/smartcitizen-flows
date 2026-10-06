@@ -36,3 +36,47 @@ def app(tmp_path):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+USERS = {
+    'admin-token': {'id': 1, 'username': 'admin', 'role': 'admin'},
+    'researcher-token': {'id': 2, 'username': 'researcher', 'role': 'researcher'},
+    'citizen-token': {'id': 3, 'username': 'citizen', 'role': 'citizen'},
+}
+
+
+class MeResponse:
+    def __init__(self, status_code, payload=None):
+        self.status_code = status_code
+        self.payload = payload
+
+    def json(self):
+        return self.payload
+
+
+@pytest.fixture
+def sc_me(monkeypatch):
+    ''' Replaces GET {API_URL}me: tokens in USERS are valid, "down" fails, others are rejected '''
+    import requests
+
+    import scflows.identity as identity
+
+    calls = []
+
+    def get(url, headers=None, timeout=None):
+        token = headers['Authorization'].removeprefix('Bearer ')
+        calls.append((url, token))
+        if token == 'down':
+            raise requests.ConnectionError('unreachable')
+        if token in USERS:
+            return MeResponse(200, USERS[token])
+        return MeResponse(401, {'message': 'Invalid OAuth2 Params'})
+
+    identity.cache.clear()
+    monkeypatch.setattr(identity.requests, 'get', get)
+    yield calls
+    identity.cache.clear()
+
+
+def auth(token):
+    return {'Authorization': f'Bearer {token}'}

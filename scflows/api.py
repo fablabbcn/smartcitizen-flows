@@ -4,11 +4,16 @@ Paths follow the layout of the smartcitizen-data repository, so that
 {base}/hardware/<name>.json, {base}/blueprints/<name>.json and
 {base}/calibrations/calibrations.json work with base = <host>/api/v1/
 '''
+import re
+
 from flask import Blueprint, abort, jsonify, request, url_for
+from pydantic import ValidationError
 from werkzeug.exceptions import HTTPException
 
-from . import db
+from . import db, editing
+from .identity import ADMIN, EDITORS, current_identity, requires_role
 from .models import Blueprint as BlueprintModel, Calibration, Hardware
+from .validation import check_hardware
 
 api = Blueprint('api', __name__, url_prefix='/api/v1')
 
@@ -32,6 +37,9 @@ def add_cache_control(response):
 
 @api.errorhandler(HTTPException)
 def json_error(error):
+    # Errors raised with a ready response (see unprocessable) keep it
+    if error.response is not None:
+        return error.response
     return jsonify({'error': error.name, 'message': error.description}), error.code
 
 
@@ -82,3 +90,110 @@ def list_calibrations():
 @api.get('/calibrations/<sensor_id>')
 def get_calibration(sensor_id):
     return jsonify(get_by_name(Calibration, sensor_id, field='sensor_id').to_json())
+
+
+# Writes: admins and researchers. Deletes: admins
+
+KEY_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+
+def key_of(value):
+    key = value.removesuffix('.json')
+    if not KEY_PATTERN.match(key):
+        abort(400, 'Names can only contain letters, numbers, "_" and "-" (64 characters at most)')
+    return key
+
+
+def json_body():
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        abort(400, 'The body must be a json object')
+    return body
+
+
+def unprocessable(errors):
+    response = jsonify({'error': 'Unprocessable Entity', 'message': 'Invalid content', 'errors': errors})
+    response.status_code = 422
+    abort(response)
+
+
+def validation_errors(error):
+    return [f"{'.'.join(str(part) for part in item['loc']) or 'body'}: {item['msg']}" for item in error.errors()]
+
+
+def saved(item, created, warnings=None):
+    response = jsonify({'data': item.to_json(), 'warnings': warnings or []})
+    response.status_code = 201 if created else 200
+    return response
+
+
+@api.put('/blueprints/<name>')
+@requires_role(*EDITORS)
+def put_blueprint(name):
+    try:
+        item, created = editing.save_blueprint(key_of(name), json_body(), identity=current_identity())
+    except ValidationError as error:
+        unprocessable(validation_errors(error))
+    db.session.commit()
+    return saved(item, created)
+
+
+@api.put('/hardware/<name>')
+@requires_role(*EDITORS)
+def put_hardware(name):
+    key = key_of(name)
+    check = check_hardware(json_body())
+    if not check.valid:
+        unprocessable(check.errors)
+    item, created = editing.save_hardware(key, check.hardware, identity=current_identity())
+    db.session.commit()
+    return saved(item, created, check.warnings)
+
+
+@api.post('/hardware/<name>/check')
+def post_hardware_check(name):
+    ''' Checks a hardware description without saving it '''
+    key_of(name)
+    return jsonify(check_hardware(json_body()).to_json())
+
+
+@api.put('/calibrations/<sensor_id>')
+@requires_role(*EDITORS)
+def put_calibration(sensor_id):
+    try:
+        item, created = editing.save_calibration(key_of(sensor_id), json_body(), identity=current_identity())
+    except ValidationError as error:
+        unprocessable(validation_errors(error))
+    db.session.commit()
+    return saved(item, created)
+
+
+def delete_item(kind, key):
+    if not editing.delete(kind, key_of(key), identity=current_identity()):
+        abort(404)
+    db.session.commit()
+    return '', 204
+
+
+@api.delete('/blueprints/<name>')
+@requires_role(ADMIN)
+def delete_blueprint(name):
+    return delete_item('blueprint', name)
+
+
+@api.delete('/hardware/<name>')
+@requires_role(ADMIN)
+def delete_hardware(name):
+    return delete_item('hardware', name)
+
+
+@api.delete('/calibrations/<sensor_id>')
+@requires_role(ADMIN)
+def delete_calibration(sensor_id):
+    return delete_item('calibration', sensor_id)
+
+
+@api.get('/<any(blueprints, hardware, calibrations):kinds>/<key>/revisions')
+def get_revisions(kinds, key):
+    kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration'}[kinds]
+    return jsonify([revision.to_json() for revision in editing.revisions(kind, key_of(key))])

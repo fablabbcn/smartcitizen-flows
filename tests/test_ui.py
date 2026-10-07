@@ -179,5 +179,6 @@ def test_history(client):
 
     page = client.get('/metadata/hardware/SCAS_TEST1/history').get_data(as_text=True)
 
-    assert re.search(r'<td>update</td>\s*<td>researcher</td>', page)
-    assert '<td>import</td>' in page
+    assert re.search(r'<span class="badge update">update</span>\s*<strong>researcher</strong>', page)
+    assert 'Changed: <code>description</code>' in page
+    assert '<span class="badge import">import</span>' in page

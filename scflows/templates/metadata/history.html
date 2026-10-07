@@ -1,25 +1,39 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
+{% from "_macros.html" import badge, datetime with context %}
+{% block title %}History of {{ key }}{% endblock %}
+{% block page_class %}narrow{% endblock %}
 {% block content %}
-<div class="container" id="main-container">
-    <p><a href="{{ url_for('ui.index') }}">Metadata</a> / {{ label }} {{ key }}</p>
-    <h1>History of {{ label | lower }} {{ key }}</h1>
-    <table class="table">
-        <thead><tr><th>Date (UTC)</th><th>Action</th><th>User</th><th>Content</th></tr></thead>
-        <tbody>
-        {% for revision in revisions %}
-            <tr>
-                <td>{{ revision.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                <td>{{ revision.action }}</td>
-                <td>{{ revision.username or '' }}</td>
-                <td>
-                    {% if revision.before is not none %}<details><summary>Before</summary><pre>{{ revision.before | tojson(indent=2) }}</pre></details>{% endif %}
-                    {% if revision.after is not none %}<details><summary>After</summary><pre>{{ revision.after | tojson(indent=2) }}</pre></details>{% endif %}
-                </td>
-            </tr>
-        {% else %}
-            <tr><td colspan="4">No changes recorded</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% set edit_url = url_for('ui.edit_hardware', name=key) if kind == 'hardware' else url_for('ui.edit_calibration', sensor_id=key) %}
+<div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#{{ 'hardware' if kind == 'hardware' else 'calibrations' }}">Metadata</a><span><a href="{{ edit_url }}">{{ key }}</a></span><span>History</span></div>
+<div class="page-header">
+    <div>
+        <h1>History of {{ label | lower }} <span class="mono">{{ key }}</span></h1>
+        <p class="subtitle">Every change made through the API, the interface or the import, newest first.</p>
+    </div>
+    <div class="actions"><a class="btn" href="{{ edit_url }}">Back to {{ label | lower }}</a></div>
 </div>
+
+<ol class="timeline">
+{% for revision, changed in revisions %}
+    <li class="card"><div class="card-body">
+        <div class="revision-meta">
+            {{ badge(revision.action) }}
+            <strong>{{ revision.username or 'system' }}</strong>
+            {{ datetime(revision.created_at) }}
+        </div>
+        {% if changed and revision.before is not none and revision.after is not none %}
+        <p class="changed">Changed: {% for field in changed %}<code>{{ field }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% endif %}
+        <details>
+            <summary>Show content</summary>
+            <div class="diff">
+                {% if revision.before is not none %}<div><span class="label-text">Before</span><pre>{{ revision.before | tojson(indent=2) }}</pre></div>{% endif %}
+                {% if revision.after is not none %}<div><span class="label-text">After</span><pre>{{ revision.after | tojson(indent=2) }}</pre></div>{% endif %}
+            </div>
+        </details>
+    </div></li>
+{% else %}
+    <li class="card"><div class="card-body empty muted">No changes recorded</div></li>
+{% endfor %}
+</ol>
 {% endblock %}

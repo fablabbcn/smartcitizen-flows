@@ -275,3 +275,28 @@ def test_jobs_page_requires_admin(app, client):
     page = client.get('/jobs/').get_data(as_text=True)
     assert 'kits/1' in page and 'kits/2' in page and 'PROCESSED AND UPLOADED' in page
     assert 'info: done' in client.get(f'/jobs/runs/{run.id}').get_data(as_text=True)
+
+
+def test_run_page_shows_log_levels(app, client):
+    run = make_run(state='failed', log=['info: loaded', 'warning: no data', 'error: not posted', 'plain line'])
+
+    sign_in(client, 'admin')
+    page = client.get(f'/jobs/runs/{run.id}').get_data(as_text=True)
+
+    assert '<div class="log-line warning" data-text="warning: no data">' in page
+    assert '<span class="log-message">not posted</span>' in page
+    assert '<div class="log-line " data-text="plain line">' in page
+
+
+def test_overview_figures(app, client):
+    jobs.sync_jobs(to_process={1, 2}, to_back_up={3})
+    job('process', 1).paused = True
+    make_run(state='failed')
+
+    sign_in(client, 'admin')
+    page = client.get('/').get_data(as_text=True)
+    assert '2 active' in page and '1 paused' in page and '1 failed in 24 h' in page
+
+    sign_in(client, 'researcher')
+    page = client.get('/').get_data(as_text=True)
+    assert 'active' not in page and 'hardware' in page

@@ -1,34 +1,77 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}{{ 'New calibration' if new else sensor_id }}{% endblock %}
+{% block page_class %}narrow{% endblock %}
 {% block content %}
-<div class="container" id="main-container">
-    <p><a href="{{ url_for('ui.index') }}">Metadata</a> / Calibrations</p>
-    <h1>{% if new %}New calibration{% else %}Calibration {{ sensor_id }}{% endif %} <small>{{ kind }}</small></h1>
-    {% if not new %}<p><a href="{{ url_for('ui.history', kind='calibration', key=sensor_id) }}">History</a> · <a href="{{ url_for('api.get_calibration', sensor_id=sensor_id) }}">JSON</a></p>{% endif %}
-    {% include "metadata/_messages.html" %}
-    <form method="POST">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        {% if new %}
-        <div class="form-group"><label>Sensor id</label><input class="form-control" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required></div>
-        <div class="form-group"><label>Kind</label>
-            <select class="form-control" name="kind">
-                {% for item in kinds %}<option value="{{ item }}" {% if item == kind %}selected{% endif %}>{{ item }}</option>{% endfor %}
-            </select>
-            <button class="btn btn-secondary btn-sm" name="action" value="change_kind" formnovalidate>Change kind</button>
-        </div>
-        {% else %}
-        <input type="hidden" name="kind" value="{{ kind }}">
-        {% endif %}
-        {% for field in fields %}
-        <div class="form-group"><label>{{ field }}{% if field in optional %} (optional){% endif %}</label>
-            <input class="form-control" name="{{ field }}" value="{{ data.get(field, '') }}"></div>
-        {% endfor %}
-        <button class="btn btn-primary" name="action" value="save">Save</button>
-    </form>
-    {% if not new and current_user.role == 'admin' %}
-    <form method="POST" action="{{ url_for('ui.delete', kind='calibration', key=sensor_id) }}" onsubmit="return confirm('Delete calibration {{ sensor_id }}?')" style="margin-top: 2em">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <button class="btn btn-danger btn-sm">Delete</button>
-    </form>
+<div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#calibrations">Metadata</a><span>Calibrations</span><span>{{ 'New' if new else sensor_id }}</span></div>
+<div class="page-header">
+    <div>
+        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind | replace('_', ' ') }}</span></h1>
+        <p class="subtitle">{{ 'Values from the Alphasense sensor sheet.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}</p>
+    </div>
+    {% if not new %}
+    <div class="actions">
+        <a class="btn" href="{{ url_for('ui.history', kind='calibration', key=sensor_id) }}">History</a>
+        <a class="btn" href="{{ url_for('api.get_calibration', sensor_id=sensor_id) }}">JSON</a>
+    </div>
     {% endif %}
 </div>
+{% include "metadata/_messages.html" %}
+
+<form method="POST">
+    {{ csrf() }}
+    {% if new %}
+    <div class="card">
+        <div class="card-header"><h2>Sensor</h2></div>
+        <div class="card-body form-grid">
+            <div class="field">
+                <label for="sensor_id">Sensor id</label>
+                <input class="input mono" id="sensor_id" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required>
+            </div>
+            <div class="field">
+                <label for="kind">Kind</label>
+                <div class="row">
+                    <select class="input" id="kind" name="kind" style="flex: 1">
+                        {% for item in kinds %}<option value="{{ item }}" {% if item == kind %}selected{% endif %}>{{ item | replace('_', ' ') }}</option>{% endfor %}
+                    </select>
+                    <button class="btn" name="action" value="change_kind" formnovalidate>Change</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <input type="hidden" name="kind" value="{{ kind }}">
+    {% endif %}
+
+    <div class="card">
+        <div class="card-header"><h2>Values</h2></div>
+        <div class="card-body form-grid">
+            {% for field in fields %}
+            <div class="field">
+                <label for="{{ field }}" class="mono">{{ field }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
+                <input class="input mono" id="{{ field }}" name="{{ field }}" value="{{ data.get(field, '') }}">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button class="btn primary" name="action" value="save">Save</button>
+    </div>
+</form>
+
+{% if not new and current_user.role == 'admin' %}
+<div class="card danger-zone">
+    <div class="card-body">
+        <div>
+            <h3>Delete calibration</h3>
+            <p class="hint">Hardware with sensor {{ sensor_id }} gets a warning in its check, and the channels that use the sensor are not processed. The history is kept.</p>
+        </div>
+        <form method="POST" action="{{ url_for('ui.delete', kind='calibration', key=sensor_id) }}" data-confirm="Delete calibration {{ sensor_id }}?">
+            {{ csrf() }}
+            <button class="btn danger" type="submit">Delete</button>
+        </form>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

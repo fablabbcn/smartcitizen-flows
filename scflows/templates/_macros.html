@@ -1,0 +1,39 @@
+{# Shared pieces of the interface #}
+
+{% macro csrf() %}<input type="hidden" name="csrf" value="{{ csrf_token() }}">{% endmacro %}
+
+{# Flashed messages. Categories: success (default), info, warning, error #}
+{% macro flashes(extra_errors=()) %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages or extra_errors %}
+<div class="alerts" role="status">
+    {% for category, message in messages %}<div class="alert {{ 'success' if category == 'message' else category }}">{{ message }}</div>{% endfor %}
+    {% for error in extra_errors %}<div class="alert error">{{ error }}</div>{% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+{% endmacro %}
+
+{% macro badge(value, label=None) %}<span class="badge {{ value }}">{{ label or value }}</span>{% endmacro %}
+
+{% macro job_status(job) %}
+{%- if job.paused %}{{ badge('paused') }}{% elif job.enabled %}{{ badge('active') }}{% else %}{{ badge('disabled') }}{% endif %}
+{%- if job.source == 'manual' %} <span class="badge plain">manual</span>{% endif %}
+{%- endmacro %}
+
+{% macro datetime(value, seconds=False) %}{% if value %}<time datetime="{{ value.isoformat() }}">{{ value.strftime('%Y-%m-%d %H:%M:%S' if seconds else '%Y-%m-%d %H:%M') }}</time>{% endif %}{% endmacro %}
+
+{% macro duration(run) -%}
+{%- if run.started_at and run.finished_at -%}
+{%- set seconds = (run.finished_at - run.started_at).total_seconds() -%}
+{%- if seconds < 60 %}{{ seconds | round(1) }} s{% else %}{{ (seconds // 60) | int }} min {{ (seconds % 60) | int }} s{% endif -%}
+{%- endif -%}
+{%- endmacro %}
+
+{# Search box and row count for a table with data-table #}
+{% macro table_tools(placeholder='Filter') %}
+<div class="table-tools">
+    <input class="input" type="search" placeholder="{{ placeholder }}" aria-label="{{ placeholder }}" data-search>
+    <span class="count" data-count></span>
+</div>
+{% endmacro %}

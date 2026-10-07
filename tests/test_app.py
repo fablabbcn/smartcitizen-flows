@@ -43,7 +43,7 @@ def test_admin_signs_in(client, sc_sessions):
     assert '/jobs/' in response.headers['Location']
     assert client.get('/jobs/').status_code == 200
     page = client.get('/').get_data(as_text=True)
-    assert 'Logout (admin)' in page
+    assert 'Log out' in page and 'admin' in page
     assert 'href="/jobs/"' in page
 
 

@@ -1,0 +1,116 @@
+/* Design tokens: colours, type, spacing and shapes used by app.css.
+   Change values here to tweak the look of the whole interface. */
+
+:root {
+  /* Brand */
+  --color-accent: #1f6feb;
+  --color-accent-hover: #1a5fcc;
+  --color-accent-soft: #e7f0fe;
+  --color-on-accent: #ffffff;
+
+  /* Surfaces and text */
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0f2f5;
+  --color-border: #dfe3e8;
+  --color-border-strong: #c3c9d1;
+  --color-text: #1c2128;
+  --color-text-muted: #5b6573;
+  --color-header-bg: #111418;
+  --color-header-text: #e6e9ed;
+  --color-header-muted: #9aa3ad;
+
+  /* States */
+  --color-success: #1a7f37;
+  --color-success-soft: #dafbe1;
+  --color-warning: #9a6700;
+  --color-warning-soft: #fff4d4;
+  --color-danger: #cf222e;
+  --color-danger-soft: #ffe5e7;
+  --color-info: #0969da;
+  --color-info-soft: #ddf4ff;
+  --color-neutral: #57606a;
+  --color-neutral-soft: #eaeef2;
+
+  /* Logs and code */
+  --color-code-bg: #f0f2f5;
+  --color-code-text: #24292f;
+  --color-log-bg: #0f1419;
+  --color-log-text: #d5dbe1;
+  --color-log-muted: #6b7681;
+  --color-log-info: #79c0ff;
+  --color-log-warning: #e3b341;
+  --color-log-error: #ff7b72;
+
+  /* Type */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-xxl: 2rem;
+  --line-height: 1.5;
+
+  /* Spacing scale */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* Layout */
+  --page-width: 1280px;
+  --form-width: 860px;
+  --header-height: 56px;
+  --gutter: var(--space-5);
+
+  /* Shapes */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.12);
+  --focus-ring: 0 0 0 3px rgba(31, 111, 235, 0.35);
+}
+
+/* Dark theme: follows the system setting */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-accent: #4493f8;
+    --color-accent-hover: #6aa8fa;
+    --color-accent-soft: #15253d;
+    --color-on-accent: #0b0f14;
+
+    --color-bg: #0d1117;
+    --color-surface: #151b23;
+    --color-surface-muted: #1c232c;
+    --color-border: #2a313b;
+    --color-border-strong: #3d4550;
+    --color-text: #e6edf3;
+    --color-text-muted: #9198a1;
+    --color-header-bg: #010409;
+
+    --color-success: #3fb950;
+    --color-success-soft: #12261a;
+    --color-warning: #d29922;
+    --color-warning-soft: #2b2111;
+    --color-danger: #f85149;
+    --color-danger-soft: #2d1416;
+    --color-info: #58a6ff;
+    --color-info-soft: #0f2238;
+    --color-neutral: #9198a1;
+    --color-neutral-soft: #21262d;
+
+    --color-code-bg: #1f2630;
+    --color-code-text: #e6edf3;
+    --color-log-bg: #010409;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  }
+}

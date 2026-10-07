@@ -187,7 +187,13 @@ KIND_LABELS = {'hardware': 'Hardware', 'calibration': 'Calibration'}
 @editors_required
 def history(kind, key):
     return render_template('metadata/history.html', kind=kind, label=KIND_LABELS[kind], key=key,
-                           revisions=list(editing.revisions(kind, key)))
+                           revisions=[(revision, changed_fields(revision)) for revision in editing.revisions(kind, key)])
+
+
+def changed_fields(revision):
+    ''' Top level fields that differ between the content before and after a revision '''
+    before, after = revision.before or {}, revision.after or {}
+    return sorted(field for field in before.keys() | after.keys() if before.get(field) != after.get(field))
 
 
 @ui.post('/<any(hardware, calibration):kind>/<key>/delete')

@@ -90,9 +90,7 @@ SC_BEARER=sc-bearer
 CELERY_BROKER=redis://redis:6379/0
 REDIS_URL=redis://redis:6379/1
 CELERY_TIMEZONE=Europe/Madrid
-FLOWER_PORT=5555
 # FLASK
-FLASK_ENV=production
 FLASK_APP=scflows
 FLASK_DEBUG=0
 # Keep the user, password and database in line with POSTGRES_* below
@@ -173,6 +171,8 @@ docker compose exec web flask --app scflows jobs sync
 ```
 
 ### Deploying
+
+See [docs/deploy.md](docs/deploy.md): server setup, `.env`, first boot, loading the metadata, verifying, moving from the old deployment, updates, backups (`scripts/backup.sh`) and troubleshooting.
 
 The `proxy` service runs [Caddy](https://caddyserver.com/) with `scflows/public/caddy/Caddyfile`. It requests and renews the TLS certificates for `DOMAIN` (set in `.env`) automatically, redirects HTTP to HTTPS and protects `/flower` with basic auth. Ports 80 and 443 must be reachable and `DOMAIN` must point to the server.
 

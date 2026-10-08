@@ -1,37 +1,8 @@
 {% extends "base.html" %}
 {% from "_macros.html" import badge, datetime, meter, short_time with context %}
 {% block title %}Health of {{ latest.device_name or device_id }}{% endblock %}
-{% block content %}
-<div class="breadcrumbs"><a href="{{ url_for('health_ui.index') }}">Health</a><span>{{ latest.device_name or 'Device' }} #{{ device_id }}</span></div>
-<div class="page-header">
-    <div>
-        <h1 class="row">{{ latest.device_name or 'Device' }} <span class="muted">#{{ device_id }}</span> {{ badge(selected.status) }}</h1>
-        <p class="subtitle">
-            {% if selected.id != latest.id %}Older result, from {{ datetime(selected.created_at) }}. <a href="{{ url_for('health_ui.device', device_id=device_id) }}">See the latest</a>.
-            {% else %}Checked {{ datetime(selected.created_at) }}{% endif %}
-            · {{ selected.rows }} rows{% if selected.start and selected.end %} from {{ datetime(selected.start) }} to {{ datetime(selected.end) }}{% endif %}
-            {% if selected.blueprint %} · blueprint {{ selected.blueprint }}{% endif %}
-        </p>
-    </div>
-    <div class="actions">
-        <a class="btn" href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device page</a>
-        {% if current_user.is_admin and selected.run_id %}<a class="btn" href="{{ url_for('jobs_ui.run', run_id=selected.run_id) }}">Run #{{ selected.run_id }}</a>{% endif %}
-        <a class="btn" href="{{ url_for('api.get_device_health', device_id=device_id) }}">JSON</a>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h2>Runs</h2>
-        <span class="hint">Newest on the right. Each run checks the data it processed. History of {{ keep_days }} days.</span>
-    </div>
-    <div class="card-body">
-        <span class="dots large">{% for item in items | reverse %}<a class="dot {{ item.status }}{% if item.id == selected.id %} selected{% endif %}" href="{{ url_for('health_ui.device', device_id=device_id, record=item.id) }}" title="{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}: {{ item.status }}"></a>{% endfor %}</span>
-    </div>
-</div>
-
-<section class="section">
-{% for check in selected.checks %}
+{% macro check_cards(record) %}
+{% for check in record.checks %}
     <div class="card check-card">
         <div class="card-header">
             <h2>{{ check.name | capitalize }} {{ badge(check.rating) }}</h2>
@@ -79,5 +50,74 @@
 {% else %}
     <div class="card"><div class="card-body empty muted">The blueprint has no checks.</div></div>
 {% endfor %}
+{% endmacro %}
+
+{% block content %}
+<div class="breadcrumbs"><a href="{{ url_for('health_ui.index') }}">Health</a><span>{{ latest.device_name or 'Device' }} #{{ device_id }}</span></div>
+<div class="page-header">
+    <div>
+        <h1 class="row">{{ latest.device_name or 'Device' }} <span class="muted">#{{ device_id }}</span> {{ badge(selected.status) }}</h1>
+        <p class="subtitle">
+            {% if selected.id != latest.id %}Older result, from {{ datetime(selected.created_at) }}. <a href="{{ url_for('health_ui.device', device_id=device_id) }}">See the latest</a>.
+            {% else %}Checked {{ datetime(selected.created_at) }}{% endif %}
+            · {{ selected.rows }} rows{% if selected.start and selected.end %} from {{ datetime(selected.start) }} to {{ datetime(selected.end) }}{% endif %}
+            {% if selected.blueprint %} · blueprint {{ selected.blueprint }}{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device page</a>
+        {% if current_user.is_admin and selected.run_id %}<a class="btn" href="{{ url_for('jobs_ui.run', run_id=selected.run_id) }}">Run #{{ selected.run_id }}</a>{% endif %}
+        <a class="btn" href="{{ url_for('api.get_device_health', device_id=device_id) }}">JSON</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Runs</h2>
+        <span class="hint">Newest on the right. Each run checks the data it processed. History of {{ keep_days }} days.</span>
+    </div>
+    <div class="card-body">
+        <span class="dots large">{% for item in items | reverse %}<a class="dot {{ item.status }}{% if item.id == selected.id %} selected{% endif %}" href="{{ url_for('health_ui.device', device_id=device_id, record=item.id) }}" title="{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}: {{ item.status }}"></a>{% endfor %}</span>
+    </div>
+</div>
+
+<section class="section">
+{{ check_cards(selected) }}
 </section>
+
+
+{% if long_latest %}
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="row">Long processing {{ badge(long_latest.status) }}</h2>
+            <p class="hint">Blueprint <span class="mono">{{ long_latest.blueprint }}</span>, over months of backups (baselines). Last run {{ datetime(long_latest.created_at) }}{% if long_run %}: {{ long_run.start[:10] }} to {{ long_run.end[:10] }}, {{ long_run.rows }} rows{% endif %}. Not posted to the Smart Citizen API.</p>
+        </div>
+        <div class="actions">
+            <a class="btn" href="{{ url_for('api.get_device_series', device_id=device_id, blueprint=long_latest.blueprint, format='csv') }}">CSV (hourly)</a>
+            <a class="btn" href="{{ url_for('api.get_device_series', device_id=device_id, blueprint=long_latest.blueprint) }}">JSON</a>
+        </div>
+    </div>
+    {% if charts %}
+    <div class="grid wide">
+        {% for chart in charts %}
+        <div class="card"><div class="card-body">
+            <div class="row"><strong class="mono">{{ chart.name }}</strong><span class="hint">median {{ chart.median | round(1) }} · {{ chart.min | round(1) }} to {{ chart.max | round(1) }}</span></div>
+            <svg class="chart" viewBox="0 0 720 140" preserveAspectRatio="none" role="img" aria-label="{{ chart.name }} from {{ chart.start }} to {{ chart.end }}"><polyline points="{{ chart.points }}"/></svg>
+            <div class="row hint chart-axis"><span>{{ chart.start.strftime('%Y-%m-%d') }}</span><span>{{ chart.end.strftime('%Y-%m-%d') }}</span></div>
+        </div></div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card"><div class="card-body muted small">{{ 'Dry runs only: nothing stored yet.' if long_latest else 'No results stored yet.' }}</div></div>
+    {% endif %}
+    {% if long_run and long_run.parameters %}
+    <details class="section">
+        <summary>Parameters of the last run</summary>
+        <pre>{{ long_run.parameters | tojson(indent=2) }}</pre>
+    </details>
+    {% endif %}
+    <div class="section">{{ check_cards(long_latest) }}</div>
+</section>
+{% endif %}
 {% endblock %}

@@ -306,6 +306,55 @@ def get_device_health(device_id):
                     'history': [item.to_json(checks=False) for item in items]})
 
 
+SERIES_MAX_POINTS = 20000
+
+
+@api.get('/devices/<int:device_id>/series')
+@requires_role(*EDITORS)
+def get_device_series(device_id):
+    '''
+    Results of long processing (baselines over months of backups): ?blueprint= (the long blueprint
+    of the device's hardware by default), ?channels=CO2,NO2, ?from= and ?to= (dates), ?resample=
+    (1h by default, raw for none) and ?format=csv
+    '''
+    from pandas import Timedelta
+    from . import storage
+
+    if not device_health.can_see_device(current_identity(), device_id):
+        abort(403, 'Researchers can only see the data of their devices')
+    blueprint = request.args.get('blueprint') or long_blueprint_of(device_id)
+    if blueprint is None:
+        abort(404, 'No long processing for this device: add a long blueprint to its hardware')
+    channels = [name for name in request.args.get('channels', '').split(',') if name] or None
+    data = storage.read_processed(device_id, key_of(blueprint), channels=channels,
+                                  start=request.args.get('from'), end=request.args.get('to'))
+    if data is None:
+        abort(404, f'No results of {blueprint} for this device yet')
+    resample = request.args.get('resample', '1h')
+    if resample != 'raw':
+        try:
+            Timedelta(resample)
+        except ValueError:
+            abort(400, 'resample: a pandas frequency (e.g. 10min, 1h, 1D) or raw')
+        data = data.resample(resample).mean()
+    if len(data) > SERIES_MAX_POINTS:
+        abort(400, f'{len(data)} points: ask for a shorter period or a longer resample (at most {SERIES_MAX_POINTS})')
+    if request.args.get('format') == 'csv':
+        return current_app.response_class(data.to_csv(index_label='TIME'), mimetype='text/csv',
+                                          headers={'Content-Disposition': f'attachment; filename={device_id}-{blueprint}.csv'})
+    return jsonify({'device_id': device_id, 'blueprint': blueprint, 'resample': resample,
+                    'run': storage.read_run_info(device_id, blueprint),
+                    'index': [timestamp.isoformat() for timestamp in data.index],
+                    'channels': {name: [None if value != value else round(float(value), 4) for value in data[name]]
+                                 for name in data.columns}})
+
+
+def long_blueprint_of(device_id):
+    ''' Name of the long blueprint of a device, from its latest long run '''
+    items = device_health.history(device_id, limit=1, task=Job.LONG)
+    return items[0].blueprint if items else None
+
+
 # Jobs and runs: admins
 
 @api.get('/jobs')

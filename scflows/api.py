@@ -36,7 +36,7 @@ def blueprint_url(name):
 
 def hardware_json(item):
     ''' Hardware, with the url of its blueprint in flows '''
-    return item.to_json(blueprint_url=blueprint_url(item.blueprint.name))
+    return item.to_json(blueprint_url=blueprint_url(item.blueprint.name) if item.blueprint else None)
 
 
 def get_by_name(model, name, field='name'):
@@ -92,7 +92,8 @@ def health():
 @api.get('/blueprints')
 def list_blueprints():
     blueprints = db.session.execute(db.select(BlueprintModel).order_by(BlueprintModel.name)).scalars()
-    return jsonify([{'name': blueprint.name, 'url': blueprint_url(blueprint.name)} for blueprint in blueprints])
+    return jsonify([{'name': blueprint.name, 'kind': blueprint.kind, 'url': blueprint_url(blueprint.name)}
+                    for blueprint in blueprints])
 
 
 @api.get('/blueprints/<name>')
@@ -105,7 +106,8 @@ def list_hardware():
     hardware = db.session.execute(db.select(Hardware).order_by(Hardware.name)).scalars()
     return jsonify([{'name': item.name,
                      'description': item.description,
-                     'blueprint': item.blueprint.name,
+                     'blueprint': item.blueprint.name if item.blueprint else None,
+                     'blueprints': [blueprint.name for blueprint in item.blueprints],
                      'url': external_url('api.get_hardware', name=f'{item.name}.json')}
                     for item in hardware])
 

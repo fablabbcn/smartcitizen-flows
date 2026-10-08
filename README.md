@@ -8,7 +8,7 @@ Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows
 
 Each device has a job per task: `process` (calculate channels from the blueprint and post them to the Smart Citizen API, every 3 hours) and `backup` (store the data in S3, every 6 hours). Jobs are stored in the database:
 
-- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every day: devices with valid postprocessing (hardware in flows) and new readings are processed, devices of researchers are backed up. Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
+- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every day. Which jobs a device gets depends on the blueprints of its hardware (see Blueprint kinds): `process` if its hardware has a process blueprint and it has new readings; `backup` if its hardware has a long blueprint, or if it belongs to a researcher and its hardware has a backup blueprint or it has no hardware in flows. Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
 - `celery` workers run them. A device task never runs twice at the same time (lock in Redis)
 - Each run is recorded with its result and log
 
@@ -19,6 +19,16 @@ flask --app scflows jobs sync                                     # sync with th
 flask --app scflows jobs list [--task process|backup]
 flask --app scflows jobs run <device> process --dry-run [--inline] # run now (--inline: here, not in the workers)
 ```
+
+## Blueprint kinds
+
+Each blueprint has a kind (`meta.kind`, `process` when missing) and each hardware lists one or two blueprints, at most one of each kind:
+
+- `process`: processed every few hours on the latest readings from the Smart Citizen API (up to 1000), with its health checks, and posted back
+- `long`: processed on a long window of the device's backups (`window_days`, every `every_days`), with baselines that need months of data. Results stay in S3 and flows. The device is always backed up
+- `backup`: the device is only backed up (devices of researchers)
+
+`long` and `backup` do not go together: long processing already backs up. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
 
 ## Device health
 
@@ -66,7 +76,7 @@ Reading metadata is public (processing reads it without a token). Admins of the 
 | Endpoint | Who | |
 |---|---|---|
 | `PUT /api/v1/blueprints/<name>` | admin | Create or replace a blueprint (validated with `scdata`) |
-| `PUT /api/v1/hardware/<name>` | admin | Create or replace a hardware description, same structure as the hardware files. Refer to the blueprint with `blueprint` (name of a blueprint in flows) or `blueprint_url` |
+| `PUT /api/v1/hardware/<name>` | admin | Create or replace a hardware description, same structure as the hardware files. List its blueprints with `blueprints` (names of blueprints in flows), or give one with `blueprint` or `blueprint_url` |
 | `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board) |
 | `PUT /api/v1/names/<name>` | admin | Create or replace a sensor name. New names go to the end of the list |
 | `DELETE /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>` | admin | Delete |

@@ -87,7 +87,7 @@ def hardware_from_form(form):
         versions.append({'ids': ids,
                          'from': form.get(f'version_{index}_from') or None,
                          'to': form.get(f'version_{index}_to') or None})
-    return {'blueprint': form.get('blueprint') or None,
+    return {'blueprints': [name for name in form.getlist('blueprints') if name],
             'description': form.get('description') or None,
             'comment': form.get('comment') or None,
             'forwarding': form.get('forwarding') or None,
@@ -95,7 +95,10 @@ def hardware_from_form(form):
 
 
 def render_hardware(name, data, check=None, new=False):
-    blueprints = db.session.execute(db.select(BlueprintModel.name).order_by(BlueprintModel.name)).scalars().all()
+    blueprints = db.session.execute(db.select(BlueprintModel).order_by(BlueprintModel.name)).scalars().all()
+    # Hardware as read from flows has its list; a new one starts with the processing blueprint
+    if 'blueprints' not in data:
+        data = dict(data, blueprints=[data['blueprint']] if data.get('blueprint') else [])
     return render_template('metadata/hardware.html', name=name, data=data, check=check, new=new,
                            blueprints=blueprints, readonly=not current_user.is_admin)
 

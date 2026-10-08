@@ -123,6 +123,9 @@ def verify_metadata(source):
         data = dict(data)
         url = data.pop('blueprint_url', None)
         data['blueprint'] = data.get('blueprint') or (name_of(url) if url else None)
+        # Hardware files have one blueprint: flows serves it in a list too
+        if data.get('blueprints') == [data['blueprint']]:
+            data.pop('blueprints')
         return data
 
     for blueprint in db.session.execute(db.select(Blueprint)).scalars():

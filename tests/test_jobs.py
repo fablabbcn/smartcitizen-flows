@@ -122,6 +122,10 @@ def test_devices_to_process(monkeypatch):
         # Never processed
         {'id': 6, 'last_reading_at': '2026-10-01T00:00:00Z',
          'postprocessing': {'hardware_url': 'SCAS6', 'latest_postprocessing': None}},
+        # Hardware with long processing only
+        {'id': 7, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'LONG'}},
+        # Hardware not in flows
+        {'id': 8, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'UNKNOWN'}},
     ]).set_index('id')
     checked = []
 
@@ -132,8 +136,37 @@ def test_devices_to_process(monkeypatch):
     monkeypatch.setattr(smartcitizen_connector, 'search_by_query', lambda **kwargs: devices)
     monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', check_postprocessing)
 
-    assert jobs.devices_to_process() == {1, 6}
+    kinds = {name: {'process'} for name in ('SCAS1', 'SCAS2', 'SCAS4', 'BAD', 'SCAS6')}
+    kinds['LONG'] = {'long'}
+
+    assert jobs.devices_to_process(kinds) == {1, 6}
     assert checked == ['SCAS1', 'BAD', 'SCAS6']
+
+
+def test_devices_to_back_up(monkeypatch):
+    import smartcitizen_connector
+
+    with_postprocessing = pd.DataFrame([
+        # Long processing: backed up whoever owns it
+        {'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'LONG'}},
+        {'id': 2, 'last_reading_at': None, 'postprocessing': {'hardware_url': 'LONG'}},
+        {'id': 3, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'SHORT'}},
+    ]).set_index('id')
+    device = lambda device_id, hardware=None, readings=True: {
+        'id': device_id, 'last_reading_at': '2026-10-01T00:00:00Z' if readings else None,
+        'postprocessing': {'hardware_url': hardware} if hardware else None}
+    researchers = pd.DataFrame([{'id': 10, 'devices': [
+        device(4),                       # no hardware: backed up as before
+        device(5, 'BACKUP'),             # backup blueprint
+        device(6, 'SHORT'),              # processing only: not backed up
+        device(7, 'UNKNOWN'),            # hardware not in flows (old or wrong url): as without hardware
+        device(8, readings=False),
+    ]}]).set_index('id')
+    monkeypatch.setattr(smartcitizen_connector, 'search_by_query',
+                        lambda endpoint, **kwargs: with_postprocessing if endpoint == 'devices' else researchers)
+
+    kinds = {'LONG': {'long'}, 'SHORT': {'process'}, 'BACKUP': {'process', 'backup'}}
+    assert jobs.devices_to_back_up(kinds) == {1, 4, 5, 7}
 
 
 # Dispatch

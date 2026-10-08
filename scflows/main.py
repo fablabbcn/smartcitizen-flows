@@ -43,7 +43,7 @@ def index():
     # Researchers: the metadata of their devices
     hardware = visible_hardware(current_user.identity)
     metadata = {'hardware': len(hardware), 'calibrations': len(visible_calibrations(current_user.identity)),
-                'blueprints': len({item.blueprint_id for item in hardware})}
+                'blueprints': len({blueprint.id for item in hardware for blueprint in item.blueprints})}
     return render_template('index.html', metadata=metadata, jobs=None, health=health_figures())
 
 

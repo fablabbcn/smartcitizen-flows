@@ -5,7 +5,7 @@ Callers commit the session.
 from datetime import date
 
 from . import db
-from .models import Blueprint, Calibration, Hardware, HardwareVersion, Revision, SensorName
+from .models import Blueprint, Calibration, Hardware, HardwareBlueprint, HardwareVersion, Revision, SensorName
 from .schemas import HardwareIn, SensorNameIn, validate_calibration
 
 KINDS = {
@@ -63,16 +63,19 @@ def save_hardware(name, hardware, identity=None, action=None):
     '''
     if not isinstance(hardware, HardwareIn):
         hardware = HardwareIn.model_validate(hardware)
-    blueprint = find('blueprint', hardware.blueprint_name) if hardware.blueprint_name else None
-    if blueprint is None:
-        raise BlueprintNotInFlows(f'blueprint {hardware.blueprint_name} is not in flows' if hardware.blueprint_name
-                                  else 'no blueprint')
+    names = hardware.blueprint_names
+    if not names:
+        raise BlueprintNotInFlows('no blueprint')
+    blueprints = [find('blueprint', name) for name in names]
+    missing = [name for name, blueprint in zip(names, blueprints) if blueprint is None]
+    if missing:
+        raise BlueprintNotInFlows(f'blueprint {", ".join(missing)} is not in flows')
     item = find('hardware', name)
     before = item.to_json() if item else None
     if item is None:
         item = Hardware(name=name)
         db.session.add(item)
-    item.blueprint = blueprint
+    item.blueprints = blueprints
     item.description = hardware.description
     item.comment = hardware.comment
     item.forwarding = hardware.forwarding
@@ -130,7 +133,8 @@ def delete(kind, key, identity=None):
     if item is None:
         return False
     if kind == 'blueprint':
-        used_by = list(db.session.execute(db.select(Hardware.name).filter_by(blueprint=item)
+        used_by = list(db.session.execute(db.select(Hardware.name).join(Hardware.links)
+                                          .where(HardwareBlueprint.blueprint_id == item.id)
                                           .order_by(Hardware.name)).scalars())
         if used_by:
             raise BlueprintInUse(used_by)

@@ -73,10 +73,10 @@ async def dbackup(device):
                 d.options.min_date = last_requested_data
                 d.options.max_date = last_requested_data + datetime.timedelta(days=config._backup_interval_days)
 
-                if d.options.max_date > datetime.datetime.now(tz=datetime.timezone.utc):
-                    task_log.append(logger_handler(f'Best to wait until period is complete, skip'))
-                    skip = True
-                elif d.options.max_date > d.handler.json.last_reading_at:
+                # Up to the last reading, without waiting for the period to end: long processing
+                # reads the backups, they should not lag behind. The next run continues from there
+                # (the reading at the boundary is stored twice and dropped when reading)
+                if d.options.max_date > d.handler.json.last_reading_at:
                     d.options.max_date = d.handler.json.last_reading_at
 
             else:

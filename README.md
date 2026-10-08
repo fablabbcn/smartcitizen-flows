@@ -18,6 +18,7 @@ Admins see the jobs and runs in `/jobs/`, or in the API (`/api/v1/jobs`, `/api/v
 flask --app scflows jobs sync                                     # sync with the Smart Citizen API now
 flask --app scflows jobs list [--task process|backup]
 flask --app scflows jobs run <device> process --dry-run [--inline] # run now (--inline: here, not in the workers)
+flask --app scflows jobs run <device> long --dry-run --inline     # long processing without storing the result
 ```
 
 ## Blueprint kinds
@@ -28,7 +29,13 @@ Each blueprint has a kind (`meta.kind`, `process` when missing) and each hardwar
 - `long`: processed on a long window of the device's backups (`window_days`, every `every_days`), with baselines that need months of data. Results stay in S3 and flows. The device is always backed up
 - `backup`: the device is only backed up (devices of researchers)
 
-`long` and `backup` do not go together: long processing already backs up. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
+`long` and `backup` do not go together: long processing already backs up.
+
+### Long processing
+
+A `long` job (weekly by default, `every_days` of the blueprint) backs the device up, reads the last `window_days` (90 by default) of its backups from the first day of that month, processes them with the long blueprint filled with the hardware's sensors (per hardware version), runs its health checks and stores the result in `devices/<id>/processed/<blueprint>/month=YYYY-MM/` (Parquet, one partition per month, replaced by each run) next to the backups, with the window and the parameters used in `devices/<id>/processed/<blueprint>.json`. Nothing is posted to the Smart Citizen API. `STORAGE_ROOT` overrides `s3://<S3_DATA_BUCKET>` (e.g. a local folder).
+
+Backups now write up to the last reading on every run instead of waiting for their 20 day period to end, so long processing works on recent data. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
 
 ## Device health
 

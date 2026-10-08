@@ -73,7 +73,8 @@ def test_sync_creates_spread_jobs(app):
 
     assert jobs.sync_jobs(to_process={1, 2}, to_back_up={3}) == {
         'process': {'created': 2, 'enabled': 0, 'disabled': 0},
-        'backup': {'created': 1, 'enabled': 0, 'disabled': 0}}
+        'backup': {'created': 1, 'enabled': 0, 'disabled': 0},
+        'long': {'created': 0, 'enabled': 0, 'disabled': 0}}
 
     process = job('process', 1)
     assert process.enabled and not process.paused and process.source == 'auto'

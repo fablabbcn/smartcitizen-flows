@@ -58,7 +58,8 @@ def form_device_and_task():
 
 
 def queue(device_id, task, job=None):
-    dry_run = task == Job.PROCESS and bool(request.form.get('dry_run'))
+    # Dry runs process without posting (process) or storing (long)
+    dry_run = task in (Job.PROCESS, Job.LONG) and bool(request.form.get('dry_run'))
     run = queue_run(device_id, task, job=job, dry_run=dry_run, username=current_user.username)
     flash(f'Run {run.id} queued: {task} device {device_id}' + (' (dry run)' if dry_run else ''))
 

@@ -161,6 +161,8 @@ def test_long_run_aborts(run, root, options, state):
 
 
 def test_back_up_skips_when_a_backup_is_running(app, monkeypatch):
+    monkeypatch.delenv('STORAGE_ROOT', raising=False)
+    monkeypatch.setenv('S3_DATA_BUCKET', 'bucket')
     monkeypatch.setattr(dlong_module.locks, 'acquire', lambda key, seconds=None: None)
     log = []
 
@@ -293,3 +295,15 @@ def test_long_run_records_the_parameters_used(run, root):
     info = storage.read_run_info(1, 'test_long')
     assert info['parameter_sets'] == ['SCD30'] and info['hardware_parameters'] == {'CO2': {'p': 1e-9}}
     assert info['parameters']['CO2'] == {'name': 'SCD30_CO2', 'lam': 1e9, 'p': 1e-9}
+
+def test_back_up_is_skipped_with_local_storage(app, root):
+    log = []
+
+    assert asyncio.run(dlong_module.back_up(1, lambda message, level='info': message, log)) is True
+    assert 'using the backups as they are' in log[0]
+
+
+def test_backups_are_read_from_the_storage_root(run, root):
+    _, device, _, _ = run()
+
+    assert device.loaded_with['root'] == str(root)

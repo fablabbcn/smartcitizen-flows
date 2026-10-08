@@ -28,7 +28,7 @@ def test_import(app, source):
     report = import_metadata(str(source))
 
     assert report.errors == []
-    assert report.created == {'blueprints': 1, 'hardware': 2, 'calibrations': 2}
+    assert report.created == {'blueprints': 1, 'hardware': 2, 'calibrations': 2, 'names': 7}
     hardware = db.session.execute(db.select(Hardware).filter_by(name='SCAS_TEST1')).scalar_one()
     assert hardware.blueprint.name == 'test_air'
     assert hardware.versions[0].from_date.isoformat() == '2024-04-01'
@@ -42,8 +42,8 @@ def test_import_keeps_existing_items(app, source):
 
     report = import_metadata(str(source))
 
-    assert report.created == {'blueprints': 0, 'hardware': 0, 'calibrations': 0}
-    assert report.skipped == {'blueprints': 1, 'hardware': 2, 'calibrations': 2}
+    assert report.created == {'blueprints': 0, 'hardware': 0, 'calibrations': 0, 'names': 0}
+    assert report.skipped == {'blueprints': 1, 'hardware': 2, 'calibrations': 2, 'names': 7}
     assert db.session.execute(db.select(Hardware.description).filter_by(name='SCAS_TEST1')).scalar_one() \
         == '1SEN55-2ELEC-AFE'
 

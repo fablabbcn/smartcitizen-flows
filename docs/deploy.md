@@ -103,8 +103,8 @@ reclaim it (see [Updating](#updating)).
 so they cannot run different versions of the code.
 
 Processing reads its metadata from flows itself: smartcitizen-connector and scdata
-get hardware, blueprints and calibrations from `BASE_POSTPROCESSING_URL`, which
-points at this deployment's own API. Only the sensor names still come from GitHub.
+get hardware, blueprints, calibrations and sensor names from `BASE_POSTPROCESSING_URL`,
+which points at this deployment's own API.
 
 ---
 
@@ -176,7 +176,7 @@ certificate about every 60 days and answers the ACME challenge on port 80 (or on
 `http://flows.smartcitizen.me` gets a connection refused instead of a redirect.
 The old deployment only opened 443, so check this on the existing server.
 
-Outgoing traffic needs no rules: the Smart Citizen API, GitHub (sensor names),
+Outgoing traffic needs no rules: the Smart Citizen API, GitHub (metadata import, firmware for `names sync`),
 PyPI (builds) and S3 are all outbound connections.
 
 ---
@@ -373,8 +373,8 @@ docker compose logs -f proxy | grep -iE "certificate|obtain|error"
 
 ## 10. Load the metadata
 
-flows starts empty. Import the blueprints, hardware and calibrations from
-smartcitizen-data, then check that what flows serves matches the source:
+flows starts empty. Import the blueprints, hardware, calibrations and sensor names
+from smartcitizen-data, then check that what flows serves matches the source:
 
 ```bash
 docker compose exec web sh -c "git clone --depth 1 https://github.com/fablabbcn/smartcitizen-data.git /tmp/smartcitizen-data \
@@ -383,7 +383,7 @@ docker compose exec web sh -c "git clone --depth 1 https://github.com/fablabbcn/
 ```
 
 Expect `1 created` blueprints, `158 created` hardware, `594 created` calibrations,
-then `All served metadata matches the source`. The import is recorded in the
+`144 created` names, then `All served metadata matches the source`. The import is recorded in the
 revision history (as `import`, with no user). Every hardware must use a blueprint
 that is in flows: hardware pointing at a blueprint that is not (as the old
 `SCK21NILU` did) is not imported.
@@ -451,10 +451,10 @@ skipped: it has no SCD30). Check that it read the metadata from flows and not
 from GitHub:
 
 ```bash
-docker compose logs web | grep -E "GET /api/v1/(hardware/SCAS220097|blueprints/sc_air|calibrations/calibrations).json"
+docker compose logs web | grep -E "GET /api/v1/(hardware/SCAS220097|blueprints/sc_air|calibrations/calibrations|names/SCDevice).json"
 ```
 
-All three requests should be there. If none are, `BASE_POSTPROCESSING_URL` is not
+All four requests should be there. If none are, `BASE_POSTPROCESSING_URL` is not
 set in `.env`, or the containers were not recreated after setting it.
 
 Finally, confirm nothing else is exposed. From your laptop, against the server:
@@ -555,7 +555,11 @@ docker compose exec web flask --app scflows jobs run <device> process --dry-run 
 docker compose exec web flask --app scflows jobs run <device> backup --inline     # runs in the web container
 docker compose exec web flask --app scflows jobs sync
 docker compose exec web flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/
+docker compose exec web flask --app scflows names sync --dry-run   # new sensors in the API and the firmware
 ```
+
+`names sync` (without `--dry-run`) asks before each change; it needs an interactive
+terminal, so run it with `docker compose exec` (not `-T`). See the README, "Sensor names".
 
 ### Logs
 
@@ -609,7 +613,7 @@ Durable state lives in named volumes:
 
 | Volume | Contents | Losing it means |
 |---|---|---|
-| `postgres_data` | Blueprints, hardware, calibrations, their revision history, jobs and runs | **The metadata.** After the deploy it is edited in flows, not GitHub, so it cannot be re-imported without losing those changes. |
+| `postgres_data` | Blueprints, hardware, calibrations, sensor names, their revision history, jobs and runs | **The metadata.** After the deploy it is edited in flows, not GitHub, so it cannot be re-imported without losing those changes. |
 | `caddy_data` | TLS certificates and ACME account | Re-issuing; mind the rate limit. |
 | `redis_data` | Queued tasks | Nothing that matters: `beat` queues due jobs again within a minute. |
 

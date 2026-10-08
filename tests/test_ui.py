@@ -5,7 +5,7 @@ from flask import g
 
 from scflows import db
 from scflows.metadata import import_metadata
-from scflows.models import Calibration, Hardware, Revision
+from scflows.models import Calibration, Hardware, Revision, SensorName
 
 from conftest import DATA, USERS
 
@@ -239,3 +239,70 @@ def test_researcher_cannot_change_metadata(client, path, data):
     assert client.post(path, data=data).status_code == 403
     assert hardware('SCAS_TEST1').description == '1SEN55-2ELEC-AFE'
     assert hardware('SCAS_NEW') is None
+
+
+# Sensor names
+
+def test_names_tab(client):
+    sign_in(client, 'researcher', ['SCAS_TEST1'])
+
+    page = client.get('/metadata/').get_data(as_text=True)
+
+    assert '/metadata/names/TEMP' in page and 'data-tab="names"' in page
+    # Id 79 has two names in the test data
+    assert 'Ids with several names' in page and 'GB_TEMP, SHT31_EXT_TEMP' in page
+    assert 'New name' not in page
+
+
+def test_admin_edits_a_name(client):
+    sign_in(client, 'admin')
+    assert 'name="unit"' in client.get('/metadata/names/TEMP').get_data(as_text=True)
+
+    response = client.post('/metadata/names/TEMP', data=form(id='55', description='Air temperature', unit='C',
+                                                             action='save'))
+
+    assert response.status_code == 302
+    db.session.expire_all()
+    item = db.session.execute(db.select(SensorName).filter_by(name='TEMP')).scalar_one()
+    assert (item.sensor_id, item.description) == (55, 'Air temperature')
+    page = client.get('/metadata/name/TEMP/history').get_data(as_text=True)
+    assert 'Changed: <code>description</code>' in page
+
+
+def test_invalid_name_form(client):
+    sign_in(client, 'admin')
+
+    page = client.post('/metadata/names/TEMP', data=form(id='x', action='save')).get_data(as_text=True)
+
+    assert 'id: Input should be a valid integer' in page
+
+
+def test_new_and_delete_name(client):
+    sign_in(client, 'admin')
+
+    assert client.post('/metadata/names/new', data=form(name='SCD4X_CO2', id='258', description='SCD4X CO2',
+                                                        unit='ppm', action='save')).status_code == 302
+    page = client.post('/metadata/names/new', data=form(name='SCD4X_CO2', id='258')).get_data(as_text=True)
+    assert 'SCD4X_CO2 already exists' in page
+
+    assert client.post('/metadata/name/SCD4X_CO2/delete', data=form()).status_code == 302
+    assert db.session.execute(db.select(SensorName).filter_by(name='SCD4X_CO2')).scalar_one_or_none() is None
+
+
+def test_shared_id_warning(client):
+    sign_in(client, 'admin')
+
+    page = client.get('/metadata/names/SHT31_EXT_TEMP').get_data(as_text=True)
+
+    assert 'also has the name GB_TEMP. Processing uses GB_TEMP' in page
+
+
+def test_researcher_sees_names_read_only(client):
+    sign_in(client, 'researcher')
+
+    page = client.get('/metadata/names/TEMP').get_data(as_text=True)
+    assert '<fieldset class="plain" disabled>' in page and 'Delete' not in page
+
+    assert client.post('/metadata/names/TEMP', data=form(id='1', action='save')).status_code == 403
+    assert client.get('/metadata/names/new').status_code == 403
+    assert client.post('/metadata/name/TEMP/delete', data=form()).status_code == 403

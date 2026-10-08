@@ -95,6 +95,8 @@
     var initial = location.hash.slice(1);
     var known = Array.prototype.some.call(buttons, function (button) { return button.getAttribute('data-tab') === initial; });
     select(known ? initial : buttons[0].getAttribute('data-tab'));
+    // The hash names a panel: keep the page at the top instead of jumping to it
+    if (known) window.addEventListener('load', function () { window.scrollTo(0, 0); });
   });
 
   // Log viewer: filter by level and copy

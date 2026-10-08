@@ -1,7 +1,7 @@
-''' Web interface for hardware and calibrations
+''' Web interface for hardware, calibrations and sensor names
 
 Admins edit them, with the same checks and history as the API. Researchers see the
-metadata of their devices, read only (see access.py). Forms are plain html (no javascript needed).
+metadata of their devices and the sensor names, read only (see access.py). Forms are plain html (no javascript needed).
 '''
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
@@ -13,7 +13,8 @@ from .api import KEY_PATTERN
 from .auth import admin_required, requires_ui_role
 from .forms import protect
 from .identity import EDITORS
-from .models import Blueprint as BlueprintModel, Calibration
+from .models import Blueprint as BlueprintModel, Calibration, SensorName
+from .names import used_by_blueprints
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
 
@@ -54,8 +55,19 @@ def valid_key(key):
 @editors_required
 def index():
     identity = current_user.identity
+    names = db.session.execute(db.select(SensorName).order_by(SensorName.position)).scalars().all()
     return render_template('metadata/index.html', hardware=visible_hardware(identity),
-                           calibrations=visible_calibrations(identity))
+                           calibrations=visible_calibrations(identity), names=names, used=used_by_blueprints(),
+                           shared_ids=shared_ids(names))
+
+
+def shared_ids(names):
+    ''' Sensor ids with several names: scdata uses the first one '''
+    by_id = {}
+    for item in names:
+        if item.sensor_id:
+            by_id.setdefault(item.sensor_id, []).append(item.name)
+    return {sensor_id: items for sensor_id, items in by_id.items() if len(items) > 1}
 
 
 # Hardware
@@ -190,12 +202,65 @@ def save_calibration_form(sensor_id, kind, new=False):
     return redirect(url_for('ui.edit_calibration', sensor_id=sensor_id))
 
 
+# Sensor names
+
+NAME_FIELDS = ('id', 'description', 'unit')
+
+
+def render_name(name, data, errors=None, new=False):
+    names = db.session.execute(db.select(SensorName).order_by(SensorName.position)).scalars().all()
+    others = [item.name for item in names if item.name != name and data.get('id') and item.sensor_id == data.get('id')]
+    return render_template('metadata/name.html', name=name, data=data, errors=errors or [], new=new,
+                           readonly=not current_user.is_admin, used=used_by_blueprints().get(name, []),
+                           others=others, first=next((item.name for item in names if data.get('id')
+                                                      and item.sensor_id == data.get('id')), None))
+
+
+@ui.route('/names/new', methods=['GET', 'POST'])
+@admin_required
+def new_name():
+    if request.method == 'GET':
+        return render_name('', {'id': 0, 'description': '', 'unit': ''}, new=True)
+    return save_name_form(request.form.get('name', '').strip(), new=True)
+
+
+@ui.route('/names/<name>', methods=['GET', 'POST'])
+@editors_required
+def edit_name(name):
+    item = get_or_404('name', name)
+    if request.method == 'GET':
+        return render_name(name, item.to_json())
+    return save_name_form(name)
+
+
+def save_name_form(name, new=False):
+    data = {field: request.form.get(field, '').strip() for field in NAME_FIELDS}
+    errors = []
+    if new and not valid_key(name):
+        errors.append('name: letters, numbers, "_" and "-" only (64 characters at most)')
+    elif new and editing.find('name', name) is not None:
+        errors.append(f'name: {name} already exists')
+    if not errors:
+        try:
+            editing.save_name(name, data, identity=current_user.identity)
+        except ValidationError as error:
+            db.session.rollback()
+            errors = [f"{'.'.join(str(part) for part in item['loc']) or 'body'}: {item['msg']}"
+                      for item in error.errors()]
+    if errors:
+        data['id'] = int(data['id']) if data['id'].isdigit() else data['id']
+        return render_name(name, data, errors, new=new)
+    db.session.commit()
+    flash(f'Name {name} saved')
+    return redirect(url_for('ui.edit_name', name=name))
+
+
 # History and deletion
 
-KIND_LABELS = {'hardware': 'Hardware', 'calibration': 'Calibration'}
+KIND_LABELS = {'hardware': 'Hardware', 'calibration': 'Calibration', 'name': 'Name'}
 
 
-@ui.get('/<any(hardware, calibration):kind>/<key>/history')
+@ui.get('/<any(hardware, calibration, name):kind>/<key>/history')
 @editors_required
 def history(kind, key):
     # Also for deleted items
@@ -210,11 +275,11 @@ def changed_fields(revision):
     return sorted(field for field in before.keys() | after.keys() if before.get(field) != after.get(field))
 
 
-@ui.post('/<any(hardware, calibration):kind>/<key>/delete')
+@ui.post('/<any(hardware, calibration, name):kind>/<key>/delete')
 @admin_required
 def delete(kind, key):
     if not editing.delete(kind, key, identity=current_user.identity):
         abort(404)
     db.session.commit()
     flash(f'{KIND_LABELS[kind]} {key} deleted')
-    return redirect(url_for('ui.index'))
+    return redirect(url_for('ui.index') + {'hardware': '#hardware', 'calibration': '#calibrations', 'name': '#names'}[kind])

@@ -1,7 +1,10 @@
 /* Design tokens: colours, type, spacing and shapes used by app.css.
-   Change values here to tweak the look of the whole interface. */
+   Change values here to tweak the look of the whole interface.
+   The theme (light or dark) is set on <html data-theme>: the header switch, or the system setting by default */
 
 :root {
+  color-scheme: light;
+
   /* Brand */
   --color-accent: #1f6feb;
   --color-accent-hover: #1a5fcc;
@@ -78,39 +81,39 @@
   --focus-ring: 0 0 0 3px rgba(31, 111, 235, 0.35);
 }
 
-/* Dark theme: follows the system setting */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-accent: #4493f8;
-    --color-accent-hover: #6aa8fa;
-    --color-accent-soft: #15253d;
-    --color-on-accent: #0b0f14;
+/* Dark theme */
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-    --color-bg: #0d1117;
-    --color-surface: #151b23;
-    --color-surface-muted: #1c232c;
-    --color-border: #2a313b;
-    --color-border-strong: #3d4550;
-    --color-text: #e6edf3;
-    --color-text-muted: #9198a1;
-    --color-header-bg: #010409;
+  --color-accent: #4493f8;
+  --color-accent-hover: #6aa8fa;
+  --color-accent-soft: #15253d;
+  --color-on-accent: #0b0f14;
 
-    --color-success: #3fb950;
-    --color-success-soft: #12261a;
-    --color-warning: #d29922;
-    --color-warning-soft: #2b2111;
-    --color-danger: #f85149;
-    --color-danger-soft: #2d1416;
-    --color-info: #58a6ff;
-    --color-info-soft: #0f2238;
-    --color-neutral: #9198a1;
-    --color-neutral-soft: #21262d;
+  --color-bg: #0d1117;
+  --color-surface: #151b23;
+  --color-surface-muted: #1c232c;
+  --color-border: #2a313b;
+  --color-border-strong: #3d4550;
+  --color-text: #e6edf3;
+  --color-text-muted: #9198a1;
+  --color-header-bg: #010409;
 
-    --color-code-bg: #1f2630;
-    --color-code-text: #e6edf3;
-    --color-log-bg: #010409;
+  --color-success: #3fb950;
+  --color-success-soft: #12261a;
+  --color-warning: #d29922;
+  --color-warning-soft: #2b2111;
+  --color-danger: #f85149;
+  --color-danger-soft: #2d1416;
+  --color-info: #58a6ff;
+  --color-info-soft: #0f2238;
+  --color-neutral: #9198a1;
+  --color-neutral-soft: #21262d;
 
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  }
+  --color-code-bg: #1f2630;
+  --color-code-text: #e6edf3;
+  --color-log-bg: #010409;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
 }

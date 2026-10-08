@@ -118,6 +118,25 @@ pre code { padding: 0; background: none; font-size: inherit; white-space: pre; }
 .topbar-end a { color: var(--color-header-muted); }
 .topbar-end a:hover { color: #fff; }
 .clock { font-variant-numeric: tabular-nums; }
+.theme-switch {
+  min-width: 4rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-header-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.theme-switch:hover { color: #fff; border-color: rgba(255, 255, 255, 0.5); }
+
+/* Error pages */
+.error-page { padding: var(--space-7) 0; text-align: center; }
+.error-page .code { color: var(--color-text-muted); font-size: var(--text-xxl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.error-page h1 { margin: var(--space-2) 0 var(--space-3); }
+.error-page p { color: var(--color-text-muted); }
+.error-page .row { justify-content: center; margin-top: var(--space-5); }
 
 /* Page layout */
 

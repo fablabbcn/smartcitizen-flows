@@ -95,3 +95,25 @@ def test_secure_cookie_with_https_public_url(monkeypatch, tmp_path):
 
     assert app.config['SESSION_COOKIE_SECURE'] is True
     assert app.config['SESSION_COOKIE_SAMESITE'] == 'Lax'
+
+
+def test_error_pages(client, sc_sessions):
+    page = client.get('/nothing')
+    assert page.status_code == 404 and 'This page does not exist' in page.get_data(as_text=True)
+
+    login(client, 'researcher')
+    page = client.get('/jobs/')
+    assert page.status_code == 403 and 'admins only' in page.get_data(as_text=True)
+
+
+def test_api_errors_stay_json(client):
+    response = client.get('/api/v1/nothing')
+
+    assert response.status_code == 404
+    assert response.get_json()['error'] == 'Not Found'
+
+
+def test_theme_switch(client):
+    page = client.get('/').get_data(as_text=True)
+
+    assert 'data-theme-switch' in page and "localStorage.getItem('theme')" in page

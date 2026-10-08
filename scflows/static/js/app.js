@@ -12,6 +12,27 @@
     setInterval(tick, 10000);
   }
 
+  // Theme switch: auto (system setting), light, dark. The choice is kept in this browser
+  var themeSwitch = document.querySelector('[data-theme-switch]');
+  var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+  var savedTheme = function () {
+    try { return localStorage.getItem('theme') || 'auto'; } catch (error) { return 'auto'; }
+  };
+  var applyTheme = function (choice) {
+    var theme = choice === 'auto' ? (systemDark.matches ? 'dark' : 'light') : choice;
+    document.documentElement.setAttribute('data-theme', theme);
+    if (themeSwitch) themeSwitch.textContent = choice.charAt(0).toUpperCase() + choice.slice(1);
+  };
+  applyTheme(savedTheme());
+  systemDark.addEventListener('change', function () { if (savedTheme() === 'auto') applyTheme('auto'); });
+  if (themeSwitch) {
+    themeSwitch.addEventListener('click', function () {
+      var next = { auto: 'light', light: 'dark', dark: 'auto' }[savedTheme()] || 'auto';
+      try { localStorage.setItem('theme', next); } catch (error) {}
+      applyTheme(next);
+    });
+  }
+
   // Tables: filter rows with a search box and sort by clicking headers
   document.querySelectorAll('[data-table]').forEach(function (container) {
     var table = container.querySelector('table');

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ error.name }}{% endblock %}
+{% block content %}
+<section class="error-page">
+    <div class="code">{{ error.code }}</div>
+    <h1>{{ error.name }}</h1>
+    <p>{{ message }}</p>
+    <div class="row">
+        <a class="btn primary" href="{{ url_for('main.index') }}">Go to the overview</a>
+        {% if error.code in (401, 403) and not current_user.is_authenticated %}<a class="btn" href="{{ url_for('auth.login') }}">Sign in</a>{% endif %}
+    </div>
+</section>
+{% endblock %}

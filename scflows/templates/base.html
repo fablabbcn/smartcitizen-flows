@@ -4,6 +4,14 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# Theme before the first paint: saved choice, or the system setting #}
+    <script>
+        try {
+            var theme = localStorage.getItem('theme');
+            document.documentElement.setAttribute('data-theme', theme === 'light' || theme === 'dark' ? theme :
+                (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+        } catch (error) {}
+    </script>
     {% block head %}{% endblock %}
     <title>{% block title %}{% endblock %}{% if self.title() %} · {% endif %}Smart Citizen Flows</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -32,6 +40,7 @@
             {% endif %}
             <div class="topbar-end">
                 <span class="clock" data-clock></span>
+                <button class="theme-switch" type="button" data-theme-switch title="Theme: follow the system, light or dark">Auto</button>
                 {% if current_user.is_authenticated %}
                 <span><span class="user">{{ current_user.username }}</span> · {{ current_user.role }}</span>
                 <a href="{{ url_for('auth.logout') }}">Log out</a>

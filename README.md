@@ -48,16 +48,18 @@ flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/
 
 ### Editing metadata
 
-Admins and researchers of the Smart Citizen platform can create and update metadata, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for an hour. That call returns all the devices visible to the user: for admins it can take 30 seconds, so the first request with a token is slow.
+Reading metadata is public (processing reads it without a token). Admins of the Smart Citizen platform create, update and delete it, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for an hour. That call returns all the devices visible to the user: for admins it can take 30 seconds, so the first request with a token is slow.
 
 | Endpoint | Who | |
 |---|---|---|
-| `PUT /api/v1/blueprints/<name>` | admin, researcher | Create or replace a blueprint (validated with `scdata`) |
-| `PUT /api/v1/hardware/<name>` | admin, researcher | Create or replace a hardware description, same structure as the hardware files. Refer to the blueprint with `blueprint` (name of a blueprint in flows) or `blueprint_url` |
-| `PUT /api/v1/calibrations/<sensor_id>` | admin, researcher | Create or replace a calibration (Alphasense sensor or AFE board) |
+| `PUT /api/v1/blueprints/<name>` | admin | Create or replace a blueprint (validated with `scdata`) |
+| `PUT /api/v1/hardware/<name>` | admin | Create or replace a hardware description, same structure as the hardware files. Refer to the blueprint with `blueprint` (name of a blueprint in flows) or `blueprint_url` |
+| `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board) |
 | `DELETE /api/v1/<blueprints\|hardware\|calibrations>/<name>` | admin | Delete |
 | `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
 | `GET /api/v1/<blueprints\|hardware\|calibrations>/<name>/revisions` | anyone | History of changes |
+
+In the web interface, admins edit the metadata and run the jobs. Researchers sign in to see, read only, the hardware used by their devices (from the `postprocessing` of their devices when they sign in) and the calibrations of its sensors.
 
 Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint. Blueprints used by hardware cannot be deleted.
 

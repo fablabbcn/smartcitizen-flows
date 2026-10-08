@@ -59,3 +59,37 @@ def test_api_timeout(client, sc_me):
 
     assert response.status_code == 503
     assert f'did not answer in {identity.ME_TIMEOUT} seconds' in response.get_json()['message']
+
+
+def test_hardware_name():
+    assert identity.hardware_name('SCAS220013') == 'SCAS220013'
+    assert identity.hardware_name(
+        'https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/hardware/SCAS220013.json') == 'SCAS220013'
+    assert identity.hardware_name('https://flows.smartcitizen.me/api/v1/hardware/SCAS220013.json') == 'SCAS220013'
+    assert identity.hardware_name('https://example.com/blueprints/sc_air.json') is None
+    assert identity.hardware_name('not a name') is None
+    assert identity.hardware_name(None) is None
+
+
+def test_researchers_get_the_hardware_of_their_devices(app, monkeypatch):
+    devices = [{'id': 1, 'postprocessing': {'hardware_url': 'SCAS2'}},
+               {'id': 2, 'postprocessing': {'hardware_url': 'https://flows.smartcitizen.me/api/v1/hardware/SCAS1.json'}},
+               {'id': 3, 'postprocessing': None},
+               {'id': 4, 'postprocessing': {'hardware_url': 'SCAS2'}}]
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, role):
+            self.role = role
+
+        def json(self):
+            return {'id': 7, 'username': 'someone', 'role': self.role, 'devices': devices}
+
+    identity.cache.clear()
+    monkeypatch.setattr(identity.requests, 'get', lambda url, headers, timeout: Response(headers['Authorization'][7:]))
+
+    assert identity.verify_token('researcher').hardware == ('SCAS1', 'SCAS2')
+    # Admins see everything: their own devices do not matter
+    assert identity.verify_token('admin').hardware == ()
+    identity.cache.clear()

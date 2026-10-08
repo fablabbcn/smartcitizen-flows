@@ -5,8 +5,8 @@ from flask_login import current_user
 from werkzeug.exceptions import HTTPException
 
 from . import db
+from .access import visible_calibrations, visible_hardware
 from .api import json_error
-from .identity import ADMIN
 from .jobs import now
 from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun
 
@@ -29,11 +29,16 @@ def job_figures():
 def index():
     if not current_user.is_authenticated:
         return render_template('index.html')
-    metadata = {'hardware': count(db.select(db.func.count(Hardware.id))),
-                'calibrations': count(db.select(db.func.count(Calibration.id))),
-                'blueprints': count(db.select(db.func.count(BlueprintModel.id)))}
-    return render_template('index.html', metadata=metadata,
-                           jobs=job_figures() if current_user.role == ADMIN else None)
+    if current_user.is_admin:
+        metadata = {'hardware': count(db.select(db.func.count(Hardware.id))),
+                    'calibrations': count(db.select(db.func.count(Calibration.id))),
+                    'blueprints': count(db.select(db.func.count(BlueprintModel.id)))}
+        return render_template('index.html', metadata=metadata, jobs=job_figures())
+    # Researchers: the metadata of their devices
+    hardware = visible_hardware(current_user.identity)
+    metadata = {'hardware': len(hardware), 'calibrations': len(visible_calibrations(current_user.identity)),
+                'blueprints': len({item.blueprint_id for item in hardware})}
+    return render_template('index.html', metadata=metadata, jobs=None)
 
 
 # Messages for the web interface. Others show the description of the error
@@ -51,4 +56,7 @@ def error_page(error):
         return json_error(error)
     if error.response is not None:
         return error.response
-    return render_template('error.html', error=error, message=MESSAGES.get(error.code, error.description)), error.code
+    # Descriptions given with abort() explain the error better than the generic messages
+    custom = error.description != type(error).description
+    message = error.description if custom else MESSAGES.get(error.code, error.description)
+    return render_template('error.html', error=error, message=message), error.code

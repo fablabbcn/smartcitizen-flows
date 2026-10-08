@@ -5,6 +5,7 @@ Smart Citizen API. The token is checked against {API_URL}me and the result is
 cached (see TOKEN_TTL).
 '''
 import hashlib
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -26,11 +27,40 @@ INVALID_TOKEN_TTL = 60
 REQUEST_KEY = 'scflows.identity'
 
 
+HARDWARE_NAME = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+
+
 @dataclass(frozen=True)
 class Identity:
     id: int
     username: str
     role: str
+    # Researchers: hardware used by their devices (the metadata they can see). Empty for others
+    hardware: tuple = ()
+
+    def __post_init__(self):
+        # Kept as a list in the session
+        object.__setattr__(self, 'hardware', tuple(self.hardware))
+
+
+def hardware_name(hardware_url):
+    '''
+    Hardware name of a device postprocessing hardware_url: a bare name or a url ending in
+    hardware/<name>.json (GitHub or flows). None if it is not one
+    '''
+    value = (hardware_url or '').strip()
+    if '/' in value:
+        path, _, value = value.rpartition('/')
+        if not path.endswith('hardware'):
+            return None
+    name = value.removesuffix('.json')
+    return name if HARDWARE_NAME.match(name) else None
+
+
+def devices_hardware(devices):
+    ''' Hardware names used by a list of devices, as {API_URL}me embeds them '''
+    names = {hardware_name((device.get('postprocessing') or {}).get('hardware_url')) for device in devices or []}
+    return tuple(sorted(name for name in names if name))
 
 
 class TokenCache:
@@ -82,7 +112,9 @@ def verify_token(token):
         abort(503, f'Cannot verify the token: the Smart Citizen API answered {response.status_code}')
 
     user = response.json()
-    identity = Identity(id=user['id'], username=user['username'], role=user.get('role', 'citizen'))
+    role = user.get('role', 'citizen')
+    identity = Identity(id=user['id'], username=user['username'], role=role,
+                        hardware=devices_hardware(user.get('devices')) if role == RESEARCHER else ())
     cache.set(token, identity, TOKEN_TTL)
     return identity
 

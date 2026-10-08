@@ -1,7 +1,8 @@
 ''' Web interface login with Smart Citizen accounts
 
 Admins and researchers can sign in. The session keeps their identity (not the
-Smart Citizen token) for SESSION_HOURS.
+Smart Citizen token) for SESSION_HOURS: researchers see the hardware their devices
+had when they signed in.
 '''
 from functools import wraps
 
@@ -30,6 +31,10 @@ class SessionUser(UserMixin):
     @property
     def role(self):
         return self.identity.role
+
+    @property
+    def is_admin(self):
+        return self.identity.role == ADMIN
 
 
 def load_user(user_id):
@@ -71,7 +76,8 @@ def login_post():
         flash('Only Smart Citizen admins and researchers can sign in.', 'error')
         return redirect(url_for('auth.login'))
 
-    session[SESSION_KEY] = {'id': identity.id, 'username': identity.username, 'role': identity.role}
+    session[SESSION_KEY] = {'id': identity.id, 'username': identity.username, 'role': identity.role,
+                            'hardware': list(identity.hardware)}
     session.permanent = True
     login_user(SessionUser(identity))
     if identity.role == ADMIN:

@@ -42,8 +42,17 @@ def test_citizens_cannot_write(client):
     assert response.status_code == 403
 
 
-def test_researcher_creates_and_updates_calibration(client):
-    response = client.put('/api/v1/calibrations/212999999', json=ALPHASENSE, headers=auth('researcher-token'))
+@pytest.mark.parametrize('path, body', [('calibrations/212999999', ALPHASENSE), ('hardware/SCAS_TEST1', HARDWARE),
+                                        ('blueprints/other', {'channels': []})])
+def test_researchers_cannot_write(client, path, body):
+    response = client.put(f'/api/v1/{path}', json=body, headers=auth('researcher-token'))
+
+    assert response.status_code == 403
+    assert response.get_json()['message'] == 'Requires one of the roles: admin'
+
+
+def test_creates_and_updates_calibration(client):
+    response = client.put('/api/v1/calibrations/212999999', json=ALPHASENSE, headers=auth('admin-token'))
     assert response.status_code == 201
     assert response.get_json() == {'data': ALPHASENSE, 'warnings': []}
 
@@ -53,13 +62,13 @@ def test_researcher_creates_and_updates_calibration(client):
 
     assert client.get('/api/v1/calibrations/212999999').get_json() == changed
     revisions = client.get('/api/v1/calibrations/212999999/revisions').get_json()
-    assert [(item['action'], item['username']) for item in revisions] == [('update', 'admin'), ('create', 'researcher')]
+    assert [(item['action'], item['username']) for item in revisions] == [('update', 'admin'), ('create', 'admin')]
     assert revisions[0]['before'] == ALPHASENSE and revisions[0]['after'] == changed
 
 
 def test_invalid_calibration(client):
     response = client.put('/api/v1/calibrations/212999999', json=dict(ALPHASENSE, typo=1),
-                          headers=auth('researcher-token'))
+                          headers=auth('admin-token'))
 
     assert response.status_code == 422
     assert response.get_json()['errors'] == ['typo: Extra inputs are not permitted']
@@ -69,7 +78,7 @@ def test_put_hardware_with_warnings(client):
     hardware = copy.deepcopy(HARDWARE)
     hardware['description'] = 'Updated'
 
-    response = client.put('/api/v1/hardware/SCAS_TEST1', json=hardware, headers=auth('researcher-token'))
+    response = client.put('/api/v1/hardware/SCAS_TEST1', json=hardware, headers=auth('admin-token'))
 
     assert response.status_code == 200
     body = response.get_json()
@@ -137,10 +146,10 @@ def test_hardware_requires_blueprint_in_flows(client):
 
 def test_new_blueprint_can_be_used(client):
     blueprint = client.get('/api/v1/blueprints/test_air').get_json()
-    assert client.put('/api/v1/blueprints/other', json=blueprint, headers=auth('researcher-token')).status_code == 201
+    assert client.put('/api/v1/blueprints/other', json=blueprint, headers=auth('admin-token')).status_code == 201
 
     response = client.put('/api/v1/hardware/SCAS_TEST2', json=dict(HARDWARE, blueprint_url=None, blueprint='other'),
-                          headers=auth('researcher-token'))
+                          headers=auth('admin-token'))
 
     assert response.status_code == 200
     assert response.get_json()['data']['blueprint_url'] == 'http://localhost/api/v1/blueprints/other.json'

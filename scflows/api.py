@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from werkzeug.exceptions import HTTPException
 
 from . import db, editing
-from .identity import ADMIN, EDITORS, current_identity, requires_role
+from .identity import ADMIN, current_identity, requires_role
 from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun
 from .validation import check_hardware
 
@@ -127,7 +127,7 @@ def get_calibration(sensor_id):
     return jsonify(get_by_name(Calibration, sensor_id, field='sensor_id').to_json())
 
 
-# Writes: admins and researchers. Deletes: admins
+# Writes and deletes: admins. Reads are public (processing reads the metadata without a token)
 
 KEY_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 
@@ -163,7 +163,7 @@ def saved(data, created, warnings=None):
 
 
 @api.put('/blueprints/<name>')
-@requires_role(*EDITORS)
+@requires_role(ADMIN)
 def put_blueprint(name):
     try:
         item, created = editing.save_blueprint(key_of(name), json_body(), identity=current_identity())
@@ -174,7 +174,7 @@ def put_blueprint(name):
 
 
 @api.put('/hardware/<name>')
-@requires_role(*EDITORS)
+@requires_role(ADMIN)
 def put_hardware(name):
     key = key_of(name)
     check = check_hardware(json_body())
@@ -193,7 +193,7 @@ def post_hardware_check(name):
 
 
 @api.put('/calibrations/<sensor_id>')
-@requires_role(*EDITORS)
+@requires_role(ADMIN)
 def put_calibration(sensor_id):
     try:
         item, created = editing.save_calibration(key_of(sensor_id), json_body(), identity=current_identity())

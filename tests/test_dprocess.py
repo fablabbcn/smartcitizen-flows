@@ -18,7 +18,11 @@ class FakeDevice:
 
     def __init__(self, params, **kwargs):
         self.params = params
-        self.handler = SimpleNamespace(postprocessing={'latest_postprocessing': LATEST})
+        self.handler = SimpleNamespace(postprocessing={'latest_postprocessing': LATEST},
+                                       json=SimpleNamespace(name='Kit 1'))
+        self.blueprint = 'sc_air'
+        self.checks = FakeDevice.options.get('checks', ['GAPS'])
+        self.health = {}
         self.options = SimpleNamespace(min_date=None, channels=[], limit=None)
         self.required_sensors = FakeDevice.options.get('required_sensors', ['ADC_48_2', 'TEMP'])
         self.valid_for_processing = FakeDevice.options.get('valid', True)
@@ -38,6 +42,12 @@ class FakeDevice:
     def process(self):
         self.processed = FakeDevice.options.get('process', True)
         return self.processed
+
+    def health_checks(self):
+        if FakeDevice.options.get('checks_fail'):
+            raise ValueError('bad check')
+        self.health = {'start': None, 'end': None, 'rows': len(self.data),
+                       'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
 
     def update_postprocessing_date(self):
         self.postprocessing_updated = FakeDevice.options.get('postprocessing_updated', True)
@@ -60,7 +70,8 @@ def run(monkeypatch, refreshed):
 
     def run_dprocess(dry_run=False, **options):
         FakeDevice.options = options
-        _, state = asyncio.run(dprocess(1, dry_run=dry_run))
+        _, state, health = asyncio.run(dprocess(1, dry_run=dry_run))
+        FakeDevice.instance.returned_health = health
         return state, FakeDevice.instance
 
     return run_dprocess
@@ -119,3 +130,24 @@ def test_metadata_is_refreshed(run, refreshed):
     run()
 
     assert refreshed == [True]
+
+
+def test_health_checks_are_returned(run):
+    _, device = run()
+
+    assert device.returned_health == {'start': None, 'end': None, 'rows': 1, 'device_name': 'Kit 1',
+                                      'blueprint': 'sc_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
+
+
+def test_health_checks_also_when_processing_fails(run):
+    state, device = run(process=False)
+
+    assert state == ['ABORTED', 'PROCESSING_FAILED']
+    assert device.returned_health['rows'] == 1
+
+
+@pytest.mark.parametrize('options', [{'checks': []}, {'checks_fail': True}, {'load': False}])
+def test_no_health_without_checks_or_data(run, options):
+    _, device = run(**options)
+
+    assert device.returned_health is None

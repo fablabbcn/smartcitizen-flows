@@ -13,7 +13,7 @@ import click
 import pandas as pd
 from flask.cli import AppGroup
 
-from . import db, locks
+from . import db, health, locks
 from .config import config
 from .custom_logger import logger
 from .models import Job, JobRun
@@ -201,10 +201,13 @@ def execute_run(run_id):
     try:
         run.state, run.started_at = JobRun.RUNNING, now()
         db.session.commit()
-        log, state = asyncio.run(task_function(run.task)(run.device_id, run.dry_run))
+        # dprocess also returns the health checks of the data it processed
+        log, state, *extra = asyncio.run(task_function(run.task)(run.device_id, run.dry_run))
         run.log = log
         run.state = STATES.get(state[0], JobRun.ABORTED)
         run.message = state[1]
+        if extra and extra[0]:
+            health.record(run.device_id, extra[0], run=run)
     except Exception as error:
         logger.exception(f'Run {run.id} failed')
         db.session.rollback()

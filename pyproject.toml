@@ -11,7 +11,7 @@ license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
     "smartcitizen-connector==1.5.3",
-    "scdata==1.5.6",
+    "scdata==1.6.0",
     "celery[redis]>=5.6,<6",
     "flower>=2.0,<3",
     "flask>=3.1,<4",

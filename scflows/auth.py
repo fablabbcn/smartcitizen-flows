@@ -77,7 +77,7 @@ def login_post():
         return redirect(url_for('auth.login'))
 
     session[SESSION_KEY] = {'id': identity.id, 'username': identity.username, 'role': identity.role,
-                            'hardware': list(identity.hardware)}
+                            'hardware': list(identity.hardware), 'devices': list(identity.devices)}
     session.permanent = True
     login_user(SessionUser(identity))
     if identity.role == ADMIN:

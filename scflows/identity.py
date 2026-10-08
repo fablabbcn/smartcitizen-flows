@@ -35,12 +35,15 @@ class Identity:
     id: int
     username: str
     role: str
-    # Researchers: hardware used by their devices (the metadata they can see). Empty for others
+    # Researchers: hardware used by their devices (the metadata they can see) and the ids of
+    # their devices (their health). Empty for others
     hardware: tuple = ()
+    devices: tuple = ()
 
     def __post_init__(self):
-        # Kept as a list in the session
+        # Kept as lists in the session
         object.__setattr__(self, 'hardware', tuple(self.hardware))
+        object.__setattr__(self, 'devices', tuple(self.devices))
 
 
 def hardware_name(hardware_url):
@@ -55,6 +58,11 @@ def hardware_name(hardware_url):
             return None
     name = value.removesuffix('.json')
     return name if HARDWARE_NAME.match(name) else None
+
+
+def device_ids(devices):
+    ''' Ids of a list of devices, as {API_URL}me embeds them '''
+    return tuple(sorted(device['id'] for device in devices or [] if isinstance(device.get('id'), int)))
 
 
 def devices_hardware(devices):
@@ -113,8 +121,10 @@ def verify_token(token):
 
     user = response.json()
     role = user.get('role', 'citizen')
+    researcher = role == RESEARCHER
     identity = Identity(id=user['id'], username=user['username'], role=role,
-                        hardware=devices_hardware(user.get('devices')) if role == RESEARCHER else ())
+                        hardware=devices_hardware(user.get('devices')) if researcher else (),
+                        devices=device_ids(user.get('devices')) if researcher else ())
     cache.set(token, identity, TOKEN_TTL)
     return identity
 

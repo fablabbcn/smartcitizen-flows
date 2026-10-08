@@ -66,10 +66,12 @@ def test_index(client, path):
         'hardware': 'http://localhost/api/v1/hardware',
         'calibrations': 'http://localhost/api/v1/calibrations',
         'names': 'http://localhost/api/v1/names',
+        'device_health': 'http://localhost/api/v1/devices/health',
         'health': 'http://localhost/api/v1/health',
     }
-    for link in response.get_json()['links'].values():
-        assert client.get(link).status_code == 200
+    for name, link in response.get_json()['links'].items():
+        # Device health needs a token: admins see every device, researchers their own
+        assert client.get(link).status_code == (401 if name == 'device_health' else 200)
 
 
 def test_hardware_list(client):

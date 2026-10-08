@@ -60,6 +60,10 @@ def create_app(config=None):
     from .jobs_ui import jobs_ui as jobs_ui_blueprint
     app.register_blueprint(jobs_ui_blueprint)
 
+    # device health (admins: every device, researchers: theirs)
+    from .health_ui import health_ui as health_ui_blueprint
+    app.register_blueprint(health_ui_blueprint)
+
     from .metadata import metadata_cli
     app.cli.add_command(metadata_cli)
     from .jobs import jobs_cli

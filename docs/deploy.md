@@ -77,6 +77,8 @@ months to clear), so expect the workers to be busy for a while.
 The database is small: **~9 MB** with all the metadata (1 blueprint, 158 hardware,
 594 calibrations), their revision history and a few hundred jobs. It grows with
 the run history (one row per run, with its log).
+Device health adds about 5 KB per processing run (one device, sc_air): with about 70
+processing jobs every 3 hours and 30 days of history, around **85 MB**.
 
 **Docker images are the largest consumer of disk.** The flows image is about
 **2.1 GB** (scdata and its scientific stack). Postgres, Redis and Caddy add about
@@ -93,7 +95,7 @@ reclaim it (see [Updating](#updating)).
 | `proxy` | `caddy:2-alpine` | TLS (Let's Encrypt), HTTP to HTTPS redirect, `/flower` behind basic auth, everything else to `web`. The only service with published ports. |
 | `web` | `scflows:latest` | Flask app: web interface, metadata API (`/api/v1/`). Applies database migrations before serving. |
 | `celery` | `scflows:latest` | Workers that run the jobs: `dprocess` (processing) and `dbackup` (backups to S3). |
-| `beat` | `scflows:latest` | Scheduler, **one instance only**: queues the due jobs every minute, syncs the jobs with the Smart Citizen API every day at 03:00 (`CELERY_TIMEZONE`). |
+| `beat` | `scflows:latest` | Scheduler, **one instance only**: queues the due jobs every minute, syncs the jobs with the Smart Citizen API every day at 03:00 (`CELERY_TIMEZONE`), and deletes device health older than 30 days at 03:30. |
 | `flower` | `scflows:latest` | Celery monitoring, under `/flower`. |
 | `postgres` | `postgres:16-alpine` | Metadata (blueprints, hardware, calibrations), their revision history, jobs and runs. |
 | `redis` | `redis:7-alpine` | Celery broker (database 0) and locks (database 1). |
@@ -493,7 +495,9 @@ Check:
 - After a few minutes, "Latest runs" fills in. Open one to see its log.
 
 In `/jobs/`, run a processing dry run for one device ("Run now" with "Dry run"),
-open it from "Latest runs" and check it ends in `success` and shows its log.
+open it from "Latest runs" and check it ends in `success` and shows its log
+(including `Health checks done`). The device then appears in `/health/` with the
+result of the blueprint checks on that data.
 
 ---
 
@@ -538,8 +542,8 @@ all of this. Do these in order, then continue with steps 9-12 above:
 
 | Who | Sees |
 |---|---|
-| Smart Citizen admins | Overview, **Jobs** (run now, dry run, pause and resume per device, add a job, every run with its log) and **Metadata** (create, edit, check and delete hardware and calibrations, with history). |
-| Smart Citizen researchers | Overview and Metadata, **read only**, limited to the hardware used by their devices and the calibrations of its sensors. Their devices are read when they sign in: a new device shows after signing in again. |
+| Smart Citizen admins | Overview, **Health** of every device, **Jobs** (run now, dry run, pause and resume per device, add a job, every run with its log) and **Metadata** (create, edit, check and delete hardware and calibrations, with history). |
+| Smart Citizen researchers | Overview, **Health** of their devices, and Metadata **read only**, limited to the hardware used by their devices and the calibrations of its sensors. Their devices are read when they sign in: a new device shows after signing in again. |
 | Everyone else | Cannot sign in. |
 
 The API reads (`GET /api/v1/...`) are public: processing reads them without a
@@ -613,7 +617,7 @@ Durable state lives in named volumes:
 
 | Volume | Contents | Losing it means |
 |---|---|---|
-| `postgres_data` | Blueprints, hardware, calibrations, sensor names, their revision history, jobs and runs | **The metadata.** After the deploy it is edited in flows, not GitHub, so it cannot be re-imported without losing those changes. |
+| `postgres_data` | Blueprints, hardware, calibrations, sensor names, their revision history, jobs, runs and device health | **The metadata.** After the deploy it is edited in flows, not GitHub, so it cannot be re-imported without losing those changes. |
 | `caddy_data` | TLS certificates and ACME account | Re-issuing; mind the rate limit. |
 | `redis_data` | Queued tasks | Nothing that matters: `beat` queues due jobs again within a minute. |
 

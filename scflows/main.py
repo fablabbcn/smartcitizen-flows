@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request
 from flask_login import current_user
 from werkzeug.exceptions import HTTPException
 
-from . import db
+from . import db, health
 from .access import visible_calibrations, visible_hardware
 from .api import json_error
 from .jobs import now
@@ -25,6 +25,12 @@ def job_figures():
                 JobRun.state == JobRun.FAILED, JobRun.created_at >= now() - timedelta(hours=24)))}
 
 
+def health_figures():
+    ''' Devices by status of their latest health checks '''
+    items = health.latest(current_user.identity)
+    return {status: sum(1 for item in items if item.status == status) for status in ('ok', 'warning', 'problem', 'error')}
+
+
 @main.route('/')
 def index():
     if not current_user.is_authenticated:
@@ -33,12 +39,12 @@ def index():
         metadata = {'hardware': count(db.select(db.func.count(Hardware.id))),
                     'calibrations': count(db.select(db.func.count(Calibration.id))),
                     'blueprints': count(db.select(db.func.count(BlueprintModel.id)))}
-        return render_template('index.html', metadata=metadata, jobs=job_figures())
+        return render_template('index.html', metadata=metadata, jobs=job_figures(), health=health_figures())
     # Researchers: the metadata of their devices
     hardware = visible_hardware(current_user.identity)
     metadata = {'hardware': len(hardware), 'calibrations': len(visible_calibrations(current_user.identity)),
                 'blueprints': len({item.blueprint_id for item in hardware})}
-    return render_template('index.html', metadata=metadata, jobs=None)
+    return render_template('index.html', metadata=metadata, jobs=None, health=health_figures())
 
 
 # Messages for the web interface. Others show the description of the error

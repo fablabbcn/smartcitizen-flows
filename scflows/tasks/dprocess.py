@@ -31,6 +31,7 @@ async def dprocess(device, dry_run = False):
 
     d = sc.Device(params=sc.APIParams(id=device))
     task_state = [None, None]
+    health = None
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
@@ -56,7 +57,10 @@ async def dprocess(device, dry_run = False):
                 task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
                 # Process it
-                if d.process():
+                processed = d.process()
+                # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
+                health = health_checks(d, logger_handler, task_log)
+                if processed:
                     task_log.append(logger_handler(f'Device was processed: {d.processed}'))
 
                     # Update postprocessing date
@@ -89,7 +93,23 @@ async def dprocess(device, dry_run = False):
 
     task_log.append(logger_handler(f'Concluded job for {device}'))
 
-    return task_log, task_state
+    return task_log, task_state, health
+
+
+def health_checks(d, logger_handler, task_log):
+    ''' Runs the checks of the blueprint on the data of the run. Returns device.health, or None '''
+    if not d.checks:
+        return None
+    try:
+        d.health_checks()
+    except Exception as error:
+        task_log.append(logger_handler(f'Health checks failed: {type(error).__name__}: {error}', 'warning'))
+        return None
+    health = getattr(d, 'health', None)
+    if not health:
+        return None
+    task_log.append(logger_handler(f'Health checks done: {len(health["checks"])} checks on {health["rows"]} rows'))
+    return dict(health, device_name=getattr(d.handler.json, 'name', None), blueprint=d.blueprint)
 
 
 if __name__ == '__main__':

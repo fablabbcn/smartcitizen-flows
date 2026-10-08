@@ -14,6 +14,7 @@ from scflows import db, locks
 from scflows.custom_logger import logger
 from scflows.identity import hardware_name
 from scflows.models import Blueprint, Hardware
+from scflows.parameters import apply_parameters
 from scflows.storage import month_start, write_processed
 from scflows.tasks.dprocess import health_checks
 from scflows.tools import refresh_metadata
@@ -21,12 +22,11 @@ from scflows.tools import refresh_metadata
 DEFAULT_WINDOW_DAYS = 90
 
 
-def long_blueprint(device):
-    ''' The long blueprint of the device's hardware in flows, or None '''
+def device_hardware(device):
+    ''' The hardware of the device in flows, or None '''
     postprocessing = device.handler.json.postprocessing
     name = hardware_name(postprocessing.hardware_url) if postprocessing is not None else None
-    hardware = db.session.execute(db.select(Hardware).filter_by(name=name)).scalar_one_or_none() if name else None
-    return hardware.blueprint_of(Blueprint.LONG) if hardware else None
+    return db.session.execute(db.select(Hardware).filter_by(name=name)).scalar_one_or_none() if name else None
 
 
 async def back_up(device_id, logger_handler, task_log):
@@ -66,12 +66,17 @@ async def dlong(device_id, dry_run=False):
         return done('ABORTED', 'BACKUP_FAILED')
 
     device = sc.Device(params=sc.APIParams(id=device_id))
-    blueprint = long_blueprint(device)
+    hardware = device_hardware(device)
+    blueprint = hardware.blueprint_of(Blueprint.LONG) if hardware else None
     if blueprint is None:
         task_log.append(logger_handler(f'Device {device_id} has no long blueprint in its hardware', 'error'))
         return done('ABORTED', 'NO_LONG_BLUEPRINT')
     device.use_blueprint(blueprint.name, blueprint.body)
-    task_log.append(logger_handler(f'Using blueprint {blueprint.name}'))
+    # Parameters of its sensor types, then of its hardware
+    parameter_sets = apply_parameters(device, hardware)
+    task_log.append(logger_handler(f'Using blueprint {blueprint.name}, parameters of: '
+                                   f'{", ".join(parameter_sets) or "the blueprint only"}'
+                                   f'{" and hardware " + hardware.name if hardware.parameters else ""}'))
 
     window_days = blueprint.meta.get('window_days') or DEFAULT_WINDOW_DAYS
     end = datetime.now(timezone.utc)
@@ -98,7 +103,8 @@ async def dlong(device_id, dry_run=False):
         return done('SUCCESS', 'PROCESSED (DRY RUN)', health)
 
     info = {'blueprint': blueprint.name, 'start': start.isoformat(), 'end': end.isoformat(),
-            'rows': len(device.data), 'channels': channels,
+            'rows': len(device.data), 'channels': channels, 'parameter_sets': parameter_sets,
+            'hardware_parameters': hardware.parameters or {},
             # The parameters used, to tell results apart when they are tuned
             'parameters': {channel.name: channel.kwargs for channel in device.channels}}
     try:

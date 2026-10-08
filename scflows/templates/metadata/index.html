@@ -22,6 +22,7 @@
             <button type="button" role="tab" data-tab="hardware" aria-selected="true">Hardware<span class="count">{{ hardware | length }}</span></button>
             <button type="button" role="tab" data-tab="calibrations" aria-selected="false">Calibrations<span class="count">{{ calibrations | length }}</span></button>
             <button type="button" role="tab" data-tab="names" aria-selected="false">Names<span class="count">{{ names | length }}</span></button>
+            <button type="button" role="tab" data-tab="parameters" aria-selected="false">Parameters<span class="count">{{ parameter_sets | length }}</span></button>
         </div>
     </div>
 
@@ -90,6 +91,25 @@
                     </tr>
                 {% else %}
                     <tr><td colspan="6" class="empty">No names yet. Import them with <code>flask --app scflows metadata import</code></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="parameters" role="tabpanel" data-table>
+        <div class="card-body small muted">Parameters of long processing (baselines) per sensor type, over the defaults of the long blueprint: <code>{"NO2": {"lam": 1e10, "p": 1e-10}}</code>. Alphasense types apply to the sensors of that type, NDIR types (SCD30) when the blueprint reads that sensor. A hardware can override them.</div>
+        <div class="table-wrap scroll">
+            <table class="table">
+                <thead><tr><th data-sort>Sensor type</th><th>Channels</th><th>Description</th><th data-sort>Updated</th></tr></thead>
+                <tbody>
+                {% for name in sensor_types %}
+                    {% set item = parameter_sets.get(name) %}
+                    <tr>
+                        <td class="mono nowrap"><a href="{{ url_for('ui.edit_parameters', name=name) }}">{{ name }}</a></td>
+                        <td class="mono small">{% if item %}{{ item.channels | list | join(', ') }}{% else %}<span class="muted">blueprint defaults</span>{% endif %}</td>
+                        <td class="small">{{ item.description or '' if item else '' }}</td>
+                        <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') if item else '' }}</td>
+                    </tr>
                 {% endfor %}
                 </tbody>
             </table>

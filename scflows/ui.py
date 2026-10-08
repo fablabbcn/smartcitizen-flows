@@ -3,6 +3,8 @@
 Admins edit them, with the same checks and history as the API. Researchers see the
 metadata of their devices and the sensor names, read only (see access.py). Forms are plain html (no javascript needed).
 '''
+import json
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from pydantic import ValidationError
@@ -13,7 +15,8 @@ from .api import KEY_PATTERN
 from .auth import admin_required, requires_ui_role
 from .forms import protect
 from .identity import EDITORS
-from .models import Blueprint as BlueprintModel, Calibration, SensorName
+from .models import Blueprint as BlueprintModel, Calibration, ParameterSet, SensorName
+from .parameters import sensor_types
 from .names import used_by_blueprints
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
@@ -56,7 +59,9 @@ def valid_key(key):
 def index():
     identity = current_user.identity
     names = db.session.execute(db.select(SensorName).order_by(SensorName.position)).scalars().all()
+    parameter_sets = {item.name: item for item in db.session.execute(db.select(ParameterSet)).scalars()}
     return render_template('metadata/index.html', hardware=visible_hardware(identity),
+                           sensor_types=sensor_types(), parameter_sets=parameter_sets,
                            calibrations=visible_calibrations(identity), names=names, used=used_by_blueprints(),
                            shared_ids=shared_ids(names))
 
@@ -88,10 +93,21 @@ def hardware_from_form(form):
                          'from': form.get(f'version_{index}_from') or None,
                          'to': form.get(f'version_{index}_to') or None})
     return {'blueprints': [name for name in form.getlist('blueprints') if name],
+            'parameters': json_field(form.get('parameters')),
             'description': form.get('description') or None,
             'comment': form.get('comment') or None,
             'forwarding': form.get('forwarding') or None,
             'versions': versions}
+
+
+def json_field(value):
+    ''' A JSON form field: None when empty, the text itself when it is not valid JSON (validation reports it) '''
+    if not (value or '').strip():
+        return None
+    try:
+        return json.loads(value)
+    except ValueError:
+        return value
 
 
 def render_hardware(name, data, check=None, new=False):
@@ -258,12 +274,45 @@ def save_name_form(name, new=False):
     return redirect(url_for('ui.edit_name', name=name))
 
 
+# Long processing parameters per sensor type
+
+def render_parameters(name, channels, description, errors=None):
+    item = editing.find('parameters', name)
+    return render_template('metadata/parameters.html', name=name, channels=channels, description=description,
+                           errors=errors or [], exists=item is not None, readonly=not current_user.is_admin)
+
+
+@ui.route('/parameters/<name>', methods=['GET', 'POST'])
+@editors_required
+def edit_parameters(name):
+    if name not in sensor_types():
+        abort(404)
+    if request.method == 'GET':
+        item = editing.find('parameters', name)
+        return render_parameters(name, json.dumps(item.channels, indent=2) if item else '{}',
+                                 item.description if item else '')
+    if not current_user.is_admin:
+        abort(403, 'Only admins can change metadata.')
+    text, description = request.form.get('channels', ''), request.form.get('description', '').strip()
+    try:
+        editing.save_parameter_set(name, {'channels': json.loads(text or '{}'), 'description': description or None},
+                                   identity=current_user.identity)
+    except ValueError as error:
+        db.session.rollback()
+        message = (f"{'.'.join(str(part) for part in error.errors()[0]['loc'])}: {error.errors()[0]['msg']}"
+                   if isinstance(error, ValidationError) else f'channels: not valid JSON ({error})')
+        return render_parameters(name, text, description, [message])
+    db.session.commit()
+    flash(f'Parameters of {name} saved')
+    return redirect(url_for('ui.edit_parameters', name=name))
+
+
 # History and deletion
 
-KIND_LABELS = {'hardware': 'Hardware', 'calibration': 'Calibration', 'name': 'Name'}
+KIND_LABELS = {'hardware': 'Hardware', 'calibration': 'Calibration', 'name': 'Name', 'parameters': 'Parameters'}
 
 
-@ui.get('/<any(hardware, calibration, name):kind>/<key>/history')
+@ui.get('/<any(hardware, calibration, name, parameters):kind>/<key>/history')
 @editors_required
 def history(kind, key):
     # Also for deleted items
@@ -278,11 +327,12 @@ def changed_fields(revision):
     return sorted(field for field in before.keys() | after.keys() if before.get(field) != after.get(field))
 
 
-@ui.post('/<any(hardware, calibration, name):kind>/<key>/delete')
+@ui.post('/<any(hardware, calibration, name, parameters):kind>/<key>/delete')
 @admin_required
 def delete(kind, key):
     if not editing.delete(kind, key, identity=current_user.identity):
         abort(404)
     db.session.commit()
     flash(f'{KIND_LABELS[kind]} {key} deleted')
-    return redirect(url_for('ui.index') + {'hardware': '#hardware', 'calibration': '#calibrations', 'name': '#names'}[kind])
+    return redirect(url_for('ui.index') + {'hardware': '#hardware', 'calibration': '#calibrations', 'name': '#names',
+                                           'parameters': '#parameters'}[kind])

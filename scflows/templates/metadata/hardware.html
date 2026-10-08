@@ -50,6 +50,11 @@
                 <input class="input" id="comment" name="comment" value="{{ data.comment or '' }}">
             </div>
             <div class="field full">
+                <label for="parameters">Long processing parameters <span class="optional">(optional, JSON)</span></label>
+                <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false" placeholder='{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}'>{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
+                <span class="hint">Over those of its sensor types (Parameters tab), for the devices of this hardware. <code>function</code> changes the algorithm of a channel.</span>
+            </div>
+            <div class="field full">
                 <label for="forwarding">Forwarding <span class="optional">(optional)</span></label>
                 <input class="input" id="forwarding" name="forwarding" value="{{ data.forwarding or '' }}">
             </div>

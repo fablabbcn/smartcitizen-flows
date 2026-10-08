@@ -393,6 +393,26 @@ def long_blueprint_of(device_id):
 
 # Jobs and runs: admins
 
+@api.get('/jobs/sync')
+@requires_role(ADMIN)
+def get_sync():
+    ''' Whether a sync is running, and the result of the last one '''
+    from .jobs import last_sync, sync_running
+    return jsonify({'running': sync_running(), 'last': last_sync()})
+
+
+@api.post('/jobs/sync')
+@requires_role(ADMIN)
+def post_sync():
+    ''' Queues a sync with the Smart Citizen API (it takes a few minutes): 202, or 409 if one is running '''
+    from . import worker
+    from .jobs import sync_running
+    if sync_running():
+        abort(409, 'A sync is already running')
+    worker.sync_jobs.delay(source=current_identity().username)
+    return jsonify({'queued': True}), 202
+
+
 @api.get('/jobs')
 @requires_role(ADMIN)
 def list_jobs():

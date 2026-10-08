@@ -83,3 +83,34 @@ def served_hardware(source, blueprint='test_air', base='http://localhost'):
               'blueprints': source.get('blueprints', [blueprint])}
     served.update({key: value for key, value in source.items() if key not in ('blueprint', 'blueprint_url', 'blueprints')})
     return served
+
+
+class FakeRedis:
+    ''' The Redis calls of locks.py and of the sync status, in memory '''
+    def __init__(self):
+        self.values = {}
+
+    def set(self, key, value, nx=False, ex=None):
+        if nx and key in self.values:
+            return None
+        self.values[key] = value
+        return True
+
+    def get(self, key):
+        return self.values.get(key)
+
+    def exists(self, key):
+        return int(key in self.values)
+
+    def eval(self, script, count, key, token):
+        if self.values.get(key) == token:
+            del self.values[key]
+
+
+@pytest.fixture(autouse=True)
+def redis(monkeypatch):
+    ''' No Redis in the tests '''
+    import scflows.locks as locks
+    fake = FakeRedis()
+    monkeypatch.setattr(locks, 'client', lambda: fake)
+    return fake

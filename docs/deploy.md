@@ -47,7 +47,7 @@ Flower) or with `docker compose exec` (Postgres, Redis). See
 | Debian 12 or Ubuntu 22.04/24.04 | Any systemd distro with a current Docker works; the commands assume Debian/Ubuntu. |
 | A domain name | `flows.smartcitizen.me`. Let's Encrypt does not issue certificates for bare IP addresses. |
 | DNS control | To point an `A` record at the server. |
-| A Smart Citizen admin account | Its API token is `SC_BEARER`: processing posts with it, and the daily sync uses it to find devices. You also sign in to the web interface with an admin account. |
+| A Smart Citizen admin account | Its API token is `SC_BEARER`: processing posts with it, and the hourly sync uses it to find devices. You also sign in to the web interface with an admin account. |
 | AWS S3 credentials | For the backup task (raw device data to `S3_DATA_BUCKET`). |
 | SSH access as a non-root user with sudo | Step 1 sets this up if you only have `root`. |
 
@@ -95,7 +95,7 @@ reclaim it (see [Updating](#updating)).
 | `proxy` | `caddy:2-alpine` | TLS (Let's Encrypt), HTTP to HTTPS redirect, `/flower` behind basic auth, everything else to `web`. The only service with published ports. |
 | `web` | `scflows:latest` | Flask app: web interface, metadata API (`/api/v1/`). Applies database migrations before serving. |
 | `celery` | `scflows:latest` | Workers that run the jobs: `dprocess` (processing), `dlong` (long processing from the backups, results to S3) and `dbackup` (backups to S3). |
-| `beat` | `scflows:latest` | Scheduler, **one instance only**: queues the due jobs every minute, syncs the jobs with the Smart Citizen API every day at 03:00 (`CELERY_TIMEZONE`), and deletes device health older than 30 days at 03:30. |
+| `beat` | `scflows:latest` | Scheduler, **one instance only**: queues the due jobs every minute, syncs the jobs with the Smart Citizen API every hour, and deletes device health older than 30 days at 03:30 (`CELERY_TIMEZONE`). |
 | `flower` | `scflows:latest` | Celery monitoring, under `/flower`. |
 | `postgres` | `postgres:16-alpine` | Metadata (blueprints, hardware, calibrations), their revision history, jobs and runs. |
 | `redis` | `redis:7-alpine` | Celery broker (database 0) and locks (database 1). |
@@ -286,7 +286,7 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | `DOMAIN` | `flows.smartcitizen.me` | **No scheme.** Caddy requests the certificate for this name. Compose refuses to start without it. |
 | `PUBLIC_URL` | `https://flows.smartcitizen.me` | **With** the scheme. Used in links: the API root, lists, and the `blueprint_url` inside each hardware, which the connector follows. Without it, links are built from the request as seen behind Caddy, which is `http://`. It also makes the session cookie `Secure`. |
 | `BASE_POSTPROCESSING_URL` | `https://flows.smartcitizen.me/api/v1/` | **With the trailing slash.** Where smartcitizen-connector and scdata read hardware, blueprints and calibrations. Without it, processing silently reads them from GitHub instead of flows. |
-| `SC_BEARER` | The API token of a Smart Citizen **admin** | Processing posts the processed data with it, and the daily sync searches devices and users with it. |
+| `SC_BEARER` | The API token of a Smart Citizen **admin** | Processing posts the processed data with it, and the hourly sync searches devices and users with it. |
 | `FLASK_DEBUG` | `0` | Flask 3 applies `1` under gunicorn too: debug mode in production. |
 | `S3_DATA_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | The backup bucket and its credentials | Backups write raw device data there. boto3 reads `AWS_DEFAULT_REGION`: an old `AWS_REGION` alone is not enough. |
 
@@ -297,7 +297,7 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | `POSTGRES_USER`, `POSTGRES_DB` | `flows` | Must match the URI above. |
 | `CELERY_BROKER` | `redis://redis:6379/0` | |
 | `REDIS_URL` | `redis://redis:6379/1` | Locks: one run per device and task at a time. |
-| `CELERY_TIMEZONE` | `Europe/Madrid` | The daily sync runs at 03:00 in this zone. |
+| `CELERY_TIMEZONE` | `Europe/Madrid` | The daily cleanup of device health runs at 03:30 in this zone. |
 | `FLASK_APP` | `scflows` | |
 
 ### Optional
@@ -483,9 +483,11 @@ It creates a processing job for every device with valid postprocessing (hardware
 flows) and new readings, and a backup job for every device of a researcher with
 readings: about **70 processing** and **540 backup** jobs. The first runs are
 spread over the interval (3 h for processing, 6 h for backups) instead of all
-starting at once. `beat` repeats the sync every day at 03:00: new devices get
-jobs, and jobs of devices that no longer qualify are disabled. Jobs an admin
-paused stay paused.
+starting at once. `beat` repeats the sync every hour: new devices (e.g. one whose
+postprocessing was just set) get jobs within the hour, and jobs of devices that no
+longer qualify are disabled. Jobs an admin paused stay paused. "Sync now" in
+`/jobs/` (or `POST /api/v1/jobs/sync`) runs one right away; `/jobs/` shows when the
+last sync ran and what it changed.
 
 Check:
 
@@ -569,7 +571,7 @@ terminal, so run it with `docker compose exec` (not `-T`). See the README, "Sens
 
 ```bash
 docker compose logs -f celery      # job runs, as they happen
-docker compose logs -f beat        # what is queued, the daily sync
+docker compose logs -f beat        # what is queued, the hourly sync
 docker compose logs -f web         # API and interface requests, migrations
 docker compose logs -f proxy       # certificates
 ```

@@ -22,7 +22,7 @@ flask --app scflows jobs run <device> process --dry-run [--inline] # run now (--
 
 ## Processing metadata
 
-Flows serves the processing metadata (blueprints, hardware and calibrations) that used to live as json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data). The paths follow the layout of that repository, so `https://<host>/api/v1/` can be used as the base url by `smartcitizen-connector` (`BASE_POSTPROCESSING_URL`) and `scdata`.
+Flows serves the processing metadata (blueprints, hardware, calibrations and sensor names) that used to live as json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data). The paths follow the layout of that repository, so `https://<host>/api/v1/` can be used as the base url by `smartcitizen-connector` (`BASE_POSTPROCESSING_URL`) and `scdata`.
 
 | Endpoint | Content |
 |---|---|
@@ -33,6 +33,8 @@ Flows serves the processing metadata (blueprints, hardware and calibrations) tha
 | `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json`, plus `blueprint` (name). `blueprint_url` links to the blueprint in flows |
 | `GET /api/v1/calibrations` (or `/calibrations/calibrations.json`) | All calibrations. Filter with `?kind=alphasense_sensor` or `?kind=afe_board` |
 | `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
+| `GET /api/v1/names` (or `/names/SCDevice.json`) | Sensor names, in order: the name scdata and the blueprints give each Smart Citizen sensor id |
+| `GET /api/v1/names/<name>` | One sensor name |
 | `GET /api/v1/health` | Health check |
 
 Links use `PUBLIC_URL` (e.g. `https://flows.smartcitizen.me`), or the request host when it is not set. The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it:
@@ -55,9 +57,10 @@ Reading metadata is public (processing reads it without a token). Admins of the 
 | `PUT /api/v1/blueprints/<name>` | admin | Create or replace a blueprint (validated with `scdata`) |
 | `PUT /api/v1/hardware/<name>` | admin | Create or replace a hardware description, same structure as the hardware files. Refer to the blueprint with `blueprint` (name of a blueprint in flows) or `blueprint_url` |
 | `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board) |
-| `DELETE /api/v1/<blueprints\|hardware\|calibrations>/<name>` | admin | Delete |
+| `PUT /api/v1/names/<name>` | admin | Create or replace a sensor name. New names go to the end of the list |
+| `DELETE /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>` | admin | Delete |
 | `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
-| `GET /api/v1/<blueprints\|hardware\|calibrations>/<name>/revisions` | anyone | History of changes |
+| `GET /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>/revisions` | anyone | History of changes |
 
 In the web interface, admins edit the metadata and run the jobs. Researchers sign in to see, read only, the hardware used by their devices (from the `postprocessing` of their devices when they sign in) and the calibrations of its sensors.
 
@@ -68,6 +71,17 @@ curl -X PUT https://flows.smartcitizen.me/api/v1/calibrations/212830246 \
   -H "Authorization: Bearer $SC_TOKEN" -H "Content-Type: application/json" \
   -d @calibration.json
 ```
+
+### Sensor names
+
+scdata renames the readings of each sensor id with the names in `names/SCDevice.json`, and the blueprints use those names. The Smart Citizen API does not know them (sensor 55 is "Sensirion SHT31 - Temperature" there, `TEMP` here), and the SCK firmware (`lib/Sensors/Sensors.h`) names some sensors differently from what the blueprints use, so flows keeps the list. To bring in new sensors:
+
+```
+flask --app scflows names sync --dry-run
+flask --app scflows names sync
+```
+
+It compares the names with the sensors of the Smart Citizen API and the firmware, and asks before each change: new names for firmware sensors with an id and no name, and the id of names that have none. It never renames nor changes units (scdata converts readings with them). Different names for the same id, ids not in the API and names without id are listed to review by hand, with the blueprints that use each name. `--yes` applies everything, `--firmware <path or url>` reads another `Sensors.h`. Changes are recorded in the history as `names sync`. Names can also be edited with `PUT /api/v1/names/<name>` (`{"id": 258, "description": "SCD4X CO2", "unit": "ppm"}`, admin) and `DELETE`.
 
 ## Local deployment
 

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "BATT",
+    "id": "10",
+    "description": "Battery",
+    "unit": "%"
+  },
+  {
+    "name": "BATT_VOLT",
+    "id": "0",
+    "description": "Battery voltage",
+    "unit": "V"
+  },
+  {
+    "name": "TEMP",
+    "id": "55",
+    "description": "Temperature",
+    "unit": "C"
+  },
+  {
+    "name": "GB_TEMP",
+    "id": "79",
+    "description": "Gases board temperature",
+    "unit": "C"
+  },
+  {
+    "name": "SHT31_EXT_TEMP",
+    "id": "79",
+    "description": "External temperature",
+    "unit": "C"
+  },
+  {
+    "name": "LIGHT",
+    "id": "14",
+    "description": "Light",
+    "unit": "Lux"
+  },
+  {
+    "name": "ADC_48_0",
+    "id": "133",
+    "description": "ADC 48 channel 0",
+    "unit": "V"
+  }
+]

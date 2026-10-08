@@ -5,13 +5,14 @@ Callers commit the session.
 from datetime import date
 
 from . import db
-from .models import Blueprint, Calibration, Hardware, HardwareVersion, Revision
-from .schemas import HardwareIn, validate_calibration
+from .models import Blueprint, Calibration, Hardware, HardwareVersion, Revision, SensorName
+from .schemas import HardwareIn, SensorNameIn, validate_calibration
 
 KINDS = {
     'blueprint': (Blueprint, 'name'),
     'hardware': (Hardware, 'name'),
     'calibration': (Calibration, 'sensor_id'),
+    'name': (SensorName, 'name'),
 }
 
 
@@ -93,6 +94,32 @@ def save_calibration(sensor_id, data, identity=None, action=None):
     item.kind = kind
     item.data = data
     record('calibration', sensor_id, action or (Revision.UPDATE if before else Revision.CREATE), before, data,
+           identity)
+    return item, before is None
+
+
+class NameMismatch(ValueError):
+    pass
+
+
+def save_name(name, data, identity=None, action=None):
+    '''
+    Creates or replaces a sensor name. New names go to the end of the list (see SensorName).
+    Raises pydantic.ValidationError if invalid, NameMismatch if the body names another one
+    '''
+    data = SensorNameIn.model_validate(data)
+    if data.name is not None and data.name != name:
+        raise NameMismatch(f'name: {data.name} in the body, {name} in the path')
+    item = find('name', name)
+    before = item.to_json() if item else None
+    if item is None:
+        last = db.session.execute(db.select(db.func.max(SensorName.position))).scalar()
+        item = SensorName(name=name, position=(last or 0) + 1)
+        db.session.add(item)
+    item.sensor_id = data.id
+    item.description = data.description
+    item.unit = data.unit
+    record('name', name, action or (Revision.UPDATE if before else Revision.CREATE), before, item.to_json(),
            identity)
     return item, before is None
 

@@ -14,7 +14,7 @@ from scflows import db, locks
 from scflows.custom_logger import logger
 from scflows.identity import hardware_name
 from scflows.models import Blueprint, Hardware
-from scflows.storage import month_start, write_processed
+from scflows.storage import month_start, root, write_processed
 from scflows.tasks.dprocess import health_checks
 from scflows.tools import refresh_metadata
 
@@ -32,6 +32,11 @@ def long_blueprint(device):
 async def back_up(device_id, logger_handler, task_log):
     ''' Brings the backup up to date, unless a backup of the device is already running '''
     from scflows.tasks.dbackup import dbackup
+
+    # Backups are only written to S3: with a local storage (STORAGE_ROOT, e.g. tests) they are used as they are
+    if not root().startswith('s3://'):
+        task_log.append(logger_handler(f'Local storage {root()}: using the backups as they are', 'warning'))
+        return True
 
     key = f'scflows:lock:backup:{device_id}'
     token = locks.acquire(key)
@@ -82,7 +87,7 @@ async def dlong(device_id, dry_run=False):
         task_log.append(logger_handler('The blueprint needs no sensors of this device', 'error'))
         return done('ABORTED', 'NO_SENSORS_TO_LOAD')
 
-    if not device.load_from_storage(min_date=start, max_date=end, channels=sensors) or device.data.empty:
+    if not device.load_from_storage(min_date=start, max_date=end, channels=sensors, root=root()) or device.data.empty:
         task_log.append(logger_handler('No data in the backups for the window', 'warning'))
         return done('ABORTED', 'EMPTY_DATA')
     task_log.append(logger_handler(f'Loaded {len(device.data)} rows from the backups'))

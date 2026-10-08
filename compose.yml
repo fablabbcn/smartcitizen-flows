@@ -1,3 +1,8 @@
+# web, celery, beat and flower run the same image: building one updates all of them
+x-flows-image: &flows-image
+  build: ./
+  image: scflows:latest
+
 services:
 
   proxy:
@@ -30,7 +35,7 @@ services:
 
   # Schedules the jobs (one instance only)
   beat:
-    build: ./
+    <<: *flows-image
     env_file:
       - .env
     command: celery --app scflows.worker:app beat -l info --schedule /tmp/celerybeat-schedule
@@ -58,7 +63,7 @@ services:
       - internal-network
 
   web:
-    build: ./
+    <<: *flows-image
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +82,7 @@ services:
       - internal-network
 
   celery:
-    build: ./
+    <<: *flows-image
     command: celery --app scflows.worker:app worker -l info --autoscale=4,2
     depends_on:
       - redis
@@ -94,7 +99,7 @@ services:
       - internal-network
 
   flower:
-    build: ./
+    <<: *flows-image
     command: celery --app scflows.worker:app flower --url_prefix=flower
     depends_on:
       - celery

@@ -161,6 +161,8 @@ def test_long_run_aborts(run, root, options, state):
 
 
 def test_back_up_skips_when_a_backup_is_running(app, monkeypatch):
+    monkeypatch.delenv('STORAGE_ROOT', raising=False)
+    monkeypatch.setenv('S3_DATA_BUCKET', 'bucket')
     monkeypatch.setattr(dlong_module.locks, 'acquire', lambda key, seconds=None: None)
     log = []
 
@@ -280,3 +282,15 @@ def test_device_page_shows_long_results(app, client, stored):
     assert 'Long processing' in page and 'test_long' in page
     assert page.count('<svg class="chart"') == 2 and '2026-08-01 to 2026-08-04' in page
     assert 'Parameters of the last run' in page
+
+def test_back_up_is_skipped_with_local_storage(app, root):
+    log = []
+
+    assert asyncio.run(dlong_module.back_up(1, lambda message, level='info': message, log)) is True
+    assert 'using the backups as they are' in log[0]
+
+
+def test_backups_are_read_from_the_storage_root(run, root):
+    _, device, _, _ = run()
+
+    assert device.loaded_with['root'] == str(root)

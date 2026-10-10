@@ -1,0 +1,6 @@
+# Also review pull requests stacked on other branches, not only those to main
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - ".*"

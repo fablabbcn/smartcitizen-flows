@@ -110,3 +110,16 @@ def test_not_found(client, path):
     assert response.status_code == 404
     assert response.get_json()['error'] == 'Not Found'
     assert 'Cache-Control' not in response.headers
+
+
+def test_health_when_the_database_fails(client, monkeypatch):
+    from scflows import db
+
+    def fail(*args, **kwargs):
+        raise RuntimeError('connection refused to db-host:5432')
+    monkeypatch.setattr(db.session, 'execute', fail)
+
+    response = client.get('/api/v1/health')
+
+    assert response.status_code == 503
+    assert response.get_json() == {'status': 'unhealthy'}

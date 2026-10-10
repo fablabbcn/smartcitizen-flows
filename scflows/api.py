@@ -4,7 +4,7 @@ Paths follow the layout of the smartcitizen-data repository, so that
 {base}/hardware/<name>.json, {base}/blueprints/<name>.json and
 {base}/calibrations/calibrations.json work with base = <host>/api/v1/
 '''
-from flask import Blueprint, abort, jsonify, request, url_for
+from flask import Blueprint, abort, current_app, jsonify, request, url_for
 from werkzeug.exceptions import HTTPException
 
 from . import db
@@ -37,7 +37,13 @@ def json_error(error):
 
 @api.get('/health')
 def health():
-    db.session.execute(db.text('SELECT 1'))
+    try:
+        db.session.execute(db.text('SELECT 1'))
+    except Exception:
+        # Details go to the log, not to the response
+        current_app.logger.exception('Health check failed')
+        db.session.rollback()
+        return {'status': 'unhealthy'}, 503
     return {'status': 'ok'}
 
 

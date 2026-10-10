@@ -214,3 +214,15 @@ def test_sync_yes_applies_everything(app, client, sources):
     db.session.expire_all()
     assert served(client)[-1]['name'] == 'SCD4X_CO2'
     assert 'Nothing to change' in sync(app).output
+
+
+def test_malformed_names_file_is_reported(app, tmp_path):
+    import shutil
+    source = tmp_path / 'smartcitizen-data'
+    shutil.copytree(DATA, source)
+    (source / 'names' / 'SCDevice.json').write_text('[{"name": ')
+
+    report = import_metadata(str(source))
+
+    assert len(report.errors) == 1 and 'SCDevice.json: cannot be read as JSON' in report.errors[0]
+    assert report.created['names'] == 0 and report.created['hardware'] == 2

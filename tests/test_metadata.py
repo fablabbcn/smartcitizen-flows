@@ -114,3 +114,12 @@ def test_cli(app, source):
     (source / 'hardware' / 'SCAS_TEST1.json').write_text('{"description": "x", "versions": [{"ids": {}, "from": "bad"}]}')
     result = runner.invoke(args=['metadata', 'import', str(source), '--overwrite'])
     assert result.exit_code == 1
+
+
+def test_malformed_files_are_reported_and_skipped(app, source):
+    (source / 'hardware' / 'SCAS_TEST2.json').write_text('{"blueprint_url": ')
+
+    report = import_metadata(str(source))
+
+    assert len(report.errors) == 1 and 'SCAS_TEST2.json: cannot be read as JSON' in report.errors[0]
+    assert report.created['hardware'] == 1 and report.created['calibrations'] == 2

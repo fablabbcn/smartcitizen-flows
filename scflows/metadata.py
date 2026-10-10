@@ -60,6 +60,16 @@ def upsert(model, key, value, overwrite, report, kind):
     return item
 
 
+def load_or_report(path, report):
+    ''' The json of a file, or None if it cannot be read (the error goes to the report) '''
+    try:
+        return load_json(path)
+    except (OSError, ValueError) as error:
+        # json.JSONDecodeError is a ValueError
+        report.errors.append(f'{path}: cannot be read as JSON ({error})')
+        return None
+
+
 def import_metadata(path, overwrite=False):
     '''
     Imports blueprints, hardware and calibrations from a smartcitizen-data checkout.
@@ -68,7 +78,9 @@ def import_metadata(path, overwrite=False):
     report = ImportReport()
 
     for blueprint_path in sorted(glob(join(path, 'blueprints', '*.json'))):
-        body = load_json(blueprint_path)
+        body = load_or_report(blueprint_path, report)
+        if body is None:
+            continue
         try:
             validate_blueprint(body)
         except ValidationError as error:
@@ -82,7 +94,9 @@ def import_metadata(path, overwrite=False):
     blueprints = {blueprint.name: blueprint for blueprint in db.session.execute(db.select(Blueprint)).scalars()}
 
     for hardware_path in sorted(glob(join(path, 'hardware', '*.json'))):
-        body = load_json(hardware_path)
+        body = load_or_report(hardware_path, report)
+        if body is None:
+            continue
         try:
             validate_hardware(body)
             versions = [HardwareVersion(ids=version['ids'],
@@ -103,7 +117,7 @@ def import_metadata(path, overwrite=False):
         item.versions = versions
 
     calibrations_path = join(path, 'calibrations', 'calibrations.json')
-    for sensor_id, data in load_json(calibrations_path).items():
+    for sensor_id, data in (load_or_report(calibrations_path, report) or {}).items():
         if not isinstance(data, dict):
             report.errors.append(f'{calibrations_path}: {sensor_id} is not an object')
             continue

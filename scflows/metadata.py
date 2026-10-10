@@ -1,7 +1,7 @@
 ''' Import processing metadata from a smartcitizen-data checkout, and verify what is served '''
 import json
 from dataclasses import dataclass, field
-from os.path import basename, join, splitext
+from os.path import exists, basename, join, splitext
 from glob import glob
 from urllib.parse import urlparse
 
@@ -87,10 +87,8 @@ def import_metadata(path, overwrite=False):
 
     # In the order of the file: for an id with several names, scdata uses the first one
     names_path = join(path, NAMES_FILE)
-    try:
-        names = load_json(names_path)
-    except FileNotFoundError:
-        names = []
+    # Optional: older checkouts have no names. A file that cannot be read is reported
+    names = (load_or_report(names_path, report) or []) if exists(names_path) else []
     for item in names:
         name = item.get('name') if isinstance(item, dict) else None
         if not name:

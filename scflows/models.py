@@ -126,3 +126,76 @@ class Revision(db.Model):
             'before': self.before,
             'after': self.after,
         }
+
+
+class Job(TimestampMixin, db.Model):
+    ''' Periodic task for a device: process (dprocess) or backup (dbackup) '''
+    PROCESS = 'process'
+    BACKUP = 'backup'
+    TASKS = (PROCESS, BACKUP)
+    # Created by the sync with the Smart Citizen API, or by an admin
+    AUTO = 'auto'
+    MANUAL = 'manual'
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, nullable=False)
+    task = db.Column(db.String(16), nullable=False)
+    source = db.Column(db.String(16), nullable=False, default=AUTO)
+    # enabled: the device qualifies (set by the sync). paused: stopped by an admin
+    enabled = db.Column(db.Boolean, nullable=False, default=True)
+    paused = db.Column(db.Boolean, nullable=False, default=False)
+    interval_hours = db.Column(db.Integer, nullable=False)
+    next_run_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    last_queued_at = db.Column(db.DateTime(timezone=True))
+    runs = db.relationship('JobRun', back_populates='job', order_by='JobRun.id.desc()', lazy='dynamic')
+
+    __table_args__ = (db.UniqueConstraint('device_id', 'task', name='uq_job_device_task'),)
+
+    @property
+    def active(self):
+        return self.enabled and not self.paused
+
+    def to_json(self):
+        return {
+            'id': self.id, 'device_id': self.device_id, 'task': self.task, 'source': self.source,
+            'enabled': self.enabled, 'paused': self.paused, 'interval_hours': self.interval_hours,
+            'next_run_at': self.next_run_at.isoformat() if self.next_run_at else None,
+            'last_queued_at': self.last_queued_at.isoformat() if self.last_queued_at else None,
+        }
+
+
+class JobRun(db.Model):
+    ''' One execution of a job, or of a task requested once '''
+    QUEUED = 'queued'
+    RUNNING = 'running'
+    SUCCESS = 'success'
+    FAILED = 'failed'
+    ABORTED = 'aborted'
+
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('job.id', ondelete='SET NULL'), index=True)
+    job = db.relationship('Job', back_populates='runs')
+    device_id = db.Column(db.Integer, nullable=False, index=True)
+    task = db.Column(db.String(16), nullable=False)
+    dry_run = db.Column(db.Boolean, nullable=False, default=False)
+    state = db.Column(db.String(16), nullable=False, default=QUEUED)
+    # Result code of the task, e.g. PROCESSED AND UPLOADED, EMPTY_DATA
+    message = db.Column(db.Text)
+    log = db.Column(JSONType)
+    # Smart Citizen user who requested it, empty for scheduled runs
+    username = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    started_at = db.Column(db.DateTime(timezone=True))
+    finished_at = db.Column(db.DateTime(timezone=True))
+
+    def to_json(self, log=False):
+        result = {
+            'id': self.id, 'job_id': self.job_id, 'device_id': self.device_id, 'task': self.task,
+            'dry_run': self.dry_run, 'state': self.state, 'message': self.message, 'username': self.username,
+            'created_at': self.created_at.isoformat(),
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'finished_at': self.finished_at.isoformat() if self.finished_at else None,
+        }
+        if log:
+            result['log'] = self.log
+        return result

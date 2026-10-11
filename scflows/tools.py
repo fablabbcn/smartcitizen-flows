@@ -71,27 +71,6 @@ def load_env(env_file):
     else:
         return True
 
-def get_tabfile_dir():
-
-    # Check if windows
-    _mswin = name == "nt"
-    # Get user_home
-    _user_home = expanduser("~")
-
-    # Get .cache dir - maybe change it if found in config.json
-    if _mswin:
-        _ddir = environ["APPDATA"]
-    elif 'XDG_CACHE_HOME' in environ:
-        _ddir = environ['XDG_CACHE_HOME']
-    else:
-        _ddir = join(expanduser("~"), '.cache')
-
-    dpath = join(_ddir, 'scdata', 'tasks')
-
-    return dpath
-
-def check_path(path):
-    return isdir(path)
 
 # Last refresh of scdata metadata (monotonic seconds)
 _metadata_refreshed_at = None

@@ -8,13 +8,6 @@ os.environ.setdefault('FLASK_SECRET_KEY', 'test')
 os.environ.setdefault('SQLALCHEMY_DATABASE_URI', 'sqlite://')
 
 import pytest
-from crontab import CronTab
-
-
-@pytest.fixture(autouse=True)
-def no_user_crontab(monkeypatch):
-    ''' Never write the crontab of the user running the tests '''
-    monkeypatch.setattr(CronTab, 'write_to_user', lambda self, user=True: None)
 
 
 DATA = os.path.join(os.path.dirname(__file__), 'data', 'smartcitizen-data')

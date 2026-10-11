@@ -10,6 +10,9 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 migrate = Migrate()
 
+# Values of env.example that must be replaced
+PLACEHOLDER = 'change-me'
+
 def create_app(config=None):
     app = Flask(__name__, template_folder='templates')
 
@@ -22,6 +25,11 @@ def create_app(config=None):
     app.config['PUBLIC_URL'] = environ.get('PUBLIC_URL', '').rstrip('/') or None
     if config is not None:
         app.config.update(config)
+    if not app.testing:
+        from sqlalchemy.engine import make_url
+        if PLACEHOLDER in (app.config['SECRET_KEY'], make_url(app.config['SQLALCHEMY_DATABASE_URI']).password):
+            raise RuntimeError(f'Replace the "{PLACEHOLDER}" values of env.example in .env: '
+                               'FLASK_SECRET_KEY, and the database password (POSTGRES_PASSWORD and SQLALCHEMY_DATABASE_URI)')
     # Keep the key order of the stored json
     app.json.sort_keys = False
 
@@ -56,7 +64,13 @@ def create_app(config=None):
     from .ui import ui as ui_blueprint
     app.register_blueprint(ui_blueprint)
 
+    # device jobs interface (admins)
+    from .jobs_ui import jobs_ui as jobs_ui_blueprint
+    app.register_blueprint(jobs_ui_blueprint)
+
     from .metadata import metadata_cli
     app.cli.add_command(metadata_cli)
+    from .jobs import jobs_cli
+    app.cli.add_command(jobs_cli)
 
     return app

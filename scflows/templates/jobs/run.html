@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container" id="main-container">
+    <p><a href="{{ url_for('jobs_ui.index') }}">Jobs</a> / Run {{ run.id }}</p>
+    <h1>{{ run.task }} device {{ run.device_id }}{% if run.dry_run %} (dry run){% endif %}</h1>
+    <table class="table table-sm">
+        <tr><th>State</th><td>{{ run.state }}</td></tr>
+        <tr><th>Result</th><td>{{ run.message or '' }}</td></tr>
+        <tr><th>Requested by</th><td>{{ run.username or 'schedule' }}</td></tr>
+        <tr><th>Queued (UTC)</th><td>{{ run.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td></tr>
+        <tr><th>Started</th><td>{{ run.started_at.strftime('%Y-%m-%d %H:%M:%S') if run.started_at else '' }}</td></tr>
+        <tr><th>Finished</th><td>{{ run.finished_at.strftime('%Y-%m-%d %H:%M:%S') if run.finished_at else '' }}</td></tr>
+    </table>
+    <h3>Log</h3>
+    <pre>{% for line in run.log or [] %}{{ line }}
+{% endfor %}</pre>
+</div>
+{% endblock %}

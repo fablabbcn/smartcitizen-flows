@@ -21,7 +21,7 @@
 				<img class="logo" src="https://smartcitizen.me/assets/images/smartcitizen_logo.svg" alt="Smart Citizen Logo" width=50px height=50px>
 				<ul class="nav">
 						<li>
-							{% if current_user.role == 'admin' %}<a href="{{ url_for('main.default') }}">TASKS</a>{% endif %}
+							{% if current_user.role == 'admin' %}<a href="{{ url_for('jobs_ui.index') }}">JOBS</a>{% endif %}
 							<a href="{{ url_for('ui.index') }}">METADATA</a>
 							<a href="{{ url_for('auth.logout') }}" class="navbar-item">Logout ({{ current_user.username }})</a>
 						</li>

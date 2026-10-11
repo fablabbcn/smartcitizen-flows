@@ -1,3 +1,6 @@
+import pytest
+from werkzeug.exceptions import HTTPException
+
 from scflows import identity
 
 from conftest import auth
@@ -59,3 +62,28 @@ def test_api_timeout(client, sc_me):
 
     assert response.status_code == 503
     assert f'did not answer in {identity.ME_TIMEOUT} seconds' in response.get_json()['message']
+
+
+def test_unexpected_me_body(app, sc_me, monkeypatch):
+    from conftest import MeResponse
+
+    for payload in (None, [], {'username': 'no id'}):
+        monkeypatch.setattr(identity.requests, 'get', lambda *args, payload=payload, **kwargs: MeResponse(200, payload))
+        with app.test_request_context(headers=auth('admin-token')):
+            with pytest.raises(HTTPException) as error:
+                identity.current_identity()
+        assert error.value.code == 503
+
+
+def test_expired_tokens_are_dropped(app, sc_me, monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(identity.time, 'monotonic', lambda: now[0])
+    monkeypatch.setattr(identity, 'CACHE_SWEEP_SIZE', 2)
+
+    for token in ('a', 'b', 'c'):
+        identity.verify_token(token)
+    now[0] += identity.INVALID_TOKEN_TTL + 1
+    assert identity.cache.get('a') is None and len(identity.cache) == 2
+
+    identity.verify_token('d')
+    assert len(identity.cache) == 1

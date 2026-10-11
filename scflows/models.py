@@ -1,6 +1,5 @@
 from datetime import date, datetime, timezone
 
-from flask_login import UserMixin
 from sqlalchemy.dialects.postgresql import JSONB
 
 from . import db
@@ -11,13 +10,6 @@ JSONType = db.JSON().with_variant(JSONB(), 'postgresql')
 
 def utcnow():
     return datetime.now(timezone.utc)
-
-
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True) # primary keys are required by SQLAlchemy
-    # email = db.Column(db.String(100), unique=True)
-    password = db.Column(db.String(100))
-    name = db.Column(db.String(1000))
 
 
 class TimestampMixin:

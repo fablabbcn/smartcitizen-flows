@@ -1,3 +1,4 @@
+from datetime import timedelta
 from os import environ
 from os.path import dirname, join
 
@@ -29,16 +30,16 @@ def create_app(config=None):
     # Schema changes: flask db upgrade
     migrate.init_app(app, db, directory=join(dirname(__file__), 'migrations'))
 
+    # Web interface sessions (login with Smart Citizen accounts, see auth.py)
+    from .auth import SESSION_HOURS, load_user
+    app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=SESSION_HOURS)
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_SECURE'] = bool(app.config['PUBLIC_URL'] and app.config['PUBLIC_URL'].startswith('https'))
+
     login_manager = LoginManager()
     login_manager.login_view = 'auth.login'
+    login_manager.user_loader(load_user)
     login_manager.init_app(app)
-
-    from .models import User
-
-    @login_manager.user_loader
-    def load_user(user_id):
-        # since the user_id is just the primary key of our user table, use it in the query for the user
-        return db.session.get(User, int(user_id))
 
     # blueprint for auth routes in our app
     from .auth import auth as auth_blueprint

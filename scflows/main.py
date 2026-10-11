@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 from flask import Flask, request, render_template, redirect, url_for, Blueprint
-from flask_login import login_required, current_user
+from scflows.auth import admin_required
 
 import json
 from os.path import join, exists
@@ -23,7 +23,7 @@ def index():
     return render_template('index.html')
 
 @main.route('/tasks', methods = ['GET', 'POST'])
-@login_required
+@admin_required
 def default():
     global tabfile_dir
     error = None
@@ -44,7 +44,7 @@ def default():
     return render_template("jobs.html", tabfiles=tabfiles, defaultpath=tabfile_dir, error=error)
 
 @main.route('/editjob/<tabfile>-<cron>', methods = ['POST', 'GET'])
-@login_required
+@admin_required
 def editjob(tabfile,cron,error=None):
     global tabfiles
     tabfiles = parsetabfiles(path=tabfile_dir)
@@ -75,7 +75,7 @@ def editjob(tabfile,cron,error=None):
     return render_template("editjob.html", tabfile=tabfile, cron=cron, crondict=crondict, error=error)
 
 @main.route('/triggerjob/<tabfile>-<cron>', methods = ['POST'])
-@login_required
+@admin_required
 def triggerjob(tabfile, cron):
     global cronthread
     tabfiles=parsetabfiles(path=tabfile_dir)
@@ -88,7 +88,7 @@ def triggerjob(tabfile, cron):
             return redirect(url_for("main.logfile", tabfile=tabfile, cron=cron))
 
 @main.route('/tabfiles/<tabfile>')
-@login_required
+@admin_required
 def tabfile(tabfile):
     tabfiles = parsetabfiles(path=tabfile_dir)
     tabpath = f"{tabfile_dir}/{tabfile}.tab"
@@ -102,7 +102,7 @@ def tabfile(tabfile):
     return render_template("file_viewer.html", file_type='tabfile', file=tab)
 
 @main.route('/logfiles/<tabfile>-<cron>')
-@login_required
+@admin_required
 def logfile(tabfile, cron):
     print (tabfile)
     global cronthread
@@ -133,7 +133,7 @@ def logfile(tabfile, cron):
     return render_template("file_viewer.html", file_type='log', cron=cron, file=log, status = status)
 
 @main.route('/jobfiles/<tabfile>-<cron>')
-@login_required
+@admin_required
 def taskfile(tabfile, cron):
     print (tabfile)
     global tabfiles

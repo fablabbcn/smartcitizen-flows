@@ -29,12 +29,12 @@
         {{ table_tools('Filter by name, blueprint or sensor') }}
         <div class="table-wrap scroll">
             <table class="table">
-                <thead><tr><th data-sort>Name</th><th data-sort>Blueprint</th><th data-sort>Description</th><th data-sort>Comment</th><th data-sort="number" class="num">Versions</th><th>Sensors</th><th data-sort>Updated</th></tr></thead>
+                <thead><tr><th data-sort>Name</th><th data-sort>Blueprints</th><th data-sort>Description</th><th data-sort>Comment</th><th data-sort="number" class="num">Versions</th><th>Sensors</th><th data-sort>Updated</th></tr></thead>
                 <tbody>
                 {% for item in hardware %}
                     <tr>
                         <td class="nowrap"><a href="{{ url_for('ui.edit_hardware', name=item.name) }}">{{ item.name }}</a></td>
-                        <td>{{ item.blueprint.name }}</td>
+                        <td>{% for blueprint in item.blueprints %}{{ blueprint.name }}{% if blueprint.kind != 'process' %} <span class="badge plain">{{ blueprint.kind }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
                         <td>{{ item.description or '' }}</td>
                         <td class="clip" title="{{ item.comment or '' }}">{{ item.comment or '' }}</td>
                         <td class="num">{{ item.versions | length }}</td>

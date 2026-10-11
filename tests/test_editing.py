@@ -133,7 +133,7 @@ def test_put_hardware_by_blueprint_name(client):
     response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint='missing'),
                           headers=auth('admin-token'))
     assert response.status_code == 422
-    assert response.get_json()['errors'] == ['blueprint: missing is not in flows']
+    assert response.get_json()['errors'] == ['blueprints: missing is not in flows']
 
 
 def test_check_hardware_is_public(client):
@@ -148,13 +148,13 @@ def test_hardware_requires_blueprint_in_flows(client):
 
     response = client.put('/api/v1/hardware/SCAS_NEW', json=hardware, headers=auth('admin-token'))
     assert response.status_code == 422
-    assert response.get_json()['errors'] == ['blueprint: required, the name of a blueprint in flows']
+    assert response.get_json()['errors'] == ['blueprints: required, one or two blueprints in flows']
 
     github = 'https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/blueprints/sck_21.json'
     response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint_url=github),
                           headers=auth('admin-token'))
     assert response.status_code == 422
-    assert response.get_json()['errors'] == ['blueprint: sck_21 is not in flows']
+    assert response.get_json()['errors'] == ['blueprints: sck_21 is not in flows']
 
 
 def test_new_blueprint_can_be_used(client):
@@ -212,3 +212,71 @@ def test_body_must_be_an_object(client):
                           headers=auth('admin-token'))
 
     assert response.status_code == 400
+
+
+# Blueprint lists
+
+@pytest.fixture
+def kinds(client):
+    ''' A long and a backup blueprint next to test_air (process) '''
+    body = client.get('/api/v1/blueprints/test_air').get_json()
+    for name, kind in (('test_long', 'long'), ('test_backup', 'backup')):
+        meta = dict(body.get('meta') or {}, kind=kind)
+        assert client.put(f'/api/v1/blueprints/{name}', json=dict(body, meta=meta),
+                          headers=auth('admin-token')).status_code == 201
+
+
+def put_blueprints(client, names):
+    return client.put('/api/v1/hardware/SCAS_TEST1', json=dict(HARDWARE, blueprint_url=None, blueprints=names),
+                      headers=auth('admin-token'))
+
+
+def test_hardware_with_process_and_long(client, kinds):
+    response = put_blueprints(client, ['test_air', 'test_long'])
+
+    assert response.status_code == 200
+    served = client.get('/api/v1/hardware/SCAS_TEST1.json').get_json()
+    # smartcitizen-connector gets the processing blueprint
+    assert (served['blueprint'], served['blueprints']) == ('test_air', ['test_air', 'test_long'])
+    assert served['blueprint_url'] == 'http://localhost/api/v1/blueprints/test_air.json'
+    assert {item['name']: item['kind'] for item in client.get('/api/v1/blueprints').get_json()} == {
+        'test_air': 'process', 'test_backup': 'backup', 'test_long': 'long'}
+    # Order kept, and changed
+    assert put_blueprints(client, ['test_long', 'test_air']).status_code == 200
+    assert client.get('/api/v1/hardware/SCAS_TEST1').get_json()['blueprints'] == ['test_long', 'test_air']
+
+
+def test_long_only_hardware_serves_the_long_blueprint(client, kinds):
+    assert put_blueprints(client, ['test_long']).status_code == 200
+
+    served = client.get('/api/v1/hardware/SCAS_TEST1.json').get_json()
+    assert (served['blueprint'], served['blueprints']) == ('test_long', ['test_long'])
+
+
+@pytest.mark.parametrize('names, error', [
+    ([], 'blueprints: required, one or two blueprints in flows'),
+    (['test_air', 'test_long', 'test_backup'], 'blueprints: at most two (process and long, or process and backup)'),
+    (['test_long', 'test_backup'], 'blueprints: long processing always backs up the device, do not add a backup blueprint'),
+])
+def test_blueprint_list_rules(client, kinds, names, error):
+    response = put_blueprints(client, names)
+
+    assert response.status_code == 422
+    assert error in response.get_json()['errors']
+
+
+def test_two_blueprints_of_a_kind(client, kinds):
+    body = client.get('/api/v1/blueprints/test_air').get_json()
+    client.put('/api/v1/blueprints/other_air', json=body, headers=auth('admin-token'))
+
+    response = put_blueprints(client, ['test_air', 'other_air'])
+
+    assert response.get_json()['errors'] == ['blueprints: two process blueprints, only one of each kind']
+
+
+def test_blueprint_in_a_list_cannot_be_deleted(client, kinds):
+    put_blueprints(client, ['test_air', 'test_long'])
+
+    response = client.delete('/api/v1/blueprints/test_long', headers=auth('admin-token'))
+
+    assert response.status_code == 409 and 'SCAS_TEST1' in response.get_json()['message']

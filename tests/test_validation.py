@@ -73,9 +73,9 @@ def test_missing_calibration(hardware):
 
 
 @pytest.mark.parametrize('change, error', [
-    ({'blueprint_url': None}, 'blueprint: required, the name of a blueprint in flows'),
-    ({'blueprint_url': 'https://example.com/blueprints/other.json'}, 'blueprint: other is not in flows'),
-    ({'blueprint_url': None, 'blueprint': 'other'}, 'blueprint: other is not in flows'),
+    ({'blueprint_url': None}, 'blueprints: required, one or two blueprints in flows'),
+    ({'blueprint_url': 'https://example.com/blueprints/other.json'}, 'blueprints: other is not in flows'),
+    ({'blueprint_url': None, 'blueprint': 'other'}, 'blueprints: other is not in flows'),
 ])
 def test_blueprint_must_be_in_flows(hardware, change, error):
     hardware.update(change)

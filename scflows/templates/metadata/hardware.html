@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1>{% if new %}New hardware{% else %}Hardware <span class="mono">{{ name }}</span>{% endif %}</h1>
-        <p class="subtitle">The blueprint gives the channels to process; each version lists the sensors mounted in a period.</p>
+        <p class="subtitle">The blueprints give the channels to process and how; each version lists the sensors mounted in a period.</p>
     </div>
     {% if not new %}
     <div class="actions">
@@ -32,11 +32,14 @@
                 <span class="hint">Letters, numbers, "_" and "-". Devices refer to it in their postprocessing hardware url.</span>
             </div>
             {% endif %}
-            <div class="field">
-                <label for="blueprint">Blueprint</label>
-                <select class="input" id="blueprint" name="blueprint">
-                    {% for blueprint in blueprints %}<option value="{{ blueprint }}" {% if data.blueprint == blueprint %}selected{% endif %}>{{ blueprint }}</option>{% endfor %}
-                </select>
+            <div class="field full">
+                <span class="label-text">Blueprints</span>
+                <div class="row">
+                    {% for blueprint in blueprints %}
+                    <label class="check"><input type="checkbox" name="blueprints" value="{{ blueprint.name }}" {% if blueprint.name in data.blueprints %}checked{% endif %}> <span class="mono">{{ blueprint.name }}</span> <span class="badge plain">{{ blueprint.kind }}</span></label>
+                    {% endfor %}
+                </div>
+                <span class="hint">One or two: <strong>process</strong> (every few hours, posted to the Smart Citizen API), <strong>long</strong> (baselines over months of backups, always backed up) or <strong>backup</strong> (backups only, researchers' devices). Not long and backup together.</span>
             </div>
             <div class="field">
                 <label for="description">Description</label>

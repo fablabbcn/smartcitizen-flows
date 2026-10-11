@@ -316,7 +316,11 @@ def get_run(run_id):
 
 
 def run_options(task):
-    body = request.get_json(silent=True) or {}
+    body = request.get_json(silent=True)
+    if body is None:
+        body = {}
+    if not isinstance(body, dict):
+        abort(400, 'The body must be a json object')
     dry_run = bool(body.get('dry_run', False))
     if dry_run and task != Job.PROCESS:
         abort(400, 'dry_run is only available for process')

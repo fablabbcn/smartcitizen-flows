@@ -207,3 +207,12 @@ def test_history(client):
     assert re.search(r'<span class="badge update">update</span>\s*<strong>researcher</strong>', page)
     assert 'Changed: <code>description</code>' in page
     assert '<span class="badge import">import</span>' in page
+
+
+def test_changed_fields_tell_missing_from_null():
+    from types import SimpleNamespace
+
+    from scflows.ui import changed_fields
+
+    revision = SimpleNamespace(before={'t20': 20}, after={'t20': 20, 'ae_total_zero_mv': None})
+    assert changed_fields(revision) == ['ae_total_zero_mv']

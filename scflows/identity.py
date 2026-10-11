@@ -23,6 +23,8 @@ EDITORS = (ADMIN, RESEARCHER)
 ME_TIMEOUT = 60
 TOKEN_TTL = 3600
 INVALID_TOKEN_TTL = 60
+# Expired tokens are dropped when the cache grows past this size
+CACHE_SWEEP_SIZE = 1000
 
 REQUEST_KEY = 'scflows.identity'
 
@@ -81,15 +83,25 @@ class TokenCache:
         return hashlib.sha256(token.encode()).hexdigest()
 
     def get(self, token):
+        key = self.key(token)
         with self._lock:
-            item = self._items.get(self.key(token))
-        if item is None or item[1] < time.monotonic():
-            return None
+            item = self._items.get(key)
+            if item is not None and item[1] < time.monotonic():
+                del self._items[key]
+                item = None
         return item
 
     def set(self, token, identity, ttl):
+        now = time.monotonic()
         with self._lock:
-            self._items[self.key(token)] = (identity, time.monotonic() + ttl)
+            # Random tokens would otherwise grow the cache forever
+            if len(self._items) >= CACHE_SWEEP_SIZE:
+                self._items = {key: item for key, item in self._items.items() if item[1] >= now}
+            self._items[self.key(token)] = (identity, now + ttl)
+
+    def __len__(self):
+        with self._lock:
+            return len(self._items)
 
     def clear(self):
         with self._lock:
@@ -119,12 +131,16 @@ def verify_token(token):
     if response.status_code != 200:
         abort(503, f'Cannot verify the token: the Smart Citizen API answered {response.status_code}')
 
-    user = response.json()
-    role = user.get('role', 'citizen')
-    researcher = role == RESEARCHER
-    identity = Identity(id=user['id'], username=user['username'], role=role,
-                        hardware=devices_hardware(user.get('devices')) if researcher else (),
-                        devices=device_ids(user.get('devices')) if researcher else ())
+    try:
+        user = response.json()
+        role = user.get('role', 'citizen')
+        researcher = role == RESEARCHER
+        identity = Identity(id=user['id'], username=user['username'], role=role,
+                            hardware=devices_hardware(user.get('devices')) if researcher else (),
+                            devices=device_ids(user.get('devices')) if researcher else ())
+    except (ValueError, TypeError, KeyError, AttributeError):
+        # json.JSONDecodeError is a ValueError
+        abort(503, 'Cannot verify the token: the Smart Citizen API answered an unexpected body')
     cache.set(token, identity, TOKEN_TTL)
     return identity
 

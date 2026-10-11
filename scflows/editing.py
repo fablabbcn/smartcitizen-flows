@@ -74,6 +74,11 @@ def save_hardware(name, hardware, identity=None, action=None):
     missing = [name for name, blueprint in zip(names, blueprints) if blueprint is None]
     if missing:
         raise BlueprintNotInFlows(f'blueprint {", ".join(missing)} is not in flows')
+    # The same rules as check_hardware, also for the import
+    from .validation import blueprint_kind_errors
+    errors = blueprint_kind_errors(blueprints)
+    if errors:
+        raise ValueError('; '.join(errors))
     item = find('hardware', name)
     before = item.to_json() if item else None
     if item is None:

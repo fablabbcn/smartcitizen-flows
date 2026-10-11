@@ -189,6 +189,23 @@ def test_dispatch_due_jobs(app, queued):
     assert jobs.dispatch_due_jobs() == []
 
 
+def test_runs_that_cannot_be_sent_fail(app, monkeypatch):
+    def delay(run_id):
+        raise ConnectionError('broker unreachable')
+
+    monkeypatch.setattr(worker.run_job, 'delay', delay)
+    jobs.sync_jobs(to_process={1, 2}, to_back_up=set())
+    for device_id in (1, 2):
+        job('process', device_id).next_run_at = jobs.now() - timedelta(minutes=10)
+    db.session.commit()
+
+    runs = jobs.dispatch_due_jobs()
+
+    db.session.expire_all()
+    assert [db.session.get(JobRun, run.id).state for run in runs] == ['failed', 'failed']
+    assert runs[0].message.startswith('NOT_QUEUED: ConnectionError')
+
+
 def test_next_run_keeps_the_minute_after_downtime(app):
     item = SimpleNamespace(next_run_at=datetime(2026, 10, 1, 0, 17, tzinfo=timezone.utc), interval_hours=3)
 
@@ -230,6 +247,25 @@ def test_execute_run_error(app, lock, task):
     run = jobs.execute_run(make_run().id)
 
     assert (run.state, run.message) == ('failed', 'RuntimeError: boom')
+    assert lock == {}
+
+
+def test_lock_is_released_when_the_final_commit_fails(app, lock, task, monkeypatch):
+    run = make_run()
+    commit = db.session.commit
+    calls = []
+
+    def failing_commit():
+        calls.append(True)
+        # The commit at the start of the run works, the one in finally fails
+        if len(calls) == 2:
+            raise RuntimeError('connection lost')
+        commit()
+
+    monkeypatch.setattr(db.session, 'commit', failing_commit)
+    with pytest.raises(RuntimeError):
+        jobs.execute_run(run.id)
+
     assert lock == {}
 
 

@@ -147,6 +147,22 @@ def test_plan_adds_new_firmware_sensors_once():
     assert changes[1].reasons == ['new in the firmware: "Next"; not in the Smart Citizen API yet']
 
 
+def test_plan_skips_invalid_firmware_names():
+    changes, notices = plan([], api(300), [sensor('BAD NAME', 300), sensor('X' * 65, 301)])
+
+    assert changes == []
+    assert notices == ["'BAD NAME' (id 300) in the firmware is not a valid name: skipped",
+                       f"'{'X' * 65}' (id 301) in the firmware is not a valid name: skipped"]
+
+
+def test_save_name_validates_the_name(app):
+    import pytest
+    from scflows import editing
+
+    with pytest.raises(ValueError, match='can only contain'):
+        editing.save_name('BAD NAME', {'id': 1, 'description': 'x', 'unit': ''})
+
+
 def test_plan_never_renames_or_changes_units():
     names = [name('PRESS', 58, 'kPa')]
     firmware = [sensor('MPL_PRESS', 58, 'Pa')]

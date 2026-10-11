@@ -68,10 +68,17 @@ def index():
 
 # Hardware
 
+# Versions a hardware form can send: more is not a hardware, but a broken or forged form
+MAX_VERSIONS = 100
+
+
 def hardware_from_form(form):
     ''' Hardware description (as sent to the API) from the form. Slots are "SLOT=sensor id" lines '''
+    count = form.get('version_count', '0')
+    if not count.isdigit() or int(count) > MAX_VERSIONS:
+        abort(400, f'version_count: a number up to {MAX_VERSIONS}')
     versions = []
-    for index in range(int(form.get('version_count', 0))):
+    for index in range(int(count)):
         if form.get(f'version_{index}_remove'):
             continue
         ids = {}

@@ -1,0 +1,9 @@
+{% with messages = get_flashed_messages() %}
+{% for message in messages %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
+{% endwith %}
+{% if check %}
+    {% for error in check.errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+    {% for warning in check.warnings %}<div class="alert alert-warning">{{ warning }}</div>{% endfor %}
+    {% if check.valid and not check.warnings %}<div class="alert alert-success">No errors or warnings</div>{% endif %}
+{% endif %}
+{% for error in errors or [] %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}

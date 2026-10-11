@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container-fluid" id="main-container">
+    <h1>Jobs</h1>
+    {% with messages = get_flashed_messages() %}{% for message in messages %}<div class="alert alert-info">{{ message }}</div>{% endfor %}{% endwith %}
+    <div class="row" style="margin-bottom: 1em">
+        <form class="form-inline col" method="POST" action="{{ url_for('jobs_ui.run_device') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <strong style="margin-right: .5em">Run now</strong>
+            <input class="form-control form-control-sm" name="device_id" placeholder="Device id" size="8">
+            <select class="form-control form-control-sm" name="task"><option value="process">process</option><option value="backup">backup</option></select>
+            <label style="margin: 0 .5em"><input type="checkbox" name="dry_run"> dry run (process)</label>
+            <button class="btn btn-primary btn-sm">Run</button>
+        </form>
+        <form class="form-inline col" method="POST" action="{{ url_for('jobs_ui.add_job') }}">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <strong style="margin-right: .5em">Add job</strong>
+            <input class="form-control form-control-sm" name="device_id" placeholder="Device id" size="8">
+            <select class="form-control form-control-sm" name="task"><option value="process">process</option><option value="backup">backup</option></select>
+            <button class="btn btn-secondary btn-sm" style="margin-left: .5em">Add</button>
+        </form>
+    </div>
+    <p>Devices are processed every few hours and backed up periodically. The list of jobs is synced daily with the Smart Citizen API.
+       <a href="{{ url_for('jobs_ui.index') }}">All</a> · <a href="{{ url_for('jobs_ui.index', task='process') }}">Processing</a> · <a href="{{ url_for('jobs_ui.index', task='backup') }}">Backups</a></p>
+    <table id="jobs-table" class="display" style="width:100%">
+        <thead><tr><th>Device</th><th>Task</th><th>Status</th><th>Every</th><th>Next run (UTC)</th><th>Last run</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for job in jobs %}
+            {% set last = latest.get(job.id) %}
+            <tr>
+                <td><a href="https://smartcitizen.me/kits/{{ job.device_id }}">{{ job.device_id }}</a></td>
+                <td>{{ job.task }}</td>
+                <td>{% if job.paused %}paused{% elif job.enabled %}active{% else %}disabled{% endif %}{% if job.source == 'manual' %} (manual){% endif %}</td>
+                <td>{{ job.interval_hours }} h</td>
+                <td>{{ job.next_run_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ last.state }}</a> {{ last.message or '' }}{% endif %}</td>
+                <td style="white-space: nowrap">
+                    <form method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}" style="display: inline">
+                        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                        {% if job.task == 'process' %}<label title="Process without posting"><input type="checkbox" name="dry_run"> dry</label>{% endif %}
+                        <button class="btn btn-primary btn-sm">Run now</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('jobs_ui.resume_job' if job.paused else 'jobs_ui.pause_job', job_id=job.id) }}" style="display: inline">
+                        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                        <button class="btn btn-sm {{ 'btn-success' if job.paused else 'btn-warning' }}">{{ 'Resume' if job.paused else 'Pause' }}</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Latest runs</h2>
+    <table class="table table-sm">
+        <thead><tr><th>Run</th><th>Device</th><th>Task</th><th>State</th><th>Result</th><th>By</th><th>Queued (UTC)</th><th>Duration</th></tr></thead>
+        <tbody>
+        {% for item in runs %}
+            <tr>
+                <td><a href="{{ url_for('jobs_ui.run', run_id=item.id) }}">{{ item.id }}</a></td>
+                <td>{{ item.device_id }}</td>
+                <td>{{ item.task }}{% if item.dry_run %} (dry run){% endif %}</td>
+                <td>{{ item.state }}</td>
+                <td>{{ item.message or '' }}</td>
+                <td>{{ item.username or 'schedule' }}</td>
+                <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>{% if item.started_at and item.finished_at %}{{ ((item.finished_at - item.started_at).total_seconds()) | round(1) }} s{% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8">No runs yet</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script type="text/javascript">
+    $(document).ready(function () { $('#jobs-table').DataTable({"pageLength": 25}); });
+</script>
+{% endblock %}

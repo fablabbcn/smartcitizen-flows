@@ -71,24 +71,43 @@ def load_env(env_file):
     else:
         return True
 
-def get_tabfile_dir():
 
-    # Check if windows
-    _mswin = name == "nt"
-    # Get user_home
-    _user_home = expanduser("~")
+# Last refresh of scdata metadata (monotonic seconds)
+_metadata_refreshed_at = None
+METADATA_MAX_AGE = 300
+# After a failed refresh: retry after a minute, not on every task
+METADATA_RETRY = 60
 
-    # Get .cache dir - maybe change it if found in config.json
-    if _mswin:
-        _ddir = environ["APPDATA"]
-    elif 'XDG_CACHE_HOME' in environ:
-        _ddir = environ['XDG_CACHE_HOME']
-    else:
-        _ddir = join(expanduser("~"), '.cache')
 
-    dpath = join(_ddir, 'scdata', 'tasks')
+METADATA = ('blueprints', 'calibrations', 'names')
 
-    return dpath
 
-def check_path(path):
-    return isdir(path)
+def refresh_metadata(max_age=METADATA_MAX_AGE):
+    '''
+    Reloads scdata blueprints and calibrations (from BASE_POSTPROCESSING_URL), at most every max_age seconds.
+    Workers are long running: without it, changes made in flows would only apply after a restart.
+    Returns True if reloaded
+    '''
+    import time
+    from scdata._config import config as scdata_config
+
+    global _metadata_refreshed_at
+    now = time.monotonic()
+    if _metadata_refreshed_at is not None and now - _metadata_refreshed_at < max_age:
+        return False
+    previous = {name: getattr(scdata_config, name, None) for name in METADATA}
+    try:
+        scdata_config.get_meta_data()
+        # scdata loads nothing (not None) when flows cannot be reached: keep what was loaded before
+        empty = [name for name, value in previous.items() if value and not getattr(scdata_config, name, None)]
+        error = f'it returned no {", ".join(empty)}' if empty else None
+    except Exception as exception:
+        error = f'{type(exception).__name__}: {exception}'
+    if error is None:
+        _metadata_refreshed_at = now
+        return True
+    for name, value in previous.items():
+        setattr(scdata_config, name, value)
+    logger.warning(f'Metadata refresh failed ({error}): keeping the previous metadata, retrying in {METADATA_RETRY} s')
+    _metadata_refreshed_at = now - max(max_age - METADATA_RETRY, 0)
+    return False

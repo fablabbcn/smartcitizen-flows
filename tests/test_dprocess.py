@@ -48,7 +48,14 @@ class FakeDevice:
 
 
 @pytest.fixture
-def run(monkeypatch):
+def refreshed(monkeypatch):
+    calls = []
+    monkeypatch.setattr(dprocess_module, 'refresh_metadata', lambda: calls.append(True))
+    return calls
+
+
+@pytest.fixture
+def run(monkeypatch, refreshed):
     monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
 
     def run_dprocess(dry_run=False, **options):
@@ -106,3 +113,9 @@ def test_postprocessing_not_updated(run):
 
 def test_posting_failed(run):
     assert run(post=False)[0] == ['FAILED', 'DATA_POSTING_FAILED']
+
+
+def test_metadata_is_refreshed(run, refreshed):
+    run()
+
+    assert refreshed == [True]

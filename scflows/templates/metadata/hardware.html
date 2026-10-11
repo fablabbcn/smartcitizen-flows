@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container" id="main-container">
+    <p><a href="{{ url_for('ui.index') }}">Metadata</a> / Hardware</p>
+    <h1>{% if new %}New hardware{% else %}Hardware {{ name }}{% endif %}</h1>
+    {% if not new %}<p><a href="{{ url_for('ui.history', kind='hardware', key=name) }}">History</a> · <a href="{{ url_for('api.get_hardware', name=name ~ '.json') }}">JSON</a></p>{% endif %}
+    {% include "metadata/_messages.html" %}
+    <form method="POST">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        {% if new %}
+        <div class="form-group"><label>Name</label><input class="form-control" name="name" value="{{ name }}" placeholder="SCAS220001" required></div>
+        {% endif %}
+        <div class="form-group"><label>Blueprint</label>
+            <select class="form-control" name="blueprint">
+                {% for blueprint in blueprints %}<option value="{{ blueprint }}" {% if data.blueprint == blueprint %}selected{% endif %}>{{ blueprint }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="form-group"><label>Description</label><input class="form-control" name="description" value="{{ data.description or '' }}"></div>
+        <div class="form-group"><label>Comment</label><input class="form-control" name="comment" value="{{ data.comment or '' }}"></div>
+        <div class="form-group"><label>Forwarding</label><input class="form-control" name="forwarding" value="{{ data.forwarding or '' }}"></div>
+
+        <h3>Versions</h3>
+        <p>Sensors mounted in each period. One slot per line: <code>AS_48_32=212830246</code> (Alphasense sensor), <code>PT_49_23=10-002911</code> (AFE board). Leave "To" empty for the current version.</p>
+        <input type="hidden" name="version_count" value="{{ data.versions | length }}">
+        {% for version in data.versions %}
+        <div class="card" style="margin-bottom: 1em"><div class="card-body">
+            <div class="form-row">
+                <div class="col"><label>From</label><input class="form-control" type="date" name="version_{{ loop.index0 }}_from" value="{{ version['from'] or '' }}"></div>
+                <div class="col"><label>To</label><input class="form-control" type="date" name="version_{{ loop.index0 }}_to" value="{{ version['to'] or '' }}"></div>
+            </div>
+            <label>Slots</label>
+            <textarea class="form-control" rows="4" name="version_{{ loop.index0 }}_ids">{% for slot, sensor_id in version.ids.items() %}{{ slot }}={{ sensor_id }}
+{% endfor %}</textarea>
+            <label><input type="checkbox" name="version_{{ loop.index0 }}_remove"> Remove this version</label>
+        </div></div>
+        {% endfor %}
+        <button class="btn btn-secondary" name="action" value="add_version">Add version</button>
+        <button class="btn btn-info" name="action" value="check">Check</button>
+        <button class="btn btn-primary" name="action" value="save">Save</button>
+    </form>
+    {% if not new and current_user.role == 'admin' %}
+    <form method="POST" action="{{ url_for('ui.delete', kind='hardware', key=name) }}" onsubmit="return confirm('Delete hardware {{ name }}?')" style="margin-top: 2em">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Delete</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

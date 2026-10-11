@@ -3,15 +3,6 @@ from types import SimpleNamespace
 import pytest
 
 import scflows.auth as auth_module
-from scflows import create_app
-
-
-@pytest.fixture
-def client(monkeypatch, tmp_path):
-    monkeypatch.setenv('SQLALCHEMY_DATABASE_URI', f"sqlite:///{tmp_path / 'db.sqlite'}")
-    app = create_app()
-    app.config['TESTING'] = True
-    return app.test_client()
 
 
 @pytest.fixture

@@ -1,0 +1,9 @@
+{
+  "meta": {"documentation": "https://docs.smartcitizen.me/"},
+  "channels": [
+    {"name": "NO2_WE", "function": "channel_names", "kwargs": {"channel": null}, "unit": "V"},
+    {"name": "NO2", "function": "alphasense_803_04", "kwargs": {"we": null, "ae": null, "t": "EC_SENSOR_TEMP", "alphasense_id": null}, "depends_on": ["NO2_WE"], "unit": "ppb"}
+  ],
+  "checks": [],
+  "exports": [{"name": "all"}, {"name": "clean", "columns": ["NO2"]}]
+}

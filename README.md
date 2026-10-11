@@ -66,6 +66,31 @@ This will schedule a device regardless the auto-scheduling:
 python flows.py manual-schedule --device <device> --dry-run --force-first-run --overwrite
 ```
 
+## Processing metadata
+
+Flows serves the processing metadata (blueprints, hardware and calibrations) that used to live as json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data). The paths follow the layout of that repository, so `https://<host>/api/v1/` can be used as the base url by `smartcitizen-connector` (`BASE_POSTPROCESSING_URL`) and `scdata`.
+
+| Endpoint | Content |
+|---|---|
+| `GET /api/v1/blueprints` | List of blueprints |
+| `GET /api/v1/blueprints/<name>[.json]` | Blueprint |
+| `GET /api/v1/hardware` | List of hardware |
+| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json` |
+| `GET /api/v1/calibrations` (or `/calibrations/calibrations.json`) | All calibrations. Filter with `?kind=alphasense_sensor` or `?kind=afe_board` |
+| `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
+| `GET /api/v1/health` | Health check |
+
+The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it. The `postgres` host of `SQLALCHEMY_DATABASE_URI` is only reachable inside the compose network: run these commands in the `web` container (`docker compose exec web flask --app scflows ...`), or point the URI to a database reachable from where they run.
+
+```
+git clone --depth 1 https://github.com/fablabbcn/smartcitizen-data.git /tmp/smartcitizen-data
+flask --app scflows metadata import /tmp/smartcitizen-data
+flask --app scflows metadata verify /tmp/smartcitizen-data
+flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/
+```
+
+`import` keeps items that already exist, unless `--overwrite` is passed.
+
 ## Local deployment
 
 You can deploy via `docker` or by running the different components separately.
@@ -92,8 +117,13 @@ FLOWER_PORT=5555
 FLASK_ENV=production
 FLASK_APP=scflows
 FLASK_DEBUG=1
-SQLALCHEMY_DATABASE_URI=sqlite:///db.sqlite
+# Keep the user, password and database in line with POSTGRES_* below
+SQLALCHEMY_DATABASE_URI=postgresql+psycopg://flows:change-me@postgres:5432/flows
 FLASK_SECRET_KEY=change-me
+# POSTGRES
+POSTGRES_USER=flows
+POSTGRES_PASSWORD=change-me
+POSTGRES_DB=flows
 # BACKUPS
 S3_DATA_BUCKET=bucket-name
 AWS_ACCESS_KEY_ID=key-id
@@ -166,7 +196,7 @@ docker compose build -t scflows:latest .
 And run:
 
 ```
-docker compose up -d rabbitmq flows celery flower web
+docker compose up -d rabbitmq postgres flows celery flower web
 ```
 
 Which will run the `flask` app in `localhost:5000` and `flower` in `localhost:5555`. The `flows` container runs `cron`, which does not inherit the container environment: its entrypoint writes it to `/etc/environment` on start. You can jump into the flows `docker` `flows` container and run the `auto-schedule`, to start processing tasks.

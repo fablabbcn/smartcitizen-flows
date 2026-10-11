@@ -307,7 +307,7 @@ def get_device_health(device_id):
     ''' Latest health of a device in full, and its history (?limit=, 50 by default) '''
     if not device_health.can_see_device(current_identity(), device_id):
         abort(403, 'Researchers can only see the health of their devices')
-    limit = min(request.args.get('limit', 50, type=int), 500)
+    limit = max(1, min(request.args.get('limit', 50, type=int), 500))
     items = device_health.history(device_id, limit=limit)
     if not items:
         abort(404, 'No health checks for this device yet')

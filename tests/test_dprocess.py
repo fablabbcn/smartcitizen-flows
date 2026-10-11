@@ -40,6 +40,8 @@ class FakeDevice:
         return self.loaded
 
     def process(self):
+        if FakeDevice.options.get('process_raises'):
+            raise ValueError('channels with a cycle')
         self.processed = FakeDevice.options.get('process', True)
         return self.processed
 
@@ -141,6 +143,13 @@ def test_health_checks_are_returned(run):
 
 def test_health_checks_also_when_processing_fails(run):
     state, device = run(process=False)
+
+    assert state == ['ABORTED', 'PROCESSING_FAILED']
+    assert device.returned_health['rows'] == 1
+
+
+def test_health_checks_when_processing_raises(run):
+    state, device = run(process_raises=True)
 
     assert state == ['ABORTED', 'PROCESSING_FAILED']
     assert device.returned_health['rows'] == 1

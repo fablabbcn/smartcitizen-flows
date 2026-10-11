@@ -1,42 +1,68 @@
-{% extends "layout.html" %}
+{% extends "base.html" %}
+{% from "_macros.html" import datetime, table_tools with context %}
+{% block title %}Metadata{% endblock %}
 {% block content %}
-<div class="container-fluid" id="main-container">
-    {% include "metadata/_messages.html" %}
-    <h1>Hardware <a class="btn btn-info btn-sm" href="{{ url_for('ui.new_hardware') }}">New hardware</a></h1>
-    <table id="hardware-table" class="display" style="width:100%">
-        <thead><tr><th>Name</th><th>Description</th><th>Comment</th><th>Blueprint</th><th>Sensors</th><th>Updated</th></tr></thead>
-        <tbody>
-        {% for item in hardware %}
-            <tr>
-                <td><a href="{{ url_for('ui.edit_hardware', name=item.name) }}">{{ item.name }}</a></td>
-                <td>{{ item.description or '' }}</td>
-                <td>{{ item.comment or '' }}</td>
-                <td>{{ item.blueprint.name }}</td>
-                <td>{% for version in item.versions %}{{ version.ids.values() | join(', ') }}{% if not loop.last %}; {% endif %}{% endfor %}</td>
-                <td>{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-
-    <h1>Calibrations <a class="btn btn-info btn-sm" href="{{ url_for('ui.new_calibration') }}">New calibration</a></h1>
-    <table id="calibrations-table" class="display" style="width:100%">
-        <thead><tr><th>Sensor id</th><th>Kind</th><th>Updated</th></tr></thead>
-        <tbody>
-        {% for item in calibrations %}
-            <tr>
-                <td><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
-                <td>{{ item.kind }}</td>
-                <td>{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+<div class="page-header">
+    <div>
+        <h1>Metadata</h1>
+        <p class="subtitle">Hardware gives each device its blueprint and the sensors mounted in each period. Calibrations hold the values of each sensor.</p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="{{ url_for('ui.new_calibration') }}">New calibration</a>
+        <a class="btn primary" href="{{ url_for('ui.new_hardware') }}">New hardware</a>
+    </div>
 </div>
-<script type="text/javascript">
-    $(document).ready(function () {
-        $('#hardware-table').DataTable({"pageLength": 25});
-        $('#calibrations-table').DataTable({"pageLength": 25});
-    });
-</script>
+
+<div class="card">
+    <div class="card-header">
+        <div class="segmented" role="tablist" aria-label="Metadata" data-tabs>
+            <button type="button" role="tab" data-tab="hardware" aria-selected="true">Hardware<span class="count">{{ hardware | length }}</span></button>
+            <button type="button" role="tab" data-tab="calibrations" aria-selected="false">Calibrations<span class="count">{{ calibrations | length }}</span></button>
+        </div>
+    </div>
+
+    <div id="hardware" role="tabpanel" data-table>
+        {{ table_tools('Filter by name, blueprint or sensor') }}
+        <div class="table-wrap scroll">
+            <table class="table">
+                <thead><tr><th data-sort>Name</th><th data-sort>Blueprint</th><th data-sort>Description</th><th data-sort>Comment</th><th data-sort="number" class="num">Versions</th><th>Sensors</th><th data-sort>Updated</th></tr></thead>
+                <tbody>
+                {% for item in hardware %}
+                    <tr>
+                        <td class="nowrap"><a href="{{ url_for('ui.edit_hardware', name=item.name) }}">{{ item.name }}</a></td>
+                        <td>{{ item.blueprint.name }}</td>
+                        <td>{{ item.description or '' }}</td>
+                        <td class="clip" title="{{ item.comment or '' }}">{{ item.comment or '' }}</td>
+                        <td class="num">{{ item.versions | length }}</td>
+                        <td class="clip mono small" title="{{ item.sensor_ids | join(', ') }}">{{ item.sensor_ids | join(', ') }}</td>
+                        <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7" class="empty">No hardware yet</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="calibrations" role="tabpanel" data-table>
+        {{ table_tools('Filter by sensor id or kind') }}
+        <div class="table-wrap scroll">
+            <table class="table">
+                <thead><tr><th data-sort>Sensor id</th><th data-sort>Kind</th><th data-sort>Updated</th></tr></thead>
+                <tbody>
+                {% for item in calibrations %}
+                    <tr>
+                        <td class="mono"><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
+                        <td>{{ item.kind | replace('_', ' ') }}</td>
+                        <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="3" class="empty">No calibrations yet</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% endblock %}

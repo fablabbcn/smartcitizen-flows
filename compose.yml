@@ -74,6 +74,13 @@ services:
     # Apply database migrations before serving
     command: sh -c "flask --app scflows db upgrade && exec gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -"
     # Served through the proxy. For local use, publish 5000:5000 in a compose.override.yml
+    # Healthy once migrated and serving (gunicorn starts after the migrations)
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
     restart: unless-stopped
     stop_grace_period: 3s
     volumes:
@@ -85,9 +92,11 @@ services:
     <<: *flows-image
     command: celery --app scflows.worker:app worker -l info --autoscale=4,2
     depends_on:
-      - redis
+      redis:
+        condition: service_started
       # Processing reads blueprints, hardware and calibrations from flows (BASE_POSTPROCESSING_URL)
-      - web
+      web:
+        condition: service_healthy
     # user: nobody
     env_file:
       - .env

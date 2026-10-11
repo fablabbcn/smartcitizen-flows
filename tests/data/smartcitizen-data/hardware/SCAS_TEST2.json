@@ -1,0 +1,1 @@
+{"blueprint_url": "https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/blueprints/test_air.json", "description": "Forwarded kit", "forwarding": "nilu", "versions": [{"ids": {"AS_48_01": "202760040"}, "from": "2023-01-01", "to": "2024-01-01"}, {"ids": {"AS_48_01": "212830246"}, "from": "2024-01-01", "to": null}]}

@@ -52,6 +52,10 @@ def import_metadata(path, overwrite=False):
     report = ImportReport()
 
     def run(kind, counter, key, save, data, source):
+        # As the API and the web interface: the key is used in urls and pages
+        if not editing.KEY_PATTERN.match(key):
+            report.errors.append(f'{source}: {key!r} can only contain letters, numbers, "_" and "-" (64 characters at most)')
+            return
         if not overwrite and editing.find(kind, key) is not None:
             report.skipped[counter] += 1
             return

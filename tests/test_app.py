@@ -123,3 +123,15 @@ def test_theme_switch(client):
     page = client.get('/').get_data(as_text=True)
 
     assert 'data-theme-switch' in page and "localStorage.getItem('theme')" in page
+
+
+def test_placeholders_are_rejected(monkeypatch):
+    from scflows import create_app
+
+    monkeypatch.setenv('FLASK_SECRET_KEY', 'change-me')
+    with pytest.raises(RuntimeError, match='change-me'):
+        create_app()
+    monkeypatch.setenv('FLASK_SECRET_KEY', 'a-real-key')
+    monkeypatch.setenv('SQLALCHEMY_DATABASE_URI', 'postgresql+psycopg://flows:change-me@postgres:5432/flows')
+    with pytest.raises(RuntimeError, match='change-me'):
+        create_app()

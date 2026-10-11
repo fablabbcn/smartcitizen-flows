@@ -2,12 +2,16 @@
 
 Callers commit the session.
 '''
+import re
 from datetime import date
 
 from . import db
 from .models import (Blueprint, Calibration, Hardware, HardwareBlueprint, HardwareVersion, ParameterSet, Revision,
                      SensorName)
 from .schemas import HardwareIn, ParameterSetIn, SensorNameIn, validate_calibration
+
+# Names of blueprints and hardware, and sensor ids
+KEY_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
 
 KINDS = {
     'blueprint': (Blueprint, 'name'),

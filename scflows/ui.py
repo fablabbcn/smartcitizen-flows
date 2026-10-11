@@ -1,17 +1,19 @@
-''' Web interface to edit hardware and calibrations, for admins and researchers
+''' Web interface for hardware and calibrations
 
-Uses the same checks and history as the API. Forms are plain html (no javascript needed).
+Admins edit them, with the same checks and history as the API. Researchers see the
+metadata of their devices, read only (see access.py). Forms are plain html (no javascript needed).
 '''
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from pydantic import ValidationError
 
 from . import db, editing
+from .access import can_see, visible_calibrations, visible_hardware
 from .api import KEY_PATTERN
 from .auth import admin_required, requires_ui_role
 from .forms import protect
 from .identity import EDITORS
-from .models import Blueprint as BlueprintModel, Calibration, Hardware
+from .models import Blueprint as BlueprintModel, Calibration
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
 
@@ -28,7 +30,16 @@ OPTIONAL_CALIBRATION_FIELDS = {name for schema in (AlphasenseCalibration, AfeCal
                                for name, info in schema.model_fields.items() if not info.is_required()}
 
 
+def check_visible(kind, key):
+    if not can_see(current_user.identity, kind, key):
+        abort(403, 'Researchers can only see the hardware of their devices and the calibrations of its sensors.')
+
+
 def get_or_404(kind, key):
+    ''' The item, if it exists and the user can see it. Only admins can change it (POST) '''
+    check_visible(kind, key)
+    if request.method == 'POST' and not current_user.is_admin:
+        abort(403, 'Only admins can change metadata.')
     item = editing.find(kind, key)
     if item is None:
         abort(404)
@@ -42,9 +53,9 @@ def valid_key(key):
 @ui.get('/')
 @editors_required
 def index():
-    hardware = db.session.execute(db.select(Hardware).order_by(Hardware.name)).scalars().all()
-    calibrations = db.session.execute(db.select(Calibration).order_by(Calibration.sensor_id)).scalars().all()
-    return render_template('metadata/index.html', hardware=hardware, calibrations=calibrations)
+    identity = current_user.identity
+    return render_template('metadata/index.html', hardware=visible_hardware(identity),
+                           calibrations=visible_calibrations(identity))
 
 
 # Hardware
@@ -74,11 +85,11 @@ def hardware_from_form(form):
 def render_hardware(name, data, check=None, new=False):
     blueprints = db.session.execute(db.select(BlueprintModel.name).order_by(BlueprintModel.name)).scalars().all()
     return render_template('metadata/hardware.html', name=name, data=data, check=check, new=new,
-                           blueprints=blueprints)
+                           blueprints=blueprints, readonly=not current_user.is_admin)
 
 
 @ui.route('/hardware/new', methods=['GET', 'POST'])
-@editors_required
+@admin_required
 def new_hardware():
     if request.method == 'GET':
         return render_hardware('', {'versions': [{'ids': {}, 'from': None, 'to': None}]}, new=True)
@@ -134,11 +145,12 @@ def calibration_from_form(form, kind):
 def render_calibration(sensor_id, kind, data, errors=None, new=False):
     return render_template('metadata/calibration.html', sensor_id=sensor_id, kind=kind, data=data,
                            fields=CALIBRATION_FIELDS[kind], optional=OPTIONAL_CALIBRATION_FIELDS,
-                           kinds=list(CALIBRATION_FIELDS), errors=errors or [], new=new)
+                           kinds=list(CALIBRATION_FIELDS), errors=errors or [], new=new,
+                           readonly=not current_user.is_admin)
 
 
 @ui.route('/calibrations/new', methods=['GET', 'POST'])
-@editors_required
+@admin_required
 def new_calibration():
     kind = request.values.get('kind', Calibration.ALPHASENSE_SENSOR)
     if kind not in CALIBRATION_FIELDS:
@@ -186,6 +198,8 @@ KIND_LABELS = {'hardware': 'Hardware', 'calibration': 'Calibration'}
 @ui.get('/<any(hardware, calibration):kind>/<key>/history')
 @editors_required
 def history(kind, key):
+    # Also for deleted items
+    check_visible(kind, key)
     return render_template('metadata/history.html', kind=kind, label=KIND_LABELS[kind], key=key,
                            revisions=[(revision, changed_fields(revision)) for revision in editing.revisions(kind, key)])
 

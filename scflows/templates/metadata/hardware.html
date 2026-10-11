@@ -17,9 +17,11 @@
     {% endif %}
 </div>
 {% include "metadata/_messages.html" %}
+{% if readonly %}<div class="alerts"><div class="alert info">Read only: only admins can change metadata.</div></div>{% endif %}
 
 <form method="POST">
     {{ csrf() }}
+    <fieldset class="plain" {% if readonly %}disabled{% endif %}>
     <div class="card">
         <div class="card-header"><h2>Details</h2></div>
         <div class="card-body form-grid">
@@ -55,7 +57,7 @@
         <div class="section-header">
             <div>
                 <h2>Versions</h2>
-                <p class="hint">One slot per line: <code>AS_48_32=212830246</code> for an Alphasense sensor, <code>PT_49_23=10-002911</code> for an AFE board. Leave "To" empty for the current version.</p>
+                {% if not readonly %}<p class="hint">One slot per line: <code>AS_48_32=212830246</code> for an Alphasense sensor, <code>PT_49_23=10-002911</code> for an AFE board. Leave "To" empty for the current version.</p>{% endif %}
             </div>
         </div>
         <input type="hidden" name="version_count" value="{{ data.versions | length }}">
@@ -66,7 +68,7 @@
                 <h3>Version {{ loop.index }}
                     {% if not version['to'] %}<span class="badge active">current</span>{% endif %}
                 </h3>
-                <label class="check muted"><input type="checkbox" name="{{ prefix }}_remove"> Remove</label>
+                {% if not readonly %}<label class="check muted"><input type="checkbox" name="{{ prefix }}_remove"> Remove</label>{% endif %}
             </div>
             <div class="card-body">
                 <div class="form-grid">
@@ -89,14 +91,17 @@
         {% endfor %}
     </div>
 
+    </fieldset>
+    {% if not readonly %}
     <div class="form-actions">
         <button class="btn" name="action" value="add_version">Add version</button>
         <button class="btn" name="action" value="check">Check</button>
         <button class="btn primary" name="action" value="save">Save</button>
     </div>
+    {% endif %}
 </form>
 
-{% if not new and current_user.role == 'admin' %}
+{% if not new and not readonly %}
 <div class="card danger-zone">
     <div class="card-body">
         <div>

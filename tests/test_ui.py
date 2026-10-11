@@ -16,8 +16,8 @@ def client(app):
     return app.test_client()
 
 
-def sign_in(client, role):
-    user = next(user for user in USERS.values() if user['role'] == role)
+def sign_in(client, role, hardware=()):
+    user = dict(next(user for user in USERS.values() if user['role'] == role), hardware=list(hardware))
     # The test app context outlives requests: drop the user cached by Flask-Login
     g.pop('_login_user', None)
     with client.session_transaction() as session:
@@ -51,7 +51,7 @@ def test_access(client, role, status):
 
 
 def test_index_lists_metadata(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     page = client.get('/metadata/').get_data(as_text=True)
 
@@ -60,17 +60,17 @@ def test_index_lists_metadata(client):
 
 
 def test_edit_hardware_form(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
 
     assert 'AS_48_32=212830246' in page
     assert 'value="2024-04-01"' in page
-    assert 'Delete' not in page
+    assert 'Delete' in page and 'value="save"' in page
 
 
 def test_check_hardware(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(action='check')).get_data(as_text=True)
 
@@ -79,19 +79,19 @@ def test_check_hardware(client):
 
 
 def test_save_hardware(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     response = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(description='Updated'))
 
     assert response.status_code == 302
     assert hardware('SCAS_TEST1').description == 'Updated'
     revision = db.session.execute(db.select(Revision).filter_by(key='SCAS_TEST1', action='update')).scalar_one()
-    assert revision.username == 'researcher'
+    assert revision.username == 'admin'
     assert 'saved with 2 warnings' in client.get(response.headers['Location']).get_data(as_text=True)
 
 
 def test_invalid_hardware_is_not_saved(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(
         description='Updated', version_0_ids='AS_48_32=730002320')).get_data(as_text=True)
@@ -101,7 +101,7 @@ def test_invalid_hardware_is_not_saved(client):
 
 
 def test_add_and_remove_versions(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(action='add_version')).get_data(as_text=True)
     assert 'name="version_1_from"' in page
@@ -118,7 +118,7 @@ def test_add_and_remove_versions(client):
 
 
 def test_new_hardware(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     assert client.post('/metadata/hardware/new', data=hardware_form(name='SCAS_NEW')).status_code == 302
     assert hardware('SCAS_NEW').blueprint.name == 'test_air'
@@ -130,7 +130,7 @@ def test_new_hardware(client):
 
 
 def test_edit_calibration(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
     assert 'name="t20"' in client.get('/metadata/calibrations/10-002911').get_data(as_text=True)
 
     response = client.post('/metadata/calibrations/10-002911', data=form(t20='21', v20='0.31', action='save'))
@@ -142,7 +142,7 @@ def test_edit_calibration(client):
 
 
 def test_new_calibration(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
     page = client.get('/metadata/calibrations/new?kind=afe_board').get_data(as_text=True)
     assert 'name="v20"' in page and 'name="we_sensor_zero_mv"' not in page
 
@@ -155,7 +155,7 @@ def test_new_calibration(client):
 
 
 def test_forms_require_csrf_token(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     response = client.post('/metadata/hardware/SCAS_TEST1', data=dict(hardware_form(description='x'), csrf='other'))
 
@@ -164,7 +164,7 @@ def test_forms_require_csrf_token(client):
 
 
 def test_delete_requires_admin(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'researcher', ['SCAS_TEST1'])
     assert client.post('/metadata/hardware/SCAS_TEST1/delete', data=form()).status_code == 403
 
     sign_in(client, 'admin')
@@ -174,11 +174,68 @@ def test_delete_requires_admin(client):
 
 
 def test_history(client):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
     client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(description='Updated'))
 
     page = client.get('/metadata/hardware/SCAS_TEST1/history').get_data(as_text=True)
 
-    assert re.search(r'<span class="badge update">update</span>\s*<strong>researcher</strong>', page)
+    assert re.search(r'<span class="badge update">update</span>\s*<strong>admin</strong>', page)
     assert 'Changed: <code>description</code>' in page
     assert '<span class="badge import">import</span>' in page
+
+
+# Researchers: the metadata of their devices, read only
+
+def test_researcher_sees_the_metadata_of_their_devices(client):
+    sign_in(client, 'researcher', ['SCAS_TEST1', 'NOT_IN_FLOWS'])
+
+    page = client.get('/metadata/').get_data(as_text=True)
+
+    assert '/metadata/hardware/SCAS_TEST1' in page and '/metadata/hardware/SCAS_TEST2' not in page
+    # Calibrations of the sensors in SCAS_TEST1
+    assert '/metadata/calibrations/10-002911' in page
+    assert 'New hardware' not in page and 'read only' in page
+
+
+def test_researcher_without_hardware(client):
+    sign_in(client, 'researcher')
+
+    page = client.get('/metadata/').get_data(as_text=True)
+
+    assert '/metadata/hardware/' not in page and 'None of your devices uses hardware in flows' in page
+
+
+def test_researcher_forms_are_read_only(client):
+    sign_in(client, 'researcher', ['SCAS_TEST1'])
+
+    page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
+    assert 'AS_48_32=212830246' in page and '<fieldset class="plain" disabled>' in page
+    assert 'value="save"' not in page and 'Delete' not in page
+    assert 'Read only' in client.get('/metadata/calibrations/10-002911').get_data(as_text=True)
+    assert client.get('/metadata/hardware/SCAS_TEST1/history').status_code == 200
+
+
+@pytest.mark.parametrize('path', ['/metadata/hardware/SCAS_TEST2', '/metadata/hardware/SCAS_TEST2/history',
+                                  '/metadata/calibrations/202760040'])
+def test_researcher_cannot_see_other_metadata(client, path):
+    # 202760040 is only in SCAS_TEST2
+    sign_in(client, 'researcher', ['SCAS_TEST1'])
+
+    response = client.get(path)
+
+    assert response.status_code == 403
+    assert 'hardware of their devices' in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize('path, data', [
+    ('/metadata/hardware/SCAS_TEST1', hardware_form(description='Updated')),
+    ('/metadata/calibrations/10-002911', form(t20='21', v20='0.31', action='save')),
+    ('/metadata/hardware/new', hardware_form(name='SCAS_NEW')),
+    ('/metadata/calibrations/new', form(sensor_id='10-000001', kind='afe_board', t20='20', action='save')),
+])
+def test_researcher_cannot_change_metadata(client, path, data):
+    sign_in(client, 'researcher', ['SCAS_TEST1'])
+
+    assert client.post(path, data=data).status_code == 403
+    assert hardware('SCAS_TEST1').description == '1SEN55-2ELEC-AFE'
+    assert hardware('SCAS_NEW') is None

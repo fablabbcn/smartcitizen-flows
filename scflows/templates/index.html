@@ -25,7 +25,7 @@
     {% endif %}
     <a class="card section-card" href="{{ url_for('ui.index') }}">
         <h2>Metadata</h2>
-        <p>Hardware of each device, with its blueprint and the sensors mounted in each period, and sensor calibrations.</p>
+        <p>{% if current_user.is_admin %}Hardware of each device, with its blueprint and the sensors mounted in each period, and sensor calibrations.{% else %}The hardware of your devices, with the sensors mounted in each period, and their calibrations (read only).{% endif %}</p>
         <div class="figures">
             <span class="badge plain">{{ metadata.hardware }} hardware</span>
             <span class="badge plain">{{ metadata.calibrations }} calibrations</span>

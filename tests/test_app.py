@@ -81,7 +81,7 @@ def test_session_keeps_identity_not_token(app, client, sc_sessions):
     login(client)
 
     with client.session_transaction() as session:
-        assert session['identity'] == {'id': 1, 'username': 'admin', 'role': 'admin'}
+        assert session['identity'] == {'id': 1, 'username': 'admin', 'role': 'admin', 'hardware': []}
         assert 'admin-token' not in str(dict(session))
         assert session.permanent
 

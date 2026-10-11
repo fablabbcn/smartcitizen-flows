@@ -5,12 +5,14 @@
 <div class="page-header">
     <div>
         <h1>Metadata</h1>
-        <p class="subtitle">Hardware gives each device its blueprint and the sensors mounted in each period. Calibrations hold the values of each sensor.</p>
+        <p class="subtitle">Hardware gives each device its blueprint and the sensors mounted in each period. Calibrations hold the values of each sensor.{% if not current_user.is_admin %} You see the hardware of your devices and the calibrations of its sensors, read only.{% endif %}</p>
     </div>
+    {% if current_user.is_admin %}
     <div class="actions">
         <a class="btn" href="{{ url_for('ui.new_calibration') }}">New calibration</a>
         <a class="btn primary" href="{{ url_for('ui.new_hardware') }}">New hardware</a>
     </div>
+    {% endif %}
 </div>
 
 <div class="card">
@@ -38,7 +40,7 @@
                         <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="7" class="empty">No hardware yet</td></tr>
+                    <tr><td colspan="7" class="empty">{{ "No hardware yet" if current_user.is_admin else "None of your devices uses hardware in flows" }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -58,7 +60,7 @@
                         <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="3" class="empty">No calibrations yet</td></tr>
+                    <tr><td colspan="3" class="empty">{{ "No calibrations yet" if current_user.is_admin else "No calibrations for the sensors of your hardware" }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

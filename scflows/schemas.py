@@ -97,6 +97,8 @@ def validate_calibration(data):
     ''' Validates calibration data. Returns its kind '''
     from .models import Calibration
 
+    if not isinstance(data, dict):
+        raise ValueError('calibration must be an object')
     kind = Calibration.kind_of(data)
     schema = AfeCalibration if kind == Calibration.AFE_BOARD else AlphasenseCalibration
     schema.model_validate(data)

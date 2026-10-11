@@ -32,10 +32,6 @@ def test_import(app, source):
     hardware = db.session.execute(db.select(Hardware).filter_by(name='SCAS_TEST1')).scalar_one()
     assert hardware.blueprint.name == 'test_air'
     assert hardware.versions[0].from_date.isoformat() == '2024-04-01'
-    # Blueprint not in flows: not linked, url kept
-    other = db.session.execute(db.select(Hardware).filter_by(name='SCAS_TEST2')).scalar_one()
-    assert other.blueprint is None
-    assert other.blueprint_url.endswith('missing.json')
     kinds = dict(db.session.execute(db.select(Calibration.sensor_id, Calibration.kind)).all())
     assert kinds == {'212830246': 'alphasense_sensor', '10-002911': 'afe_board'}
 
@@ -62,6 +58,16 @@ def test_import_overwrite(app, source):
     assert report.updated['hardware'] == 2
     hardware = db.session.execute(db.select(Hardware).filter_by(name='SCAS_TEST1')).scalar_one()
     assert [version.ids['AS_48_32'] for version in hardware.versions] == ['212830246', '214920348']
+
+
+def test_import_rejects_blueprints_not_in_flows(app, source):
+    edit_json(source / 'hardware' / 'SCAS_TEST2.json', lambda data: data.update(
+        blueprint_url='https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/blueprints/sck_21.json'))
+
+    report = import_metadata(str(source))
+
+    assert report.created['hardware'] == 1
+    assert report.errors == [f"{source / 'hardware' / 'SCAS_TEST2.json'}: blueprint sck_21 is not in flows"]
 
 
 def test_import_reports_invalid_files(app, source):
@@ -126,3 +132,17 @@ def test_calibrations_that_are_not_an_object_are_reported(app, source):
 
     assert len(report.errors) == 1 and 'calibrations.json: is not an object' in report.errors[0]
     assert report.created['hardware'] == 2 and report.created['calibrations'] == 0
+
+
+def test_invalid_keys_are_reported(app, source):
+    import json
+
+    calibrations = source / 'calibrations' / 'calibrations.json'
+    data = json.loads(calibrations.read_text())
+    data["x');alert(1);//"] = next(iter(data.values()))
+    calibrations.write_text(json.dumps(data))
+
+    report = import_metadata(str(source))
+
+    assert len(report.errors) == 1 and 'can only contain letters' in report.errors[0]
+    assert report.created['calibrations'] == 2

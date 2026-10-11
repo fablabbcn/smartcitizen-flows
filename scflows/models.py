@@ -42,16 +42,21 @@ class Hardware(TimestampMixin, db.Model):
     description = db.Column(db.Text)
     comment = db.Column(db.Text)
     forwarding = db.Column(db.String(64))
-    # Served as stored. blueprint_id links it when the blueprint is in flows
-    blueprint_url = db.Column(db.Text)
-    blueprint_id = db.Column(db.Integer, db.ForeignKey('blueprint.id', ondelete='SET NULL'))
+    # Every hardware uses a blueprint in flows: blueprints in use cannot be deleted
+    blueprint_id = db.Column(db.Integer, db.ForeignKey('blueprint.id', ondelete='RESTRICT'), nullable=False)
     blueprint = db.relationship('Blueprint')
     versions = db.relationship('HardwareVersion', back_populates='hardware', cascade='all, delete-orphan',
                                order_by='HardwareVersion.from_date')
 
-    def to_json(self):
-        ''' Same structure as the hardware files: optional keys are left out when empty '''
-        result = {'blueprint_url': self.blueprint_url, 'description': self.description}
+    def to_json(self, blueprint_url=None):
+        '''
+        Same structure as the hardware files, with the blueprint name. Optional keys are left out when empty.
+        blueprint_url: url of the blueprint in flows (built by the API)
+        '''
+        result = {'blueprint': self.blueprint.name}
+        if blueprint_url:
+            result['blueprint_url'] = blueprint_url
+        result['description'] = self.description
         if self.comment is not None:
             result['comment'] = self.comment
         if self.forwarding is not None:
@@ -97,3 +102,35 @@ class Calibration(TimestampMixin, db.Model):
 
     def to_json(self):
         return self.data
+
+
+class Revision(db.Model):
+    ''' History of changes to blueprints, hardware and calibrations '''
+    CREATE = 'create'
+    UPDATE = 'update'
+    DELETE = 'delete'
+    IMPORT = 'import'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # blueprint, hardware or calibration, and its name or sensor_id
+    kind = db.Column(db.String(32), nullable=False)
+    key = db.Column(db.String(64), nullable=False)
+    action = db.Column(db.String(16), nullable=False)
+    before = db.Column(JSONType)
+    after = db.Column(JSONType)
+    # Smart Citizen user, empty for imports
+    user_id = db.Column(db.Integer)
+    username = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    __table_args__ = (db.Index('ix_revision_kind_key', 'kind', 'key'),)
+
+    def to_json(self):
+        return {
+            'id': self.id,
+            'action': self.action,
+            'username': self.username,
+            'created_at': self.created_at.isoformat(),
+            'before': self.before,
+            'after': self.after,
+        }

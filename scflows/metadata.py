@@ -11,8 +11,8 @@ from flask import current_app
 from flask.cli import AppGroup
 from pydantic import ValidationError
 
-from . import db
-from .models import Blueprint, Calibration, Hardware, HardwareVersion
+from . import db, editing
+from .models import Blueprint, Hardware, Revision
 
 metadata_cli = AppGroup('metadata', help='Processing metadata (blueprints, hardware, calibrations)')
 
@@ -34,32 +34,6 @@ def name_of(path):
     return splitext(basename(urlparse(str(path)).path))[0]
 
 
-def validate_blueprint(body):
-    # Imported here: scdata loads its configuration on import
-    from scdata.models import Blueprint as BlueprintSchema
-    BlueprintSchema.model_validate(body)
-
-
-def validate_hardware(body):
-    from smartcitizen_connector.models import HardwarePostprocessing
-    HardwarePostprocessing.model_validate(body)
-
-
-def upsert(model, key, value, overwrite, report, kind):
-    ''' Returns the item to fill in, or None if it exists and should be kept '''
-    item = db.session.execute(db.select(model).filter_by(**{key: value})).scalar_one_or_none()
-    if item is None:
-        item = model(**{key: value})
-        db.session.add(item)
-        report.created[kind] += 1
-    elif overwrite:
-        report.updated[kind] += 1
-    else:
-        report.skipped[kind] += 1
-        return None
-    return item
-
-
 def load_or_report(path, report):
     ''' The json of a file, or None if it cannot be read (the error goes to the report) '''
     try:
@@ -73,48 +47,35 @@ def load_or_report(path, report):
 def import_metadata(path, overwrite=False):
     '''
     Imports blueprints, hardware and calibrations from a smartcitizen-data checkout.
-    Existing items are kept unless overwrite is set. Invalid files are reported and skipped.
+    Existing items are kept unless overwrite is set. Invalid items are reported and skipped.
     '''
     report = ImportReport()
 
+    def run(kind, counter, key, save, data, source):
+        # As the API and the web interface: the key is used in urls and pages
+        if not editing.KEY_PATTERN.match(key):
+            report.errors.append(f'{source}: {key!r} can only contain letters, numbers, "_" and "-" (64 characters at most)')
+            return
+        if not overwrite and editing.find(kind, key) is not None:
+            report.skipped[counter] += 1
+            return
+        try:
+            _, created = save(key, data, action=Revision.IMPORT)
+        except (ValidationError, ValueError) as error:
+            report.errors.append(f'{source}: {error}')
+            return
+        (report.created if created else report.updated)[counter] += 1
+
     for blueprint_path in sorted(glob(join(path, 'blueprints', '*.json'))):
         body = load_or_report(blueprint_path, report)
-        if body is None:
-            continue
-        try:
-            validate_blueprint(body)
-        except ValidationError as error:
-            report.errors.append(f'{blueprint_path}: {error}')
-            continue
-        item = upsert(Blueprint, 'name', name_of(blueprint_path), overwrite, report, 'blueprints')
-        if item is not None:
-            item.body = body
+        if body is not None:
+            run('blueprint', 'blueprints', name_of(blueprint_path), editing.save_blueprint, body, blueprint_path)
     db.session.flush()
-
-    blueprints = {blueprint.name: blueprint for blueprint in db.session.execute(db.select(Blueprint)).scalars()}
 
     for hardware_path in sorted(glob(join(path, 'hardware', '*.json'))):
         body = load_or_report(hardware_path, report)
-        if body is None:
-            continue
-        try:
-            validate_hardware(body)
-            versions = [HardwareVersion(ids=version['ids'],
-                                        from_date=HardwareVersion.parse_date(version.get('from')),
-                                        to_date=HardwareVersion.parse_date(version.get('to')))
-                        for version in body.get('versions', [])]
-        except (ValidationError, ValueError, KeyError) as error:
-            report.errors.append(f'{hardware_path}: {error!r}')
-            continue
-        item = upsert(Hardware, 'name', name_of(hardware_path), overwrite, report, 'hardware')
-        if item is None:
-            continue
-        item.blueprint_url = body.get('blueprint_url')
-        item.blueprint = blueprints.get(name_of(item.blueprint_url)) if item.blueprint_url else None
-        item.description = body.get('description')
-        item.comment = body.get('comment')
-        item.forwarding = body.get('forwarding')
-        item.versions = versions
+        if body is not None:
+            run('hardware', 'hardware', name_of(hardware_path), editing.save_hardware, body, hardware_path)
 
     calibrations_path = join(path, 'calibrations', 'calibrations.json')
     calibrations = load_or_report(calibrations_path, report)
@@ -125,10 +86,8 @@ def import_metadata(path, overwrite=False):
         if not isinstance(data, dict):
             report.errors.append(f'{calibrations_path}: {sensor_id} is not an object')
             continue
-        item = upsert(Calibration, 'sensor_id', sensor_id, overwrite, report, 'calibrations')
-        if item is not None:
-            item.kind = Calibration.kind_of(data)
-            item.data = data
+        run('calibration', 'calibrations', sensor_id, editing.save_calibration, data,
+            f'{calibrations_path} ({sensor_id})')
 
     db.session.commit()
     return report
@@ -153,18 +112,25 @@ def verify_metadata(source):
     client = current_app.test_client()
     differences = []
 
-    def compare(served_path, relative_path):
+    def compare(served_path, relative_path, normalise=lambda data: data):
         served = client.get(f'/api/v1/{served_path}').get_json()
         expected = read_source(source, relative_path)
         if expected is None:
             differences.append(f'{relative_path}: not in source')
-        elif served != expected:
+        elif normalise(served) != normalise(expected):
             differences.append(f'{relative_path}: served content differs')
+
+    def hardware_by_blueprint_name(data):
+        ''' Hardware served by flows links blueprints in flows: compare the blueprint names '''
+        data = dict(data)
+        url = data.pop('blueprint_url', None)
+        data['blueprint'] = data.get('blueprint') or (name_of(url) if url else None)
+        return data
 
     for blueprint in db.session.execute(db.select(Blueprint)).scalars():
         compare(f'blueprints/{blueprint.name}.json', f'blueprints/{blueprint.name}.json')
     for hardware in db.session.execute(db.select(Hardware)).scalars():
-        compare(f'hardware/{hardware.name}.json', f'hardware/{hardware.name}.json')
+        compare(f'hardware/{hardware.name}.json', f'hardware/{hardware.name}.json', hardware_by_blueprint_name)
     compare('calibrations/calibrations.json', 'calibrations/calibrations.json')
 
     # Files of a local checkout that are not served

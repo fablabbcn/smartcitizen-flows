@@ -5,10 +5,11 @@
 <div class="page-header">
     <div>
         <h1>Metadata</h1>
-        <p class="subtitle">Hardware gives each device its blueprint and the sensors mounted in each period. Calibrations hold the values of each sensor.{% if not current_user.is_admin %} You see the hardware of your devices and the calibrations of its sensors, read only.{% endif %}</p>
+        <p class="subtitle">Hardware gives each device its blueprint and the sensors mounted in each period. Calibrations hold the values of each sensor. Names are what processing and the blueprints call each Smart Citizen sensor id.{% if not current_user.is_admin %} You see the hardware of your devices and the calibrations of its sensors, read only.{% endif %}</p>
     </div>
     {% if current_user.is_admin %}
     <div class="actions">
+        <a class="btn" href="{{ url_for('ui.new_name') }}">New name</a>
         <a class="btn" href="{{ url_for('ui.new_calibration') }}">New calibration</a>
         <a class="btn primary" href="{{ url_for('ui.new_hardware') }}">New hardware</a>
     </div>
@@ -20,6 +21,7 @@
         <div class="segmented" role="tablist" aria-label="Metadata" data-tabs>
             <button type="button" role="tab" data-tab="hardware" aria-selected="true">Hardware<span class="count">{{ hardware | length }}</span></button>
             <button type="button" role="tab" data-tab="calibrations" aria-selected="false">Calibrations<span class="count">{{ calibrations | length }}</span></button>
+            <button type="button" role="tab" data-tab="names" aria-selected="false">Names<span class="count">{{ names | length }}</span></button>
         </div>
     </div>
 
@@ -61,6 +63,33 @@
                     </tr>
                 {% else %}
                     <tr><td colspan="3" class="empty">{{ "No calibrations yet" if current_user.is_admin else "No calibrations for the sensors of your hardware" }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="names" role="tabpanel" data-table>
+        {{ table_tools('Filter by name, id, description or unit') }}
+        {% if shared_ids %}
+        <div class="card-body">
+            <div class="alert warning">Ids with several names: {% for sensor_id, items in shared_ids.items() %}<code>{{ sensor_id }}</code> ({{ items | join(', ') }}){% if not loop.last %}, {% endif %}{% endfor %}. Processing uses the first one in the list.</div>
+        </div>
+        {% endif %}
+        <div class="table-wrap scroll">
+            <table class="table">
+                <thead><tr><th data-sort="number" class="num">#</th><th data-sort>Name</th><th data-sort="number" class="num">Sensor id</th><th data-sort>Description</th><th data-sort>Unit</th><th data-sort>Used by</th></tr></thead>
+                <tbody>
+                {% for item in names %}
+                    <tr>
+                        <td class="num muted">{{ loop.index }}</td>
+                        <td class="mono nowrap"><a href="{{ url_for('ui.edit_name', name=item.name) }}">{{ item.name }}</a></td>
+                        <td class="num" data-value="{{ item.sensor_id }}">{% if item.sensor_id %}{{ item.sensor_id }}{% else %}<span class="muted" title="No id in the Smart Citizen platform">none</span>{% endif %}{% if item.sensor_id in shared_ids %} <span class="badge paused plain" title="Several names for this id">shared</span>{% endif %}</td>
+                        <td>{{ item.description }}</td>
+                        <td class="mono small">{{ item.unit }}</td>
+                        <td class="small">{{ used.get(item.name, []) | join(', ') }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="6" class="empty">No names yet. Import them with <code>flask --app scflows metadata import</code></td></tr>
                 {% endfor %}
                 </tbody>
             </table>

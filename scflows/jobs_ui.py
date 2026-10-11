@@ -5,7 +5,7 @@ from flask_login import current_user
 from . import db
 from .auth import admin_required
 from .forms import protect
-from .jobs import add_manual_job, find_job, last_sync, queue_run, set_paused, sync_running
+from .jobs import add_manual_job, find_job, last_sync, queue_run, queue_sync, set_paused, sync_running
 from .models import Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
@@ -36,12 +36,11 @@ def index():
 @admin_required
 def sync_now():
     ''' Queues a sync with the Smart Citizen API (it takes a few minutes) '''
-    from . import worker
     if sync_running():
         flash('A sync is already running: reload in a few minutes', 'warning')
     else:
-        worker.sync_jobs.delay(source=current_user.username)
-        flash('Sync queued: new and changed jobs appear in a few minutes', 'info')
+        run = queue_sync(current_user.username)
+        flash(f'Sync queued (run {run.id}): new and changed jobs appear in a few minutes', 'info')
     return back()
 
 

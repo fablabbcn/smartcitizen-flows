@@ -264,7 +264,8 @@ class Job(TimestampMixin, db.Model):
 
 
 class JobRun(db.Model):
-    ''' One execution of a job, or of a task requested once '''
+    ''' One execution of a job, of a task requested once, or of a sync of the jobs (task sync, no device) '''
+    SYNC = 'sync'
     QUEUED = 'queued'
     RUNNING = 'running'
     SUCCESS = 'success'
@@ -274,7 +275,8 @@ class JobRun(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey('job.id', ondelete='SET NULL'), index=True)
     job = db.relationship('Job', back_populates='runs')
-    device_id = db.Column(db.Integer, nullable=False, index=True)
+    # Empty for syncs
+    device_id = db.Column(db.Integer, index=True)
     task = db.Column(db.String(16), nullable=False)
     dry_run = db.Column(db.Boolean, nullable=False, default=False)
     state = db.Column(db.String(16), nullable=False, default=QUEUED)

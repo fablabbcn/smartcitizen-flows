@@ -60,9 +60,9 @@ def dispatch_due_jobs():
 
 
 @app.task(name='scflows.sync_jobs')
-def sync_jobs(source='schedule'):
+def sync_jobs(source='schedule', run_id=None):
     from scflows.jobs import run_sync
-    run_sync(source=source)
+    run_sync(source=source, run_id=run_id)
 
 
 @app.task(name='scflows.prune_health')

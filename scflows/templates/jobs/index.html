@@ -8,7 +8,7 @@
         <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced every hour with the Smart Citizen API.</p>
         <p class="hint">
             {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
-            {% elif last_sync %}Last sync {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}:
+            {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}:
                 {% for task, counts in last_sync.report.items() %}{{ task }} {{ counts.created }} created, {{ counts.enabled }} enabled, {{ counts.disabled }} disabled{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
             {% else %}No sync recorded yet.{% endif %}
         </p>
@@ -101,7 +101,7 @@
                 {% for item in runs %}
                     <tr>
                         <td class="num"><a href="{{ url_for('jobs_ui.run', run_id=item.id) }}">#{{ item.id }}</a></td>
-                        <td>{{ item.device_id }}</td>
+                        <td>{{ item.device_id or '' }}</td>
                         <td>{{ item.task }}{% if item.dry_run %} <span class="badge plain">dry run</span>{% endif %}</td>
                         <td>{{ badge(item.state) }}</td>
                         <td class="clip" title="{{ item.message or '' }}">{{ item.message or '' }}</td>

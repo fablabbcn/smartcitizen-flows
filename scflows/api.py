@@ -414,12 +414,11 @@ def get_sync():
 @requires_role(ADMIN)
 def post_sync():
     ''' Queues a sync with the Smart Citizen API (it takes a few minutes): 202, or 409 if one is running '''
-    from . import worker
-    from .jobs import sync_running
+    from .jobs import queue_sync, sync_running
     if sync_running():
         abort(409, 'A sync is already running')
-    worker.sync_jobs.delay(source=current_identity().username)
-    return jsonify({'queued': True}), 202
+    run = queue_sync(current_identity().username)
+    return jsonify({'queued': run.state == JobRun.QUEUED, 'run': run.to_json()}), 202
 
 
 @api.get('/jobs')

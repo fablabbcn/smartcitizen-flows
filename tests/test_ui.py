@@ -331,3 +331,12 @@ def test_researcher_sees_names_read_only(client):
     assert client.post('/metadata/names/TEMP', data=form(id='1', action='save')).status_code == 403
     assert client.get('/metadata/names/new').status_code == 403
     assert client.post('/metadata/name/TEMP/delete', data=form()).status_code == 403
+
+
+def test_changed_fields_tell_missing_from_null():
+    from types import SimpleNamespace
+
+    from scflows.ui import changed_fields
+
+    revision = SimpleNamespace(before={'t20': 20}, after={'t20': 20, 'ae_total_zero_mv': None})
+    assert changed_fields(revision) == ['ae_total_zero_mv']

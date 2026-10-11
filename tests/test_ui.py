@@ -119,7 +119,7 @@ def test_add_and_remove_versions(client):
 
 @pytest.mark.parametrize('count', ['x', '-1', '101'])
 def test_invalid_version_count_is_rejected(client, count):
-    sign_in(client, 'researcher')
+    sign_in(client, 'admin')
 
     assert client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(version_count=count)).status_code == 400
     assert hardware('SCAS_TEST1').description == '1SEN55-2ELEC-AFE'

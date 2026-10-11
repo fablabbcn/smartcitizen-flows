@@ -282,6 +282,21 @@ def test_lock_is_released_when_the_final_commit_fails(app, lock, task, monkeypat
     assert lock == {}
 
 
+def test_run_fails_when_the_lock_cannot_be_taken(app, task, monkeypatch):
+    def acquire(key, seconds=None):
+        raise ConnectionError('redis unreachable')
+
+    monkeypatch.setattr(jobs.locks, 'acquire', acquire)
+    run = make_run()
+    with pytest.raises(ConnectionError):
+        jobs.execute_run(run.id)
+
+    db.session.expire_all()
+    assert db.session.get(JobRun, run.id).state == 'failed'
+    assert db.session.get(JobRun, run.id).message.startswith('LOCK_FAILED')
+    assert task.calls == []
+
+
 def test_execute_run_already_running(app, lock, task):
     lock['scflows:lock:process:1'] = 'other'
 

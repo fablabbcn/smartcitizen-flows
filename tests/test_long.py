@@ -245,7 +245,9 @@ def test_series_api(app, client, sc_me, stored):
     csv = client.get('/api/v1/devices/1/series?format=csv&resample=1D', headers=auth('admin-token'))
     assert csv.mimetype == 'text/csv' and csv.get_data(as_text=True).splitlines()[0] == 'TIME,CO2,NO2'
     assert client.get('/api/v1/devices/1/series?resample=raw', headers=auth('admin-token')).status_code == 200
-    assert client.get('/api/v1/devices/1/series?resample=often', headers=auth('admin-token')).status_code == 400
+    for query in ('resample=often', 'resample=0s', 'resample=-1h', 'from=yesterday', 'to=2026-13-01',
+                  'channels=NOPE'):
+        assert client.get(f'/api/v1/devices/1/series?{query}', headers=auth('admin-token')).status_code == 400, query
 
 
 def test_series_access(app, client, sc_me, stored, monkeypatch):

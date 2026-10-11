@@ -50,3 +50,22 @@ def test_refresh_metadata_at_most_every_max_age(monkeypatch):
     assert tools.refresh_metadata(max_age=300) is True
 
     assert calls == [1000.0, 1400.0]
+
+
+def test_refresh_metadata_keeps_what_was_loaded_when_flows_is_unreachable(monkeypatch):
+    import scflows.tools as tools
+    from scdata._config import config as scdata_config
+
+    def get_meta_data():
+        # What scdata loads when the requests fail
+        scdata_config.blueprints, scdata_config.calibrations = {}, {}
+
+    monkeypatch.setattr(scdata_config, 'blueprints', {'sc_air': {}})
+    monkeypatch.setattr(scdata_config, 'calibrations', {'1': {}})
+    monkeypatch.setattr(scdata_config, 'get_meta_data', get_meta_data)
+    monkeypatch.setattr(tools, '_metadata_refreshed_at', None)
+
+    assert tools.refresh_metadata() is False
+    assert scdata_config.blueprints == {'sc_air': {}} and scdata_config.calibrations == {'1': {}}
+    # Tried again on the next call
+    assert tools._metadata_refreshed_at is None

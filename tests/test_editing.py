@@ -79,6 +79,19 @@ def test_put_hardware_with_warnings(client):
     assert client.get('/api/v1/hardware/SCAS_TEST1.json').get_json() == served_hardware(hardware, 'test_air')
 
 
+def test_blueprint_deleted_after_the_check(client, monkeypatch):
+    from scflows import editing
+
+    def save_hardware(*args, **kwargs):
+        raise editing.BlueprintNotInFlows('blueprint test_air is not in flows')
+
+    monkeypatch.setattr(editing, 'save_hardware', save_hardware)
+    response = client.put('/api/v1/hardware/SCAS_TEST1', json=copy.deepcopy(HARDWARE), headers=auth('admin-token'))
+
+    assert response.status_code == 422
+    assert response.get_json()['errors'] == ['blueprint: blueprint test_air is not in flows']
+
+
 def test_invalid_hardware_is_not_saved(client):
     hardware = copy.deepcopy(HARDWARE)
     hardware['versions'][0]['ids'] = {'AS_48_32': '730002320'}

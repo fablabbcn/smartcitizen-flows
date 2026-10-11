@@ -117,3 +117,12 @@ def test_malformed_files_are_reported_and_skipped(app, source):
 
     assert len(report.errors) == 1 and 'SCAS_TEST2.json: cannot be read as JSON' in report.errors[0]
     assert report.created['hardware'] == 1 and report.created['calibrations'] == 2
+
+
+def test_calibrations_that_are_not_an_object_are_reported(app, source):
+    (source / 'calibrations' / 'calibrations.json').write_text('[]')
+
+    report = import_metadata(str(source))
+
+    assert len(report.errors) == 1 and 'calibrations.json: is not an object' in report.errors[0]
+    assert report.created['hardware'] == 2 and report.created['calibrations'] == 0

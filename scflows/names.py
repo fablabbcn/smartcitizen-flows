@@ -133,6 +133,9 @@ def plan(names, api, firmware, used=None):
         if not editing.KEY_PATTERN.match(sensor.name):
             notices.append(f'{sensor.name!r} (id {sensor.id}) in the firmware is not a valid name: skipped')
             continue
+        if len(sensor.title or '') > 255 or len(sensor.unit or '') > 32:
+            notices.append(f'{sensor.name} (id {sensor.id}) in the firmware has a title or unit too long: skipped')
+            continue
         current = by_name.get(sensor.name)
         if current is not None:
             if current['id'] == 0:

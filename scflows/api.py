@@ -353,8 +353,8 @@ def get_run(run_id):
 def run_options(task):
     body = request.get_json(silent=True) or {}
     dry_run = bool(body.get('dry_run', False))
-    if dry_run and task != Job.PROCESS:
-        abort(400, 'dry_run is only available for process')
+    if dry_run and task not in (Job.PROCESS, Job.LONG):
+        abort(400, 'dry_run is only available for process and long')
     return dry_run
 
 

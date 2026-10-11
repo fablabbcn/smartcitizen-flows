@@ -211,7 +211,9 @@ class Job(TimestampMixin, db.Model):
     ''' Periodic task for a device: process (dprocess) or backup (dbackup) '''
     PROCESS = 'process'
     BACKUP = 'backup'
-    TASKS = (PROCESS, BACKUP)
+    # Long processing: baselines over months of backups (blueprints of kind long)
+    LONG = 'long'
+    TASKS = (PROCESS, BACKUP, LONG)
     # Created by the sync with the Smart Citizen API, or by an admin
     AUTO = 'auto'
     MANUAL = 'manual'

@@ -14,10 +14,13 @@ set +a
 
 mkdir -p "$BACKUP_DIR"
 file="$BACKUP_DIR/flows-$(date +%F).sql.gz"
+# A failed dump leaves no temporary file behind
+trap 'rm -f "$file.tmp"' EXIT
 # Write to a temporary file: a failed dump never replaces a good one
 # pg_dump compresses itself (-Z): with a pipe to gzip, a failed dump would go unnoticed
 docker compose exec -T postgres pg_dump -Z 6 -U "$POSTGRES_USER" "$POSTGRES_DB" > "$file.tmp"
 mv "$file.tmp" "$file"
 echo "$(date '+%F %T') wrote $file ($(du -h "$file" | cut -f1))"
 
-find "$BACKUP_DIR" -name 'flows-*.sql.gz' -mtime +"$RETENTION_DAYS" -print -delete
+# In minutes: -mtime +14 would keep them a day longer
+find "$BACKUP_DIR" -name 'flows-*.sql.gz' -mmin +"$((RETENTION_DAYS * 1440))" -print -delete

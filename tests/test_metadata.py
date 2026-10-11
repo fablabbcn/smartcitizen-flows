@@ -132,3 +132,17 @@ def test_calibrations_that_are_not_an_object_are_reported(app, source):
 
     assert len(report.errors) == 1 and 'calibrations.json: is not an object' in report.errors[0]
     assert report.created['hardware'] == 2 and report.created['calibrations'] == 0
+
+
+def test_invalid_keys_are_reported(app, source):
+    import json
+
+    calibrations = source / 'calibrations' / 'calibrations.json'
+    data = json.loads(calibrations.read_text())
+    data["x');alert(1);//"] = next(iter(data.values()))
+    calibrations.write_text(json.dumps(data))
+
+    report = import_metadata(str(source))
+
+    assert len(report.errors) == 1 and 'can only contain letters' in report.errors[0]
+    assert report.created['calibrations'] == 2

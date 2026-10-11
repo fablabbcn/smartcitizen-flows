@@ -84,6 +84,8 @@ class FakeDevice:
         return True
 
     def process(self):
+        if FakeDevice.options.get('process_raises'):
+            raise ValueError('channels with a cycle')
         self.data['CO2'] = self.data['SCD30_CO2'] - 10
         return FakeDevice.options.get('process', True)
 
@@ -154,6 +156,7 @@ def test_dry_run_stores_nothing(run, root):
     ({'hardware': 'SCAS_TEST2'}, ['ABORTED', 'NO_LONG_BLUEPRINT']),
     ({'empty': True}, ['ABORTED', 'EMPTY_DATA']),
     ({'process': False}, ['ABORTED', 'PROCESSING_FAILED']),
+    ({'process_raises': True}, ['ABORTED', 'PROCESSING_FAILED']),
 ])
 def test_long_run_aborts(run, root, options, state):
     assert run(**options)[0] == state

@@ -56,6 +56,14 @@
     update();
 
     table.querySelectorAll('th[data-sort]').forEach(function (header) {
+      // Sortable with the keyboard too
+      header.tabIndex = 0;
+      header.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          header.click();
+        }
+      });
       header.addEventListener('click', function () {
         var column = header.cellIndex;
         var ascending = header.getAttribute('aria-sort') !== 'ascending';
@@ -102,8 +110,8 @@
     var log = document.getElementById(filter.getAttribute('data-log-filter'));
     filter.querySelectorAll('button').forEach(function (button) {
       button.addEventListener('click', function () {
-        filter.querySelectorAll('button').forEach(function (other) { other.setAttribute('aria-selected', 'false'); });
-        button.setAttribute('aria-selected', 'true');
+        filter.querySelectorAll('button').forEach(function (other) { other.setAttribute('aria-pressed', 'false'); });
+        button.setAttribute('aria-pressed', 'true');
         log.setAttribute('data-filter', button.value);
       });
     });
@@ -115,11 +123,22 @@
       var text = Array.prototype.map.call(source.querySelectorAll('.log-line'), function (line) {
         return line.getAttribute('data-text');
       }).join('\n');
-      navigator.clipboard.writeText(text).then(function () {
-        var label = button.textContent;
-        button.textContent = 'Copied';
-        setTimeout(function () { button.textContent = label; }, 1500);
-      });
+      var label = button.textContent;
+      var show = function (message) {
+        button.textContent = message;
+        setTimeout(function () { button.textContent = label; }, 2000);
+      };
+      var failed = function () {
+        // Select the log to copy it by hand (the clipboard needs https and permission)
+        var range = document.createRange();
+        range.selectNodeContents(source);
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        show('Selected: press Ctrl+C');
+      };
+      if (!navigator.clipboard || !window.isSecureContext) return failed();
+      navigator.clipboard.writeText(text).then(function () { show('Copied'); }, failed);
     });
   });
 

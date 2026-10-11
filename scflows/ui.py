@@ -214,7 +214,10 @@ def history(kind, key):
 def changed_fields(revision):
     ''' Top level fields that differ between the content before and after a revision '''
     before, after = revision.before or {}, revision.after or {}
-    return sorted(field for field in before.keys() | after.keys() if before.get(field) != after.get(field))
+    # A field that is missing on one side and null on the other changed too
+    missing = object()
+    return sorted(field for field in before.keys() | after.keys()
+                  if before.get(field, missing) != after.get(field, missing))
 
 
 @ui.post('/<any(hardware, calibration):kind>/<key>/delete')

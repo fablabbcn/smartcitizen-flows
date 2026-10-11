@@ -1,5 +1,4 @@
-{# Flashed messages, hardware check results and form errors #}
-{% from "_macros.html" import flashes with context %}
+{# Hardware check results and form errors (flashed messages are shown by base.html) #}
 {% if check %}
 <div class="alerts" role="status">
     {% for error in check.errors %}<div class="alert error">{{ error }}</div>{% endfor %}
@@ -7,4 +6,8 @@
     {% if check.valid and not check.warnings %}<div class="alert success">No errors or warnings</div>{% endif %}
 </div>
 {% endif %}
-{{ flashes(errors or []) if errors else '' }}
+{% if errors %}
+<div class="alerts" role="status">
+    {% for error in errors %}<div class="alert error">{{ error }}</div>{% endfor %}
+</div>
+{% endif %}

@@ -71,6 +71,8 @@ def test_update_keeps_the_position(client):
     ({'id': -1}, 'id: Input should be greater than or equal to 0'),
     ({'id': 1, 'typo': 1}, 'typo: Extra inputs are not permitted'),
     ({'name': 'OTHER', 'id': 1}, 'name: OTHER in the body, TEMP in the path'),
+    ({'id': 1, 'unit': 'x' * 33}, 'unit: String should have at most 32 characters'),
+    ({'id': 1, 'description': 'x' * 256}, 'description: String should have at most 255 characters'),
 ])
 def test_invalid_names(client, body, error):
     response = client.put('/api/v1/names/TEMP', json=body, headers=auth('admin-token'))
@@ -148,11 +150,13 @@ def test_plan_adds_new_firmware_sensors_once():
 
 
 def test_plan_skips_invalid_firmware_names():
-    changes, notices = plan([], api(300), [sensor('BAD NAME', 300), sensor('X' * 65, 301)])
+    changes, notices = plan([], api(300), [sensor('BAD NAME', 300), sensor('X' * 65, 301),
+                                           FirmwareSensor('LONG_UNIT', 'Long unit', 302, 'u' * 33)])
 
     assert changes == []
     assert notices == ["'BAD NAME' (id 300) in the firmware is not a valid name: skipped",
-                       f"'{'X' * 65}' (id 301) in the firmware is not a valid name: skipped"]
+                       f"'{'X' * 65}' (id 301) in the firmware is not a valid name: skipped",
+                       'LONG_UNIT (id 302) in the firmware has a title or unit too long: skipped']
 
 
 def test_save_name_validates_the_name(app):

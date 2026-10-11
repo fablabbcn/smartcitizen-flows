@@ -201,7 +201,11 @@ def put_hardware(name):
     check = check_hardware(json_body())
     if not check.valid:
         unprocessable(check.errors)
-    item, created = editing.save_hardware(key, check.hardware, identity=current_identity())
+    try:
+        item, created = editing.save_hardware(key, check.hardware, identity=current_identity())
+    except editing.BlueprintNotInFlows as error:
+        # The blueprint was deleted after the check
+        unprocessable([f'blueprint: {error}'])
     db.session.commit()
     return saved(hardware_json(item), created, check.warnings)
 

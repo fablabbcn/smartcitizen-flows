@@ -25,6 +25,9 @@
                                 Tasks
                             </a>
                             {% endif %}
+                            <a href="{{ url_for('ui.index') }}" class="navbar-item">
+                                Metadata
+                            </a>
                             <a href="{{ url_for('auth.logout') }}" class="navbar-item">
                                 Logout ({{ current_user.username }})
                             </a>

@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container-fluid" id="main-container">
+    {% include "metadata/_messages.html" %}
+    <h1>Hardware <a class="btn btn-info btn-sm" href="{{ url_for('ui.new_hardware') }}">New hardware</a></h1>
+    <table id="hardware-table" class="display" style="width:100%">
+        <thead><tr><th>Name</th><th>Description</th><th>Comment</th><th>Blueprint</th><th>Sensors</th><th>Updated</th></tr></thead>
+        <tbody>
+        {% for item in hardware %}
+            <tr>
+                <td><a href="{{ url_for('ui.edit_hardware', name=item.name) }}">{{ item.name }}</a></td>
+                <td>{{ item.description or '' }}</td>
+                <td>{{ item.comment or '' }}</td>
+                <td>{{ item.blueprint.name }}</td>
+                <td>{% for version in item.versions %}{{ version.ids.values() | join(', ') }}{% if not loop.last %}; {% endif %}{% endfor %}</td>
+                <td>{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <h1>Calibrations <a class="btn btn-info btn-sm" href="{{ url_for('ui.new_calibration') }}">New calibration</a></h1>
+    <table id="calibrations-table" class="display" style="width:100%">
+        <thead><tr><th>Sensor id</th><th>Kind</th><th>Updated</th></tr></thead>
+        <tbody>
+        {% for item in calibrations %}
+            <tr>
+                <td><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
+                <td>{{ item.kind }}</td>
+                <td>{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script type="text/javascript">
+    $(document).ready(function () {
+        $('#hardware-table').DataTable({"pageLength": 25});
+        $('#calibrations-table').DataTable({"pageLength": 25});
+    });
+</script>
+{% endblock %}

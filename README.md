@@ -8,7 +8,7 @@ Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows
 
 Each device has a job per task: `process` (calculate channels from the blueprint and post them to the Smart Citizen API, every 3 hours) and `backup` (store the data in S3, every 6 hours). Jobs are stored in the database:
 
-- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour (or on request: "Sync now" in `/jobs/`, `POST /api/v1/jobs/sync`, `flask --app scflows jobs sync`; one sync at a time, the result of the last one shows in `/jobs/` and `GET /api/v1/jobs/sync`). Which jobs a device gets depends on the blueprints of its hardware (see Blueprint kinds): `process` if its hardware has a process blueprint and it has new readings; `backup` if its hardware has a long blueprint, or if it belongs to a researcher and its hardware has a backup blueprint or it has no hardware in flows. Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
+- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour (or on request: "Sync now" in `/jobs/`, `POST /api/v1/jobs/sync`, `flask --app scflows jobs sync`; one sync at a time, the result of the last one shows in `/jobs/` and `GET /api/v1/jobs/sync`). Which jobs a device gets depends on the blueprints of its hardware (see Blueprint kinds): `process` if its hardware has a process blueprint and it has new readings; `backup` if its hardware has a long or a backup blueprint. Devices are read from the Smart Citizen API by their postprocessing (the API cannot search users by role). Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
 - `celery` workers run them. A device task never runs twice at the same time (lock in Redis)
 - Each run is recorded with its result and log
 
@@ -27,7 +27,7 @@ Each blueprint has a kind (`meta.kind`, `process` when missing) and each hardwar
 
 - `process`: processed every few hours on the latest readings from the Smart Citizen API (up to 1000), with its health checks, and posted back
 - `long`: processed on a long window of the device's backups (`window_days`, every `every_days`), with baselines that need months of data. Results stay in S3 and flows. The device is always backed up
-- `backup`: the device is only backed up (devices of researchers)
+- `backup`: the device is only backed up (e.g. hardware of research projects)
 
 `long` and `backup` do not go together: long processing already backs up.
 

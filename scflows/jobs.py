@@ -1,7 +1,7 @@
 ''' Device jobs: which devices are processed or backed up, when, and their runs
 
-- sync_jobs: creates and enables jobs from the Smart Citizen API (devices with valid postprocessing
-  are processed, devices of researchers are backed up), and disables the ones that do not qualify
+- sync_jobs: creates and enables jobs for the devices with postprocessing in the Smart Citizen API, as the
+  blueprints of their hardware in flows say, and disables the ones that do not qualify
 - dispatch_due_jobs: queues the runs of the jobs that are due
 - execute_run: runs a task for a device, holding a lock so that it never runs twice at the same time
 '''
@@ -61,18 +61,26 @@ def kinds_of(device, kinds):
     return kinds.get(hardware_name(postprocessing['hardware_url']))
 
 
-def devices_to_process(kinds=None):
+def postprocessing_devices():
+    '''
+    Devices with postprocessing in the Smart Citizen API. It is the only search the sync makes: the API
+    cannot search users by role, so the blueprints of each device's hardware say which jobs it has
+    '''
+    from smartcitizen_connector import search_by_query
+    return search_by_query(endpoint='devices',
+                           search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
+
+
+def devices_to_process(kinds=None, devices=None):
     '''
     Devices whose hardware has a process blueprint, with valid postprocessing and readings newer than
     their last processing
     '''
-    from smartcitizen_connector import search_by_query
     from smartcitizen_connector.device import check_postprocessing
     from .models import Blueprint
 
     kinds = hardware_kinds() if kinds is None else kinds
-    devices = search_by_query(endpoint='devices',
-                              search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
+    devices = postprocessing_devices() if devices is None else devices
     result = set()
     for device_id in devices.index:
         device = devices.loc[device_id, :]
@@ -91,9 +99,8 @@ def devices_to_process(kinds=None):
     return result
 
 
-def devices_for_long(kinds=None):
+def devices_for_long(devices=None):
     ''' {device id: hours between runs} of devices with readings whose hardware has a long blueprint '''
-    from smartcitizen_connector import search_by_query
     from .identity import hardware_name
     from .models import Blueprint, Hardware
 
@@ -103,8 +110,7 @@ def devices_for_long(kinds=None):
         if blueprint is not None:
             every[item.name] = int((blueprint.meta.get('every_days') or 7) * 24)
 
-    devices = search_by_query(endpoint='devices',
-                              search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
+    devices = postprocessing_devices() if devices is None else devices
     result = {}
     for device_id in devices.index:
         device = devices.loc[device_id, :]
@@ -117,33 +123,20 @@ def devices_for_long(kinds=None):
     return result
 
 
-def devices_to_back_up(kinds=None):
+def devices_to_back_up(kinds=None, devices=None):
     '''
-    Devices with readings whose hardware has a long blueprint (long processing reads the backups),
-    and devices of researchers (role_mask 4) whose hardware has a backup blueprint or that have no
-    hardware in flows
+    Devices with readings whose hardware has a backup blueprint, or a long one (long processing reads
+    the backups)
     '''
-    from smartcitizen_connector import search_by_query
     from .models import Blueprint
 
     kinds = hardware_kinds() if kinds is None else kinds
+    devices = postprocessing_devices() if devices is None else devices
     result = set()
-    devices = search_by_query(endpoint='devices',
-                              search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
     for device_id in devices.index:
         device = devices.loc[device_id, :]
-        if not pd.isna(device.last_reading_at) and Blueprint.LONG in (kinds_of(device, kinds) or set()):
+        if not pd.isna(device.last_reading_at) and (kinds_of(device, kinds) or set()) & {Blueprint.BACKUP, Blueprint.LONG}:
             result.add(int(device_id))
-
-    users = search_by_query(endpoint='users',
-                            search_items=[{'key': 'role_mask', 'search_matcher': 'eq', 'value': 4, 'full': True}])
-    for user_id in users.index:
-        for device in users.loc[user_id, 'devices']:
-            if not device.get('last_reading_at'):
-                continue
-            device_kinds = kinds_of(device, kinds)
-            if device_kinds is None or device_kinds & {Blueprint.BACKUP, Blueprint.LONG}:
-                result.add(int(device['id']))
     return result
 
 
@@ -156,10 +149,12 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     # Long jobs run every few days, as their blueprint says: {device id: hours}
     # From the Smart Citizen API only on a full sync (no lists given)
     full = to_process is None and to_back_up is None and for_long is None
-    long_every = (devices_for_long() if full else {}) if for_long is None else (
+    # One request for all the lists
+    devices = postprocessing_devices() if to_process is None or to_back_up is None or full else None
+    long_every = (devices_for_long(devices) if full else {}) if for_long is None else (
         dict(for_long) if isinstance(for_long, dict) else {device_id: INTERVALS[Job.LONG] for device_id in for_long})
-    wanted = {Job.PROCESS: devices_to_process(kinds) if to_process is None else set(to_process),
-              Job.BACKUP: devices_to_back_up(kinds) if to_back_up is None else set(to_back_up),
+    wanted = {Job.PROCESS: devices_to_process(kinds, devices) if to_process is None else set(to_process),
+              Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up),
               Job.LONG: set(long_every)}
     report = {}
     for task, devices in wanted.items():

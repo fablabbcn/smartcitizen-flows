@@ -43,13 +43,21 @@ def aware(value):
 
 # Which devices qualify, from the Smart Citizen API
 
-def devices_to_process():
-    ''' Devices with valid postprocessing and readings newer than their last processing '''
+def postprocessing_devices():
+    '''
+    Devices with postprocessing in the Smart Citizen API. It is the only search the sync makes: the API
+    cannot search users by role, so each device's postprocessing says which jobs it has
+    '''
     from smartcitizen_connector import search_by_query
+    return search_by_query(endpoint='devices',
+                           search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
+
+
+def devices_to_process(devices=None):
+    ''' Devices with valid postprocessing and readings newer than their last processing '''
     from smartcitizen_connector.device import check_postprocessing
 
-    devices = search_by_query(endpoint='devices',
-                              search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
+    devices = postprocessing_devices() if devices is None else devices
     result = set()
     for device_id in devices.index:
         device = devices.loc[device_id, :]
@@ -66,14 +74,16 @@ def devices_to_process():
     return result
 
 
-def devices_to_back_up():
-    ''' Devices with readings of researchers (role_mask 4) '''
-    from smartcitizen_connector import search_by_query
-
-    users = search_by_query(endpoint='users',
-                            search_items=[{'key': 'role_mask', 'search_matcher': 'eq', 'value': 4, 'full': True}])
-    return {int(device['id']) for user_id in users.index for device in users.loc[user_id, 'devices']
-            if device.get('last_reading_at')}
+def devices_to_back_up(devices=None):
+    ''' Devices with hardware in their postprocessing and readings '''
+    devices = postprocessing_devices() if devices is None else devices
+    result = set()
+    for device_id in devices.index:
+        device = devices.loc[device_id, :]
+        postprocessing = device.postprocessing
+        if postprocessing and postprocessing.get('hardware_url') and not pd.isna(device.last_reading_at):
+            result.add(int(device_id))
+    return result
 
 
 def sync_jobs(to_process=None, to_back_up=None):
@@ -81,8 +91,10 @@ def sync_jobs(to_process=None, to_back_up=None):
     Creates or enables the jobs of the devices that qualify and disables the automatic ones that do not.
     Paused jobs stay paused. Returns {task: {'created': n, 'enabled': n, 'disabled': n}}
     '''
-    wanted = {Job.PROCESS: devices_to_process() if to_process is None else set(to_process),
-              Job.BACKUP: devices_to_back_up() if to_back_up is None else set(to_back_up)}
+    # One request for all the lists
+    devices = postprocessing_devices() if to_process is None or to_back_up is None else None
+    wanted = {Job.PROCESS: devices_to_process(devices) if to_process is None else set(to_process),
+              Job.BACKUP: devices_to_back_up(devices) if to_back_up is None else set(to_back_up)}
     report = {}
     for task, devices in wanted.items():
         counts = {'created': 0, 'enabled': 0, 'disabled': 0}

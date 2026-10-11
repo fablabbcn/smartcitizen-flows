@@ -55,6 +55,13 @@ def test_unknown_slot_and_sensor_code(hardware):
     ]
 
 
+def test_short_sensor_id(hardware):
+    hardware['versions'][0]['ids'] = {'AS_48_32': ''}
+
+    assert check_hardware(hardware).errors == [
+        "versions.0.ids.AS_48_32: sensor id '' is too short to hold an Alphasense code"]
+
+
 def test_missing_calibration(hardware):
     hardware['versions'][0]['ids'] = {'AS_48_32': '212999999'}
 

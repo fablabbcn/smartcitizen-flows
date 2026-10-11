@@ -222,3 +222,47 @@ class JobRun(db.Model):
         if log:
             result['log'] = self.log
         return result
+
+
+class DeviceHealth(db.Model):
+    '''
+    Health checks of the blueprint (gaps, implausible, flat values, outliers) over the data of a
+    processing run: scdata's device.health, with a status per column, check and device (see health.py)
+    '''
+    OK = 'ok'
+    WARNING = 'warning'
+    PROBLEM = 'problem'
+    ERROR = 'error'
+    # Worst last
+    STATUSES = (OK, WARNING, PROBLEM, ERROR)
+
+    id = db.Column(db.Integer, primary_key=True)
+    device_id = db.Column(db.Integer, nullable=False, index=True)
+    device_name = db.Column(db.String(255))
+    blueprint = db.Column(db.String(64))
+    run_id = db.Column(db.Integer, db.ForeignKey('job_run.id', ondelete='SET NULL'), index=True)
+    run = db.relationship('JobRun')
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+    # Period of the data checked
+    start = db.Column(db.DateTime(timezone=True))
+    end = db.Column(db.DateTime(timezone=True))
+    rows = db.Column(db.Integer, nullable=False, default=0)
+    status = db.Column(db.String(16), nullable=False)
+    checks = db.Column(JSONType, nullable=False)
+
+    def to_json(self, checks=True):
+        result = {
+            'id': self.id,
+            'device_id': self.device_id,
+            'device_name': self.device_name,
+            'blueprint': self.blueprint,
+            'run_id': self.run_id,
+            'created_at': self.created_at.isoformat(),
+            'start': self.start.isoformat() if self.start else None,
+            'end': self.end.isoformat() if self.end else None,
+            'rows': self.rows,
+            'status': self.status,
+        }
+        if checks:
+            result['checks'] = self.checks
+        return result

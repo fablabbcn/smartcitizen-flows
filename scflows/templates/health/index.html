@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, datetime, table_tools with context %}
+{% block title %}Health{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Device health</h1>
+        <p class="subtitle">The checks of each blueprint (gaps, implausible and flat values, outliers) on the data of every processing run.{% if not current_user.is_admin %} Your devices.{% endif %}</p>
+    </div>
+</div>
+
+<div class="grid">
+    {% for name, label in [('problem', 'Problem'), ('warning', 'Warning'), ('ok', 'OK'), ('error', 'Check error')] %}
+    <a class="card stat" href="{{ url_for('health_ui.index', status=name) }}">
+        <div class="label">{{ label }}</div>
+        <div class="value {{ {'problem': 'danger', 'error': 'danger', 'warning': 'warning', 'ok': 'success'}[name] }}">{{ counts[name] }}</div>
+    </a>
+    {% endfor %}
+</div>
+
+<section class="section">
+    <div class="card" data-table>
+        <div class="card-header">
+            <nav class="segmented" aria-label="Status">
+                <a href="{{ url_for('health_ui.index') }}" {% if not status %}aria-current="page"{% endif %}>All<span class="count">{{ total + unchecked | length }}</span></a>
+                {% for name in ['problem', 'warning', 'ok', 'error'] %}
+                <a href="{{ url_for('health_ui.index', status=name) }}" {% if status == name %}aria-current="page"{% endif %}>{{ name | capitalize }}<span class="count">{{ counts[name] }}</span></a>
+                {% endfor %}
+            </nav>
+            <span class="hint">Problem: {{ (problem_ratio * 100) | int }}% or more flagged. History of {{ keep_days }} days.</span>
+        </div>
+        {{ table_tools('Filter by device, check or column') }}
+        <div class="table-wrap scroll">
+            <table class="table">
+                <thead><tr>
+                    <th data-sort>Device</th><th data-sort>Status</th><th>Worst issues</th><th>Recent runs</th>
+                    <th data-sort>Data checked</th><th data-sort>Checked</th>
+                </tr></thead>
+                <tbody>
+                {% for item in items %}
+                    {% set found, more = issues[item.id] %}
+                    <tr>
+                        <td><a href="{{ url_for('health_ui.device', device_id=item.device_id) }}">{{ item.device_name or 'Device' }}</a> <span class="muted small">#{{ item.device_id }}</span></td>
+                        <td data-value="{{ 3 - ['ok', 'warning', 'problem', 'error'].index(item.status) }}">{{ badge(item.status) }}</td>
+                        <td>
+                            {% if found %}
+                            <ul class="issues">
+                                {% for check, column, issue_status, ratio in found %}
+                                <li><span class="badge plain {{ issue_status }}">{{ check }}</span> {% if column %}<span class="mono">{{ column }}</span> {{ (ratio * 100) | round(1) }}%{% else %}could not run{% endif %}</li>
+                                {% endfor %}
+                                {% if more %}<li class="muted">and {{ more }} more</li>{% endif %}
+                            </ul>
+                            {% else %}<span class="muted small">nothing flagged</span>{% endif %}
+                        </td>
+                        <td><span class="dots">{% for run_status in timeline.get(item.device_id, []) %}<span class="dot {{ run_status }}" title="{{ run_status }}"></span>{% endfor %}</span></td>
+                        <td class="small nowrap">{{ item.rows }} rows{% if item.start and item.end %}<br><span class="muted">{{ item.start.strftime('%m-%d %H:%M') }} – {{ item.end.strftime('%m-%d %H:%M') }}</span>{% endif %}</td>
+                        <td class="nowrap">{{ datetime(item.created_at) }}</td>
+                    </tr>
+                {% endfor %}
+                {% for device_id in unchecked %}
+                    <tr>
+                        <td><a href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device</a> <span class="muted small">#{{ device_id }}</span></td>
+                        <td data-value="-1"><span class="badge plain">not checked</span></td>
+                        <td colspan="4" class="muted small">No checks yet: they run when the device is processed (it needs hardware in flows).</td>
+                    </tr>
+                {% endfor %}
+                {% if not items and not unchecked %}
+                    <tr><td colspan="6" class="empty">{{ 'No devices with this status' if status else 'No health checks yet: they run with every processing run.' }}</td></tr>
+                {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

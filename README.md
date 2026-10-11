@@ -20,6 +20,17 @@ flask --app scflows jobs list [--task process|backup]
 flask --app scflows jobs run <device> process --dry-run [--inline] # run now (--inline: here, not in the workers)
 ```
 
+## Device health
+
+Every processing run also runs the checks of the device's blueprint (`checks` in the blueprint: gaps, implausible values, flat values, outliers) on the data it processed, and flows stores the result. Each column gets a status: `ok` (nothing flagged), `warning` (part of the readings flagged, or of the time for gaps) or `problem` (20% or more, `PROBLEM_RATIO` in `scflows/health.py`); a check that cannot run (e.g. wrong settings) is an `error`. The device takes the worst status. Records are kept for 30 days (`KEEP_DAYS`), always keeping the latest of each device; `beat` deletes older ones every day at 03:30.
+
+Admins see every device in `/health/`, researchers the devices they own (read from their Smart Citizen account when they sign in). Each device page shows its recent runs and, per check, the columns flagged and when. The same in the API, with a Smart Citizen token of an admin or researcher:
+
+| Endpoint | Content |
+|---|---|
+| `GET /api/v1/devices/health` | Latest health of each device, with its worst issues |
+| `GET /api/v1/devices/<id>/health[?limit=50]` | Latest health of a device in full, and its history |
+
 ## Processing metadata
 
 Flows serves the processing metadata (blueprints, hardware, calibrations and sensor names) that used to live as json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data). The paths follow the layout of that repository, so `https://<host>/api/v1/` can be used as the base url by `smartcitizen-connector` (`BASE_POSTPROCESSING_URL`) and `scdata`.

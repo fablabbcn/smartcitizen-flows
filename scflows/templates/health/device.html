@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, datetime, meter, short_time with context %}
+{% block title %}Health of {{ latest.device_name or device_id }}{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="{{ url_for('health_ui.index') }}">Health</a><span>{{ latest.device_name or 'Device' }} #{{ device_id }}</span></div>
+<div class="page-header">
+    <div>
+        <h1 class="row">{{ latest.device_name or 'Device' }} <span class="muted">#{{ device_id }}</span> {{ badge(selected.status) }}</h1>
+        <p class="subtitle">
+            {% if selected.id != latest.id %}Older result, from {{ datetime(selected.created_at) }}. <a href="{{ url_for('health_ui.device', device_id=device_id) }}">See the latest</a>.
+            {% else %}Checked {{ datetime(selected.created_at) }}{% endif %}
+            · {{ selected.rows }} rows{% if selected.start and selected.end %} from {{ datetime(selected.start) }} to {{ datetime(selected.end) }}{% endif %}
+            {% if selected.blueprint %} · blueprint {{ selected.blueprint }}{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device page</a>
+        {% if current_user.is_admin and selected.run_id %}<a class="btn" href="{{ url_for('jobs_ui.run', run_id=selected.run_id) }}">Run #{{ selected.run_id }}</a>{% endif %}
+        <a class="btn" href="{{ url_for('api.get_device_health', device_id=device_id) }}">JSON</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h2>Runs</h2>
+        <span class="hint">Newest on the right. Each run checks the data it processed. History of {{ keep_days }} days.</span>
+    </div>
+    <div class="card-body">
+        <span class="dots large">{% for item in items | reverse %}<a class="dot {{ item.status }}{% if item.id == selected.id %} selected{% endif %}" href="{{ url_for('health_ui.device', device_id=device_id, record=item.id) }}" title="{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}: {{ item.status }}"></a>{% endfor %}</span>
+    </div>
+</div>
+
+<section class="section">
+{% for check in selected.checks %}
+    <div class="card check-card">
+        <div class="card-header">
+            <h2>{{ check.name | capitalize }} {{ badge(check.rating) }}</h2>
+            <span class="hint">{{ check.description }}</span>
+        </div>
+        {% if check.rating == 'error' %}
+        <div class="card-body"><div class="alert error">The check could not run: {{ check.status }}. Check its settings in the blueprint.</div></div>
+        {% elif not check.columns %}
+        <div class="card-body muted small">No columns checked{% if check.status != 'ok' %} ({{ check.status }}){% endif %}.</div>
+        {% else %}
+        {% set gaps = check.columns.values() | selectattr('minutes', 'defined') | list %}
+        {% set flagged = check.columns.items() | rejectattr('1.status', 'equalto', 'ok') | sort(attribute='1.ratio', reverse=true) | list %}
+        {% set clean = check.columns.items() | selectattr('1.status', 'equalto', 'ok') | map(attribute='0') | list %}
+        {% if flagged %}
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Column</th><th>Status</th><th>{{ 'Time in gaps' if gaps else 'Readings flagged' }}</th><th class="num">{{ 'Minutes' if gaps else 'Flagged / readings' }}</th><th>When</th></tr></thead>
+                <tbody>
+                {% for column, summary in flagged %}
+                    <tr>
+                        <td class="mono">{{ column }}</td>
+                        <td>{{ badge(summary.status) }}</td>
+                        <td>{{ meter(summary) }}</td>
+                        <td class="num nowrap">{% if summary.minutes is defined %}{{ summary.minutes }}{% else %}{{ summary.flagged }} / {{ summary.checked }}{% endif %}</td>
+                        <td>
+                            {% if summary.intervals %}
+                            <ul class="intervals">
+                                {% for start, end in summary.intervals[:3] %}<li>{{ short_time(start) }}{% if end != start %} → {{ short_time(end)[11:] if end[:10] == start[:10] else short_time(end) }}{% endif %}</li>{% endfor %}
+                                {% set more = summary.intervals | length - 3 + summary.more_intervals %}
+                                {% if more > 0 %}<li>and {{ more }} more</li>{% endif %}
+                            </ul>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% if clean %}
+        <div class="card-body small"><span class="muted">Nothing flagged in {{ clean | length }} column{{ 's' if clean | length > 1 }}:</span> <span class="mono">{{ clean | join(', ') }}</span></div>
+        {% endif %}
+        {% endif %}
+    </div>
+{% else %}
+    <div class="card"><div class="card-body empty muted">The blueprint has no checks.</div></div>
+{% endfor %}
+</section>
+{% endblock %}

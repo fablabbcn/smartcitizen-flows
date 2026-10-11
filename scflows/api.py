@@ -13,7 +13,8 @@ from pydantic import ValidationError
 from werkzeug.exceptions import HTTPException
 
 from . import db, editing
-from .identity import ADMIN, current_identity, requires_role
+from . import health as device_health
+from .identity import ADMIN, EDITORS, current_identity, requires_role
 from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun, SensorName
 from .validation import check_hardware
 
@@ -76,6 +77,7 @@ def index():
             'hardware': external_url('api.list_hardware'),
             'calibrations': external_url('api.list_calibrations'),
             'names': external_url('api.list_names'),
+            'device_health': external_url('api.list_device_health'),
             'health': external_url('api.health'),
         },
     }
@@ -280,6 +282,36 @@ def delete_name(name):
 def get_revisions(kinds, key):
     kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration', 'names': 'name'}[kinds]
     return jsonify([revision.to_json() for revision in editing.revisions(kind, key_of(key))])
+
+
+# Device health: admins see every device, researchers their own
+
+@api.get('/devices/health')
+@requires_role(*EDITORS)
+def list_device_health():
+    ''' Latest health of each device, with its worst issues '''
+    result = []
+    for item in device_health.latest(current_identity()):
+        found, more = device_health.issues(item)
+        result.append(dict(item.to_json(checks=False),
+                           url=external_url('api.get_device_health', device_id=item.device_id),
+                           issues=[{'check': check, 'column': column, 'status': status, 'ratio': ratio}
+                                   for check, column, status, ratio in found], more_issues=more))
+    return jsonify(result)
+
+
+@api.get('/devices/<int:device_id>/health')
+@requires_role(*EDITORS)
+def get_device_health(device_id):
+    ''' Latest health of a device in full, and its history (?limit=, 50 by default) '''
+    if not device_health.can_see_device(current_identity(), device_id):
+        abort(403, 'Researchers can only see the health of their devices')
+    limit = min(request.args.get('limit', 50, type=int), 500)
+    items = device_health.history(device_id, limit=limit)
+    if not items:
+        abort(404, 'No health checks for this device yet')
+    return jsonify({'latest': items[0].to_json(),
+                    'history': [item.to_json(checks=False) for item in items]})
 
 
 # Jobs and runs: admins

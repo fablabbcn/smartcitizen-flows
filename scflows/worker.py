@@ -41,6 +41,7 @@ app.conf.update(
     beat_schedule={
         'dispatch-due-jobs': {'task': 'scflows.dispatch_due_jobs', 'schedule': 60.0},
         'sync-jobs': {'task': 'scflows.sync_jobs', 'schedule': crontab(hour=3, minute=0)},
+        'prune-health': {'task': 'scflows.prune_health', 'schedule': crontab(hour=3, minute=30)},
     },
 )
 
@@ -61,6 +62,12 @@ def dispatch_due_jobs():
 def sync_jobs():
     from scflows.jobs import sync_jobs
     sync_jobs()
+
+
+@app.task(name='scflows.prune_health')
+def prune_health():
+    from scflows.health import prune
+    prune()
 
 
 if __name__ == '__main__':

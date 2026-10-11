@@ -1,7 +1,7 @@
 ''' Import processing metadata from a smartcitizen-data checkout, and verify what is served '''
 import json
 from dataclasses import dataclass, field
-from os.path import basename, join, splitext
+from os.path import exists, basename, join, splitext
 from glob import glob
 from urllib.parse import urlparse
 
@@ -14,14 +14,18 @@ from pydantic import ValidationError
 from . import db, editing
 from .models import Blueprint, Hardware, Revision
 
-metadata_cli = AppGroup('metadata', help='Processing metadata (blueprints, hardware, calibrations)')
+metadata_cli = AppGroup('metadata', help='Processing metadata (blueprints, hardware, calibrations, sensor names)')
+NAMES_FILE = join('names', 'SCDevice.json')
+
+
+KINDS = ('blueprints', 'hardware', 'calibrations', 'names')
 
 
 @dataclass
 class ImportReport:
-    created: dict = field(default_factory=lambda: {'blueprints': 0, 'hardware': 0, 'calibrations': 0})
-    updated: dict = field(default_factory=lambda: {'blueprints': 0, 'hardware': 0, 'calibrations': 0})
-    skipped: dict = field(default_factory=lambda: {'blueprints': 0, 'hardware': 0, 'calibrations': 0})
+    created: dict = field(default_factory=lambda: dict.fromkeys(KINDS, 0))
+    updated: dict = field(default_factory=lambda: dict.fromkeys(KINDS, 0))
+    skipped: dict = field(default_factory=lambda: dict.fromkeys(KINDS, 0))
     errors: list = field(default_factory=list)
 
 
@@ -46,7 +50,7 @@ def load_or_report(path, report):
 
 def import_metadata(path, overwrite=False):
     '''
-    Imports blueprints, hardware and calibrations from a smartcitizen-data checkout.
+    Imports blueprints, hardware, calibrations and sensor names from a smartcitizen-data checkout.
     Existing items are kept unless overwrite is set. Invalid items are reported and skipped.
     '''
     report = ImportReport()
@@ -57,7 +61,7 @@ def import_metadata(path, overwrite=False):
             return
         try:
             _, created = save(key, data, action=Revision.IMPORT)
-        except (ValidationError, ValueError) as error:
+        except (ValidationError, ValueError, TypeError) as error:
             report.errors.append(f'{source}: {error}')
             return
         (report.created if created else report.updated)[counter] += 1
@@ -84,6 +88,18 @@ def import_metadata(path, overwrite=False):
             continue
         run('calibration', 'calibrations', sensor_id, editing.save_calibration, data,
             f'{calibrations_path} ({sensor_id})')
+
+    # In the order of the file: for an id with several names, scdata uses the first one
+    names_path = join(path, NAMES_FILE)
+    # Optional: older checkouts have no names. A file that cannot be read is reported
+    names = (load_or_report(names_path, report) or []) if exists(names_path) else []
+    for item in names:
+        name = item.get('name') if isinstance(item, dict) else None
+        if not name:
+            report.errors.append(f'{names_path}: item without a name: {item}')
+            continue
+        run('name', 'names', name, editing.save_name, item, f'{names_path} ({name})')
+        db.session.flush()
 
     db.session.commit()
     return report
@@ -128,6 +144,9 @@ def verify_metadata(source):
     for hardware in db.session.execute(db.select(Hardware)).scalars():
         compare(f'hardware/{hardware.name}.json', f'hardware/{hardware.name}.json', hardware_by_blueprint_name)
     compare('calibrations/calibrations.json', 'calibrations/calibrations.json')
+    # Ids are strings in the file, numbers in flows
+    compare('names/SCDevice.json', 'names/SCDevice.json',
+            lambda items: [dict(item, id=int(item['id'])) for item in items])
 
     # Files of a local checkout that are not served
     if urlparse(source).scheme not in ['http', 'https']:

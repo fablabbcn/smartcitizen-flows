@@ -14,7 +14,7 @@ from werkzeug.exceptions import HTTPException
 
 from . import db, editing
 from .identity import ADMIN, current_identity, requires_role
-from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun
+from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun, SensorName
 from .validation import check_hardware
 
 api = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -75,6 +75,7 @@ def index():
             'blueprints': external_url('api.list_blueprints'),
             'hardware': external_url('api.list_hardware'),
             'calibrations': external_url('api.list_calibrations'),
+            'names': external_url('api.list_names'),
             'health': external_url('api.health'),
         },
     }
@@ -131,6 +132,20 @@ def list_calibrations():
 @api.get('/calibrations/<sensor_id>')
 def get_calibration(sensor_id):
     return jsonify(get_by_name(Calibration, sensor_id, field='sensor_id').to_json())
+
+
+# SCDevice is the handler scdata looks the names up with
+@api.get('/names/SCDevice.json', endpoint='names_file')
+@api.get('/names')
+def list_names():
+    ''' Sensor names in order, as [{name, id, description, unit}] '''
+    names = db.session.execute(db.select(SensorName).order_by(SensorName.position)).scalars()
+    return jsonify([item.to_json() for item in names])
+
+
+@api.get('/names/<name>')
+def get_name(name):
+    return jsonify(get_by_name(SensorName, name).to_json())
 
 
 # Writes and deletes: admins. Reads are public (processing reads the metadata without a token)
@@ -213,6 +228,19 @@ def put_calibration(sensor_id):
     return saved(item.to_json(), created)
 
 
+@api.put('/names/<name>')
+@requires_role(ADMIN)
+def put_name(name):
+    try:
+        item, created = editing.save_name(key_of(name), json_body(), identity=current_identity())
+    except ValidationError as error:
+        unprocessable(validation_errors(error))
+    except editing.NameMismatch as error:
+        unprocessable([str(error)])
+    db.session.commit()
+    return saved(item.to_json(), created)
+
+
 def delete_item(kind, key):
     try:
         deleted = editing.delete(kind, key_of(key), identity=current_identity())
@@ -242,9 +270,15 @@ def delete_calibration(sensor_id):
     return delete_item('calibration', sensor_id)
 
 
-@api.get('/<any(blueprints, hardware, calibrations):kinds>/<key>/revisions')
+@api.delete('/names/<name>')
+@requires_role(ADMIN)
+def delete_name(name):
+    return delete_item('name', name)
+
+
+@api.get('/<any(blueprints, hardware, calibrations, names):kinds>/<key>/revisions')
 def get_revisions(kinds, key):
-    kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration'}[kinds]
+    kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration', 'names': 'name'}[kinds]
     return jsonify([revision.to_json() for revision in editing.revisions(kind, key_of(key))])
 
 

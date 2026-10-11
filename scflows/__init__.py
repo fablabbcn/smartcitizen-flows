@@ -64,5 +64,7 @@ def create_app(config=None):
     app.cli.add_command(metadata_cli)
     from .jobs import jobs_cli
     app.cli.add_command(jobs_cli)
+    from .names import names_cli
+    app.cli.add_command(names_cli)
 
     return app

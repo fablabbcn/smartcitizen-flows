@@ -89,3 +89,15 @@ def validate_calibration(data):
     schema = AfeCalibration if kind == Calibration.AFE_BOARD else AlphasenseCalibration
     schema.model_validate(data)
     return kind
+
+
+class SensorNameIn(BaseModel):
+    ''' A sensor name, as in smartcitizen-data/names/SCDevice.json (name given separately) '''
+    model_config = ConfigDict(extra='forbid')
+
+    # Smart Citizen API sensor id. 0: no id in the platform
+    id: int = Field(ge=0)
+    description: str = ''
+    unit: str = ''
+    # Accepted so that items of the list can be sent back as they are
+    name: Optional[str] = None

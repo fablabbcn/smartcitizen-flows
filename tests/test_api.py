@@ -65,6 +65,7 @@ def test_index(client, path):
         'blueprints': 'http://localhost/api/v1/blueprints',
         'hardware': 'http://localhost/api/v1/hardware',
         'calibrations': 'http://localhost/api/v1/calibrations',
+        'names': 'http://localhost/api/v1/names',
         'health': 'http://localhost/api/v1/health',
     }
     for link in response.get_json()['links'].values():

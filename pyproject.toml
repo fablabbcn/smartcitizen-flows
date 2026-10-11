@@ -4,22 +4,23 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scflows"
-version = "0.2.0"
+version = "0.3.0"
 description = "Scheduled processing of Smart Citizen data"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
-    "smartcitizen-connector==1.5.1",
-    "scdata==1.5.1",
+    "smartcitizen-connector==1.5.2",
+    "scdata==1.5.4",
     "python-crontab==3.3.0",
     "celery>=5.6,<6",
     "flower>=2.0,<3",
-    # scdata requires Flask~=2.2, which predates Werkzeug 3
-    "flask>=2.2,<2.3",
-    "werkzeug>=2.2.2,<3",
+    "flask>=3.1,<4",
+    "werkzeug>=3.1,<4",
     "flask-sqlalchemy>=3.1,<4",
     "flask-login>=0.6,<0.7",
+    "flask-migrate>=4,<5",
+    "psycopg[binary]>=3.2,<4",
     "gunicorn>=26,<27",
     "awswrangler>=3.17,<4",
     "boto3>=1.40,<2",
@@ -37,7 +38,7 @@ dev = ["pytest>=8"]
 packages = ["scflows", "scflows.tasks"]
 
 [tool.setuptools.package-data]
-scflows = ["templates/*.html", "static/*", "static/**/*"]
+scflows = ["templates/*.html", "templates/**/*.html", "static/*", "static/**/*", "migrations/*", "migrations/versions/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

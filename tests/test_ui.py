@@ -367,3 +367,12 @@ def test_hardware_parameters_field(client):
 
     page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(parameters='{bad')).get_data(as_text=True)
     assert 'parameters: Input should be a valid dictionary' in page
+
+
+def test_changed_fields_tell_missing_from_null():
+    from types import SimpleNamespace
+
+    from scflows.ui import changed_fields
+
+    revision = SimpleNamespace(before={'t20': 20}, after={'t20': 20, 'ae_total_zero_mv': None})
+    assert changed_fields(revision) == ['ae_total_zero_mv']

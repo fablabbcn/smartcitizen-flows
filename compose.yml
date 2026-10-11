@@ -42,13 +42,34 @@ services:
     networks:
       - internal-network
 
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal-network
+
   web:
     build: ./
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     env_file:
       - .env
-    command: gunicorn --workers 1 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
+    # Run from / : flask --app scflows fails inside the package directory (/scflows)
+    working_dir: /
+    # Apply database migrations before serving
+    command: sh -c "flask --app scflows db upgrade && exec gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -"
     # healthcheck:
     #   test: "${DOCKER_HEALTHCHECK_TEST:-curl localhost:18000/healthy}"
     #   interval: "60s"
@@ -102,3 +123,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  postgres_data:

@@ -117,7 +117,11 @@ def import_metadata(path, overwrite=False):
         item.versions = versions
 
     calibrations_path = join(path, 'calibrations', 'calibrations.json')
-    for sensor_id, data in (load_or_report(calibrations_path, report) or {}).items():
+    calibrations = load_or_report(calibrations_path, report)
+    if calibrations is not None and not isinstance(calibrations, dict):
+        report.errors.append(f'{calibrations_path}: is not an object')
+        calibrations = None
+    for sensor_id, data in (calibrations or {}).items():
         if not isinstance(data, dict):
             report.errors.append(f'{calibrations_path}: {sensor_id} is not an object')
             continue

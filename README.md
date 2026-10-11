@@ -80,7 +80,7 @@ Flows serves the processing metadata (blueprints, hardware and calibrations) tha
 | `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
 | `GET /api/v1/health` | Health check |
 
-The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it:
+The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it. The `postgres` host of `SQLALCHEMY_DATABASE_URI` is only reachable inside the compose network: run these commands in the `web` container (`docker compose exec web flask --app scflows ...`), or point the URI to a database reachable from where they run.
 
 ```
 git clone --depth 1 https://github.com/fablabbcn/smartcitizen-data.git /tmp/smartcitizen-data
@@ -117,6 +117,7 @@ FLOWER_PORT=5555
 FLASK_ENV=production
 FLASK_APP=scflows
 FLASK_DEBUG=1
+# Keep the user, password and database in line with POSTGRES_* below
 SQLALCHEMY_DATABASE_URI=postgresql+psycopg://flows:change-me@postgres:5432/flows
 FLASK_SECRET_KEY=change-me
 # POSTGRES

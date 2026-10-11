@@ -1,76 +1,87 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
-from werkzeug.security import generate_password_hash, check_password_hash
-from .models import User
-from flask_login import login_user, login_required, logout_user
-from os import environ
-import requests
-import json
+''' Web interface login with Smart Citizen accounts
 
-from . import db
+Admins and researchers can sign in. The session keeps their identity (not the
+Smart Citizen token) for SESSION_HOURS.
+'''
+from functools import wraps
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask_login import UserMixin, current_user, login_required, login_user, logout_user
+
+from .identity import ADMIN, EDITORS, Identity, sign_in
 
 auth = Blueprint('auth', __name__)
+
+SESSION_HOURS = 12
+SESSION_KEY = 'identity'
+
+
+class SessionUser(UserMixin):
+    def __init__(self, identity):
+        self.identity = identity
+
+    def get_id(self):
+        return str(self.identity.id)
+
+    @property
+    def username(self):
+        return self.identity.username
+
+    @property
+    def role(self):
+        return self.identity.role
+
+
+def load_user(user_id):
+    ''' Flask-Login user loader: the identity is kept in the session '''
+    data = session.get(SESSION_KEY)
+    if not data or str(data.get('id')) != user_id:
+        return None
+    return SessionUser(Identity(**data))
+
+
+def requires_ui_role(*roles):
+    ''' Requires a signed in user with one of the roles '''
+    def decorator(view):
+        @wraps(view)
+        @login_required
+        def wrapper(*args, **kwargs):
+            if current_user.role not in roles:
+                abort(403)
+            return view(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+admin_required = requires_ui_role(ADMIN)
+
 
 @auth.route('/login')
 def login():
     return render_template('login.html')
 
+
 @auth.route('/login', methods=['POST'])
 def login_post():
-    # login code goes here
-    name = request.form.get('name')
-    password = request.form.get('password')
-    remember = True if request.form.get('remember') else False
-
-    user = User.query.filter_by(name=name).first()
-
-    # check if the user actually exists
-    # take the user-supplied password, hash it, and compare it to the hashed password in the database
-    if not user or not check_password_hash(user.password, password):
+    identity = sign_in(request.form.get('name', ''), request.form.get('password', ''))
+    if identity is None:
         flash('Please check your login details and try again.')
-        return redirect(url_for('auth.login')) # if the user doesn't exist or password is wrong, reload the page
+        return redirect(url_for('auth.login'))
+    if identity.role not in EDITORS:
+        flash('Only Smart Citizen admins and researchers can sign in.')
+        return redirect(url_for('auth.login'))
 
-    # if the above check passes, then we know the user has the right credentials
-    login_user(user, remember=remember)
-    return redirect(url_for('main.default'))
+    session[SESSION_KEY] = {'id': identity.id, 'username': identity.username, 'role': identity.role}
+    session.permanent = True
+    login_user(SessionUser(identity))
+    if identity.role == ADMIN:
+        return redirect(url_for('jobs_ui.index'))
+    return redirect(url_for('main.index'))
+
 
 @auth.route('/logout')
 @login_required
 def logout():
     logout_user()
+    session.pop(SESSION_KEY, None)
     return redirect(url_for('main.index'))
-
-@auth.route('/signup')
-def signup():
-    return render_template('signup.html')
-
-@auth.route('/signup', methods=['POST'])
-def signup_post():
-    # code to validate and add user to database goes here
-    name = request.form.get('name')
-    password = request.form.get('password')
-
-    user = User.query.filter_by(name=name).first() # if this returns a user, then the email already exists in the database
-
-    if user: # if a user is found, we want to redirect back to signup page so user can try again
-        flash('User already exists')
-        return redirect(url_for('auth.signup'))
-
-    # TODO - Hack as we currently do not have applications
-    headers = {'Content-type': 'application/json'}
-
-    auth_request = requests.post(url="https://api.smartcitizen.me/v0/sessions", data=json.dumps({'username':name, 'password':password}), headers=headers)
-
-    if auth_request.status_code == 200:
-        role_request = requests.get(url=f"https://api.smartcitizen.me/v0/users/{name}")
-        if role_request.json()['role']=='admin':
-            # create a new user with the form data. Hash the password so the plaintext version isn't saved.
-            new_user = User(name=name, password=generate_password_hash(password, method='pbkdf2:sha256'))
-
-            # add the new user to the database
-            db.session.add(new_user)
-            db.session.commit()
-
-            return redirect(url_for('auth.login'))
-
-    flash('Invalid login')
-    return redirect(url_for('auth.signup'))

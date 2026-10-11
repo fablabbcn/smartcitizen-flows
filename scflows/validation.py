@@ -66,6 +66,9 @@ def check_hardware(body):
             if slot[:2] not in ('AS', 'PT') or len(slot.split('_')) != 3:
                 check.errors.append(f'{where}: unknown slot, expected AS_<address>_<channels> or PT_<address>_<channels>')
                 continue
+            if slot.startswith('AS') and len(sensor_id) < 3:
+                check.errors.append(f'{where}: sensor id {sensor_id!r} is too short to hold an Alphasense code')
+                continue
             if slot.startswith('AS') and sensor_id[:3] not in connector_config._as_sensor_codes:
                 check.errors.append(f'{where}: unknown Alphasense sensor code {sensor_id[:3]}')
                 continue

@@ -4,7 +4,6 @@ Paths follow the layout of the smartcitizen-data repository, so that
 {base}/hardware/<name>.json, {base}/blueprints/<name>.json and
 {base}/calibrations/calibrations.json work with base = <host>/api/v1/
 '''
-import re
 
 from importlib.metadata import PackageNotFoundError, version
 
@@ -152,7 +151,7 @@ def get_name(name):
 
 # Writes and deletes: admins. Reads are public (processing reads the metadata without a token)
 
-KEY_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+KEY_PATTERN = editing.KEY_PATTERN
 
 
 def key_of(value):

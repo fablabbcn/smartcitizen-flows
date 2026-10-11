@@ -152,7 +152,7 @@ flask run
 Which will run the app in `localhost:5000`. Or with `gunicorn`:
 
 ```
-gunicorn --workers 1 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
+gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
 ```
 
 ### Celery workers

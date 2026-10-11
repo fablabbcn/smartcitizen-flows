@@ -56,8 +56,12 @@ async def dprocess(device, dry_run = False):
             if await d.load():
                 task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
-                # Process it
-                processed = d.process()
+                # Process it (a channel graph with a cycle raises): the checks run anyway
+                try:
+                    processed = d.process()
+                except Exception as error:
+                    task_log.append(logger_handler(f'Processing failed: {type(error).__name__}: {error}', 'error'))
+                    processed = False
                 # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
                 health = health_checks(d, logger_handler, task_log)
                 if processed:
@@ -120,5 +124,5 @@ if __name__ == '__main__':
     parser.add_argument('--dry-run', action='store_true', help='Process without posting')
     args = parser.parse_args()
 
-    log, state = asyncio.run(dprocess(args.device, dry_run=args.dry_run))
+    log, state, _ = asyncio.run(dprocess(args.device, dry_run=args.dry_run))
     logger.info(f'Result: {state}')

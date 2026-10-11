@@ -75,6 +75,8 @@ def load_env(env_file):
 # Last refresh of scdata metadata (monotonic seconds)
 _metadata_refreshed_at = None
 METADATA_MAX_AGE = 300
+# After a failed refresh: retry after a minute, not on every task
+METADATA_RETRY = 60
 
 
 METADATA = ('blueprints', 'calibrations', 'names')
@@ -94,13 +96,18 @@ def refresh_metadata(max_age=METADATA_MAX_AGE):
     if _metadata_refreshed_at is not None and now - _metadata_refreshed_at < max_age:
         return False
     previous = {name: getattr(scdata_config, name, None) for name in METADATA}
-    scdata_config.get_meta_data()
-    # scdata loads nothing (not None) when flows cannot be reached: keep what was loaded before
-    empty = [name for name, value in previous.items() if value and not getattr(scdata_config, name, None)]
-    for name in empty:
-        setattr(scdata_config, name, previous[name])
-    if empty:
-        logger.warning(f'Metadata refresh returned no {", ".join(empty)}: keeping the previous ones')
-        return False
-    _metadata_refreshed_at = now
-    return True
+    try:
+        scdata_config.get_meta_data()
+        # scdata loads nothing (not None) when flows cannot be reached: keep what was loaded before
+        empty = [name for name, value in previous.items() if value and not getattr(scdata_config, name, None)]
+        error = f'it returned no {", ".join(empty)}' if empty else None
+    except Exception as exception:
+        error = f'{type(exception).__name__}: {exception}'
+    if error is None:
+        _metadata_refreshed_at = now
+        return True
+    for name, value in previous.items():
+        setattr(scdata_config, name, value)
+    logger.warning(f'Metadata refresh failed ({error}): keeping the previous metadata, retrying in {METADATA_RETRY} s')
+    _metadata_refreshed_at = now - max(max_age - METADATA_RETRY, 0)
+    return False

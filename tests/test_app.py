@@ -71,6 +71,12 @@ def test_api_unreachable(client, sc_sessions):
     assert login(client, 'down').status_code == 503
 
 
+def test_unexpected_sessions_body(client, monkeypatch):
+    for payload in (None, [], {'token': 'no access_token'}):
+        monkeypatch.setattr(identity.requests, 'post', lambda *args, payload=payload, **kwargs: MeResponse(200, payload))
+        assert login(client).status_code == 503
+
+
 def test_session_keeps_identity_not_token(app, client, sc_sessions):
     login(client)
 

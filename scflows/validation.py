@@ -31,6 +31,18 @@ def slot_channels(slot, sensor_id):
     return [name for item in channels for name in item]
 
 
+def blueprint_kind_errors(blueprints):
+    ''' Errors of the kinds of the blueprints of a hardware: one of each kind, not long and backup together '''
+    errors = []
+    kinds = [blueprint.kind for blueprint in blueprints]
+    for kind in sorted(set(kinds)):
+        if kinds.count(kind) > 1:
+            errors.append(f'blueprints: two {kind} blueprints, only one of each kind')
+    if Blueprint.LONG in kinds and Blueprint.BACKUP in kinds:
+        errors.append('blueprints: long processing always backs up the device, do not add a backup blueprint')
+    return errors
+
+
 def check_hardware(body):
     '''
     Checks a hardware description.
@@ -58,12 +70,7 @@ def check_hardware(body):
     for name in names:
         if name not in found:
             check.errors.append(f'blueprints: {name} is not in flows')
-    kinds = [found[name].kind for name in names if name in found]
-    for kind in sorted(set(kinds)):
-        if kinds.count(kind) > 1:
-            check.errors.append(f'blueprints: two {kind} blueprints, only one of each kind')
-    if Blueprint.LONG in kinds and Blueprint.BACKUP in kinds:
-        check.errors.append('blueprints: long processing always backs up the device, do not add a backup blueprint')
+    check.errors += blueprint_kind_errors([found[name] for name in names if name in found])
     # Slots must have their channels in the blueprints that process data
     processing = [found[name] for name in names if name in found and found[name].kind != Blueprint.BACKUP]
 

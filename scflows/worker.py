@@ -40,7 +40,8 @@ app.conf.update(
     broker_transport_options={'visibility_timeout': 3 * 3600},
     beat_schedule={
         'dispatch-due-jobs': {'task': 'scflows.dispatch_due_jobs', 'schedule': 60.0},
-        'sync-jobs': {'task': 'scflows.sync_jobs', 'schedule': crontab(hour=3, minute=0)},
+        # Every hour: devices whose postprocessing was just set get their jobs within the hour
+        'sync-jobs': {'task': 'scflows.sync_jobs', 'schedule': crontab(minute=0)},
         'prune-health': {'task': 'scflows.prune_health', 'schedule': crontab(hour=3, minute=30)},
     },
 )
@@ -59,9 +60,9 @@ def dispatch_due_jobs():
 
 
 @app.task(name='scflows.sync_jobs')
-def sync_jobs():
-    from scflows.jobs import sync_jobs
-    sync_jobs()
+def sync_jobs(source='schedule'):
+    from scflows.jobs import run_sync
+    run_sync(source=source)
 
 
 @app.task(name='scflows.prune_health')

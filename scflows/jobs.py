@@ -6,6 +6,7 @@
 - execute_run: runs a task for a device, holding a lock so that it never runs twice at the same time
 '''
 import asyncio
+import json
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -300,12 +301,63 @@ def execute_run(run_id):
     return run
 
 
+# Syncs: hourly from beat, or on request (/jobs/, the API, the command line)
+
+SYNC_LOCK = 'scflows:lock:sync'
+LAST_SYNC = 'scflows:last_sync'
+# A sync takes a few minutes: the lock expires after this if a worker dies
+SYNC_LOCK_SECONDS = 30 * 60
+
+
+def run_sync(source='schedule'):
+    '''
+    Syncs the jobs with the Smart Citizen API, one sync at a time, and keeps its result for /jobs/.
+    Returns the report, or None if a sync was already running
+    '''
+    token = locks.acquire(SYNC_LOCK, seconds=SYNC_LOCK_SECONDS)
+    if token is None:
+        logger.info('A sync is already running')
+        return None
+    started = now()
+    result = {'source': source, 'started_at': started.isoformat()}
+    try:
+        result['report'] = sync_jobs()
+        return result['report']
+    except Exception as error:
+        result['error'] = f'{type(error).__name__}: {error}'
+        raise
+    finally:
+        result['finished_at'] = now().isoformat()
+        locks.client().set(LAST_SYNC, json.dumps(result))
+        locks.release(SYNC_LOCK, token)
+
+
+def last_sync():
+    ''' Result of the last sync ({source, started_at, finished_at, report or error}), or None '''
+    try:
+        value = locks.client().get(LAST_SYNC)
+    except Exception:
+        return None
+    return json.loads(value) if value else None
+
+
+def sync_running():
+    try:
+        return bool(locks.client().exists(SYNC_LOCK))
+    except Exception:
+        return False
+
+
 # Command line
 
 @jobs_cli.command('sync')
 def sync_command():
     ''' Create, enable and disable jobs from the Smart Citizen API '''
-    for task, counts in sync_jobs().items():
+    report = run_sync(source='command line')
+    if report is None:
+        click.echo('A sync is already running')
+        raise SystemExit(1)
+    for task, counts in report.items():
         click.echo(f'{task}: {counts["created"]} created, {counts["enabled"]} enabled, {counts["disabled"]} disabled')
 
 

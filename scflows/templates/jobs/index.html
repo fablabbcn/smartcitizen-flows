@@ -5,7 +5,19 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
-        <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced daily with the Smart Citizen API.</p>
+        <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced every hour with the Smart Citizen API.</p>
+        <p class="hint">
+            {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
+            {% elif last_sync %}Last sync {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}:
+                {% for task, counts in last_sync.report.items() %}{{ task }} {{ counts.created }} created, {{ counts.enabled }} enabled, {{ counts.disabled }} disabled{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+            {% else %}No sync recorded yet.{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <form method="POST" action="{{ url_for('jobs_ui.sync_now') }}">
+            {{ csrf() }}
+            <button class="btn" type="submit" {% if sync_running %}disabled{% endif %} title="Create, enable and disable jobs from the Smart Citizen API now">Sync now</button>
+        </form>
     </div>
 </div>
 

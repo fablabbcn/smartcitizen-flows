@@ -178,7 +178,14 @@ def execute_run(run_id):
         return run
 
     key = f'scflows:lock:{run.task}:{run.device_id}'
-    token = locks.acquire(key)
+    try:
+        token = locks.acquire(key)
+    except Exception as error:
+        # Redis cannot be reached: the run would otherwise stay queued
+        logger.exception(f'Run {run.id}: cannot take the lock {key}')
+        run.state, run.message, run.finished_at = JobRun.FAILED, f'LOCK_FAILED: {type(error).__name__}: {error}', now()
+        db.session.commit()
+        raise
     if token is None:
         run.state, run.message, run.finished_at = JobRun.ABORTED, 'ALREADY_RUNNING', now()
         db.session.commit()

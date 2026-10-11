@@ -65,10 +65,10 @@ def login():
 def login_post():
     identity = sign_in(request.form.get('name', ''), request.form.get('password', ''))
     if identity is None:
-        flash('Please check your login details and try again.')
+        flash('Please check your login details and try again.', 'error')
         return redirect(url_for('auth.login'))
     if identity.role not in EDITORS:
-        flash('Only Smart Citizen admins and researchers can sign in.')
+        flash('Only Smart Citizen admins and researchers can sign in.', 'error')
         return redirect(url_for('auth.login'))
 
     session[SESSION_KEY] = {'id': identity.id, 'username': identity.username, 'role': identity.role}

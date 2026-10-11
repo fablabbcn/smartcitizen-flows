@@ -1,9 +1,13 @@
-{% with messages = get_flashed_messages() %}
-{% for message in messages %}<div class="alert alert-success">{{ message }}</div>{% endfor %}
-{% endwith %}
+{# Hardware check results and form errors (flashed messages are shown by base.html) #}
 {% if check %}
-    {% for error in check.errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
-    {% for warning in check.warnings %}<div class="alert alert-warning">{{ warning }}</div>{% endfor %}
-    {% if check.valid and not check.warnings %}<div class="alert alert-success">No errors or warnings</div>{% endif %}
+<div class="alerts" role="status">
+    {% for error in check.errors %}<div class="alert error">{{ error }}</div>{% endfor %}
+    {% for warning in check.warnings %}<div class="alert warning">{{ warning }}</div>{% endfor %}
+    {% if check.valid and not check.warnings %}<div class="alert success">No errors or warnings</div>{% endif %}
+</div>
 {% endif %}
-{% for error in errors or [] %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+{% if errors %}
+<div class="alerts" role="status">
+    {% for error in errors %}<div class="alert error">{{ error }}</div>{% endfor %}
+</div>
+{% endif %}

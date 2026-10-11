@@ -1,10 +1,42 @@
 {% extends "base.html" %}
-
+{% from "_macros.html" import badge with context %}
+{% block title %}Overview{% endblock %}
 {% block content %}
-<h1 class="title">
-  Smart Citizen Flows
-</h1>
-<h2 class="subtitle">
-  Tasks based data processing engine
-</h2>
+<section class="hero">
+    <h1>Smart Citizen Flows</h1>
+    <p>Processes and backs up Smart Citizen devices, and keeps the hardware, blueprints and calibrations they use.</p>
+    {% if not current_user.is_authenticated %}
+    <a class="btn primary" href="{{ url_for('auth.login') }}">Sign in</a>
+    {% endif %}
+</section>
+
+{% if current_user.is_authenticated %}
+<div class="grid wide">
+    {% if jobs is not none %}
+    <a class="card section-card" href="{{ url_for('jobs_ui.index') }}">
+        <h2>Jobs</h2>
+        <p>Scheduled processing and backups per device. Run them now, pause or resume them.</p>
+        <div class="figures">
+            {{ badge('active', jobs.active ~ ' active') }}
+            {{ badge('paused', jobs.paused ~ ' paused') }}
+            {% if jobs.failed %}{{ badge('failed', jobs.failed ~ ' failed in 24 h') }}{% endif %}
+        </div>
+    </a>
+    {% endif %}
+    <a class="card section-card" href="{{ url_for('ui.index') }}">
+        <h2>Metadata</h2>
+        <p>Hardware of each device, with its blueprint and the sensors mounted in each period, and sensor calibrations.</p>
+        <div class="figures">
+            <span class="badge plain">{{ metadata.hardware }} hardware</span>
+            <span class="badge plain">{{ metadata.calibrations }} calibrations</span>
+            <span class="badge plain">{{ metadata.blueprints }} blueprints</span>
+        </div>
+    </a>
+    <a class="card section-card" href="{{ url_for('api.index') }}">
+        <h2>API</h2>
+        <p>Read hardware, blueprints and calibrations as JSON. Editing needs a Smart Citizen token.</p>
+        <div class="figures"><code>/api/v1/</code></div>
+    </a>
+</div>
+{% endif %}
 {% endblock %}

@@ -185,7 +185,7 @@ def test_delete_confirmation_is_escaped(client):
     sign_in(client, 'admin')
 
     page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
-    assert """onsubmit='return confirm("Delete hardware SCAS_TEST1?")'""" in page
+    assert 'data-confirm="Delete hardware SCAS_TEST1?"' in page
 
 
 def test_delete_requires_admin(client):
@@ -204,5 +204,15 @@ def test_history(client):
 
     page = client.get('/metadata/hardware/SCAS_TEST1/history').get_data(as_text=True)
 
-    assert re.search(r'<td>update</td>\s*<td>researcher</td>', page)
-    assert '<td>import</td>' in page
+    assert re.search(r'<span class="badge update">update</span>\s*<strong>researcher</strong>', page)
+    assert 'Changed: <code>description</code>' in page
+    assert '<span class="badge import">import</span>' in page
+
+
+def test_changed_fields_tell_missing_from_null():
+    from types import SimpleNamespace
+
+    from scflows.ui import changed_fields
+
+    revision = SimpleNamespace(before={'t20': 20}, after={'t20': 20, 'ae_total_zero_mv': None})
+    assert changed_fields(revision) == ['ae_total_zero_mv']

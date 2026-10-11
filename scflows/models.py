@@ -40,6 +40,11 @@ class Hardware(TimestampMixin, db.Model):
     versions = db.relationship('HardwareVersion', back_populates='hardware', cascade='all, delete-orphan',
                                order_by='HardwareVersion.from_date')
 
+    @property
+    def sensor_ids(self):
+        ''' Sensor ids of all versions, without repetitions '''
+        return list(dict.fromkeys(sensor_id for version in self.versions for sensor_id in version.ids.values()))
+
     def to_json(self, blueprint_url=None):
         '''
         Same structure as the hardware files, with the blueprint name. Optional keys are left out when empty.

@@ -21,12 +21,15 @@ def latest_runs(job_ids):
 @jobs_ui.get('/')
 @admin_required
 def index():
+    task = request.args.get('task') if request.args.get('task') in Job.TASKS else None
     query = db.select(Job).order_by(Job.task, Job.device_id)
-    if request.args.get('task') in Job.TASKS:
-        query = query.filter_by(task=request.args['task'])
+    if task:
+        query = query.filter_by(task=task)
     jobs = db.session.execute(query).scalars().all()
+    counts = dict(db.session.execute(db.select(Job.task, db.func.count(Job.id)).group_by(Job.task)).all())
     runs = db.session.execute(db.select(JobRun).order_by(JobRun.id.desc()).limit(50)).scalars().all()
-    return render_template('jobs/index.html', jobs=jobs, latest=latest_runs([job.id for job in jobs]), runs=runs)
+    return render_template('jobs/index.html', jobs=jobs, latest=latest_runs([job.id for job in jobs]), runs=runs,
+                           task=task, counts=counts)
 
 
 @jobs_ui.get('/runs/<int:run_id>')
@@ -49,7 +52,7 @@ def back():
 def form_device_and_task():
     device_id, task = request.form.get('device_id', '').strip(), request.form.get('task')
     if not device_id.isdigit() or task not in Job.TASKS:
-        flash('Enter a device id and choose a task')
+        flash('Enter a device id and choose a task', 'error')
         return None, None
     return int(device_id), task
 
@@ -99,6 +102,8 @@ def add_job():
     device_id, task = form_device_and_task()
     if device_id is not None:
         job, created = add_manual_job(device_id, task)
-        flash(f'Added {task} job for device {device_id}' if created else
-              f'Device {device_id} already has a {task} job')
+        if created:
+            flash(f'Added {task} job for device {device_id}')
+        else:
+            flash(f'Device {device_id} already has a {task} job', 'warning')
     return back()

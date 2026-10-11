@@ -1,31 +1,27 @@
 {% extends "base.html" %}
-
-{% block content %}
-<div class="column is-4 is-offset-4">
-    <h3 class="title">Login</h3>
-    <h4 class="subtitle">Smart Citizen admins and researchers. Signing in can take up to 30 seconds.</h4>
-    <div class="box">
-        {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <div class="notification is-danger">
-                {{ messages[0] }}
-            </div>
-        {% endif %}
-        {% endwith %}
-        <form method="POST" action="{{ url_for('auth.login_post') }}">
-            <div class="field">
-                <div class="control">
-                    <input class="input is-large" type="name" name="name" placeholder="Your Username" autofocus="">
+{% from "_macros.html" import flashes with context %}
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<main class="center-page">
+    <div class="card auth-card">
+        <div class="card-body">
+            <div class="auth-logo"><img src="https://smartcitizen.me/assets/images/smartcitizen_logo.svg" alt="Smart Citizen"></div>
+            <h1>Sign in to Flows</h1>
+            <p class="subtitle">Use your Smart Citizen account. Only admins and researchers can sign in.</p>
+            {{ flashes() }}
+            <form method="POST" action="{{ url_for('auth.login_post') }}" data-busy="Signing in…">
+                <div class="field">
+                    <label for="name">Username or email</label>
+                    <input class="input lg" id="name" name="name" autocomplete="username" required autofocus>
                 </div>
-            </div>
-
-            <div class="field">
-                <div class="control">
-                    <input class="input is-large" type="password" name="password" placeholder="Your Password">
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input class="input lg" id="password" type="password" name="password" autocomplete="current-password" required>
                 </div>
-            </div>
-            <button class="button is-block is-info is-large is-fullwidth">Login</button>
-        </form>
+                <button class="btn primary block" type="submit">Sign in</button>
+            </form>
+            <p class="note">Signing in can take up to 30 seconds.</p>
+        </div>
     </div>
-</div>
+</main>
 {% endblock %}

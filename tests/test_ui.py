@@ -264,3 +264,12 @@ def test_researcher_cannot_change_metadata(client, path, data):
     assert client.post(path, data=data).status_code == 403
     assert hardware('SCAS_TEST1').description == '1SEN55-2ELEC-AFE'
     assert hardware('SCAS_NEW') is None
+
+
+def test_changed_fields_tell_missing_from_null():
+    from types import SimpleNamespace
+
+    from scflows.ui import changed_fields
+
+    revision = SimpleNamespace(before={'t20': 20}, after={'t20': 20, 'ae_total_zero_mv': None})
+    assert changed_fields(revision) == ['ae_total_zero_mv']

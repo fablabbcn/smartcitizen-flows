@@ -306,3 +306,39 @@ def test_researcher_sees_names_read_only(client):
     assert client.post('/metadata/names/TEMP', data=form(id='1', action='save')).status_code == 403
     assert client.get('/metadata/names/new').status_code == 403
     assert client.post('/metadata/name/TEMP/delete', data=form()).status_code == 403
+
+
+# Parameters
+
+def test_parameters_tab_and_page(client):
+    sign_in(client, 'admin')
+    assert '/metadata/parameters/ASB4_NO2' in client.get('/metadata/').get_data(as_text=True)
+
+    response = client.post('/metadata/parameters/ASB4_NO2', data=form(channels='{"NO2": {"lam": 1e9}}',
+                                                                       description='Tuned', action='save'))
+    assert response.status_code == 302
+    page = client.get('/metadata/parameters/ASB4_NO2').get_data(as_text=True)
+    assert '&#34;lam&#34;: 1000000000.0' in page and 'History' in page
+
+    page = client.post('/metadata/parameters/ASB4_NO2', data=form(channels='{bad', action='save')).get_data(as_text=True)
+    assert 'channels: not valid JSON' in page
+    assert client.get('/metadata/parameters/NOT_A_TYPE').status_code == 404
+
+
+def test_researcher_sees_parameters_read_only(client):
+    sign_in(client, 'researcher')
+
+    assert '<fieldset class="plain" disabled>' in client.get('/metadata/parameters/SCD30').get_data(as_text=True)
+    assert client.post('/metadata/parameters/SCD30', data=form(channels='{}', action='save')).status_code == 403
+
+
+def test_hardware_parameters_field(client):
+    sign_in(client, 'admin')
+
+    response = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(
+        parameters='{"O3": {"function": "alphasense_803_04"}}'))
+    assert response.status_code == 302
+    assert hardware('SCAS_TEST1').parameters == {'O3': {'function': 'alphasense_803_04'}}
+
+    page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(parameters='{bad')).get_data(as_text=True)
+    assert 'parameters: Input should be a valid dictionary' in page

@@ -1,7 +1,7 @@
 ''' Validation of metadata sent to the API '''
 from datetime import date
 from os.path import basename, splitext
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -42,6 +42,8 @@ class HardwareIn(BaseModel):
     description: Optional[str] = None
     comment: Optional[str] = None
     forwarding: Optional[str] = None
+    # Long processing parameters for its devices: {channel: kwargs} (see parameters.py)
+    parameters: Optional[Dict[str, Dict[str, Any]]] = None
     versions: List[HardwareVersionIn] = []
 
     @model_validator(mode='after')
@@ -113,3 +115,11 @@ class SensorNameIn(BaseModel):
     unit: str = ''
     # Accepted so that items of the list can be sent back as they are
     name: Optional[str] = None
+
+
+class ParameterSetIn(BaseModel):
+    ''' Parameters of long processing for a sensor type: {channel: kwargs} '''
+    model_config = ConfigDict(extra='forbid')
+
+    channels: Dict[str, Dict[str, Any]]
+    description: Optional[str] = None

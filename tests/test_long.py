@@ -283,6 +283,19 @@ def test_device_page_shows_long_results(app, client, stored):
     assert page.count('<svg class="chart"') == 2 and '2026-08-01 to 2026-08-04' in page
     assert 'Parameters of the last run' in page
 
+
+def test_long_run_records_the_parameters_used(run, root):
+    editing.save_parameter_set('SCD30', {'channels': {'CO2': {'lam': 1e9}}})
+    hardware = editing.find('hardware', 'SCAS_TEST1')
+    hardware.parameters = {'CO2': {'p': 1e-9}}
+    db.session.commit()
+
+    run()
+
+    info = storage.read_run_info(1, 'test_long')
+    assert info['parameter_sets'] == ['SCD30'] and info['hardware_parameters'] == {'CO2': {'p': 1e-9}}
+    assert info['parameters']['CO2'] == {'name': 'SCD30_CO2', 'lam': 1e9, 'p': 1e-9}
+
 def test_back_up_is_skipped_with_local_storage(app, root):
     log = []
 

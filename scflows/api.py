@@ -15,7 +15,7 @@ from werkzeug.exceptions import HTTPException
 from . import db, editing
 from . import health as device_health
 from .identity import ADMIN, EDITORS, current_identity, requires_role
-from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun, SensorName
+from .models import Blueprint as BlueprintModel, Calibration, Hardware, Job, JobRun, ParameterSet, SensorName
 from .validation import check_hardware
 
 api = Blueprint('api', __name__, url_prefix='/api/v1')
@@ -77,6 +77,7 @@ def index():
             'hardware': external_url('api.list_hardware'),
             'calibrations': external_url('api.list_calibrations'),
             'names': external_url('api.list_names'),
+            'parameters': external_url('api.list_parameters'),
             'device_health': external_url('api.list_device_health'),
             'health': external_url('api.health'),
         },
@@ -136,6 +137,40 @@ def list_calibrations():
 @api.get('/calibrations/<sensor_id>')
 def get_calibration(sensor_id):
     return jsonify(get_by_name(Calibration, sensor_id, field='sensor_id').to_json())
+
+
+# Long processing parameters per sensor type (see parameters.py)
+
+@api.get('/parameters')
+def list_parameters():
+    ''' {sensor type: parameters} of the types with parameters, and the types they can be set for '''
+    from .parameters import sensor_types
+    items = db.session.execute(db.select(ParameterSet).order_by(ParameterSet.name)).scalars()
+    return jsonify({'parameters': {item.name: item.to_json() for item in items}, 'sensor_types': sensor_types()})
+
+
+@api.get('/parameters/<name>')
+def get_parameters(name):
+    return jsonify(get_by_name(ParameterSet, name).to_json())
+
+
+@api.put('/parameters/<name>')
+@requires_role(ADMIN)
+def put_parameters(name):
+    try:
+        item, created = editing.save_parameter_set(key_of(name), json_body(), identity=current_identity())
+    except ValidationError as error:
+        unprocessable(validation_errors(error))
+    except editing.UnknownSensorType as error:
+        unprocessable([str(error)])
+    db.session.commit()
+    return saved(item.to_json(), created)
+
+
+@api.delete('/parameters/<name>')
+@requires_role(ADMIN)
+def delete_parameters(name):
+    return delete_item('parameters', name)
 
 
 # SCDevice is the handler scdata looks the names up with
@@ -280,9 +315,10 @@ def delete_name(name):
     return delete_item('name', name)
 
 
-@api.get('/<any(blueprints, hardware, calibrations, names):kinds>/<key>/revisions')
+@api.get('/<any(blueprints, hardware, calibrations, names, parameters):kinds>/<key>/revisions')
 def get_revisions(kinds, key):
-    kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration', 'names': 'name'}[kinds]
+    kind = {'blueprints': 'blueprint', 'hardware': 'hardware', 'calibrations': 'calibration', 'names': 'name',
+            'parameters': 'parameters'}[kinds]
     return jsonify([revision.to_json() for revision in editing.revisions(kind, key_of(key))])
 
 

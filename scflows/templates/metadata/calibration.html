@@ -17,9 +17,11 @@
     {% endif %}
 </div>
 {% include "metadata/_messages.html" %}
+{% if readonly %}<div class="alerts"><div class="alert info">Read only: only admins can change metadata.</div></div>{% endif %}
 
 <form method="POST">
     {{ csrf() }}
+    <fieldset class="plain" {% if readonly %}disabled{% endif %}>
     {% if new %}
     <div class="card">
         <div class="card-header"><h2>Sensor</h2></div>
@@ -55,12 +57,15 @@
         </div>
     </div>
 
+    </fieldset>
+    {% if not readonly %}
     <div class="form-actions">
         <button class="btn primary" name="action" value="save">Save</button>
     </div>
+    {% endif %}
 </form>
 
-{% if not new and current_user.role == 'admin' %}
+{% if not new and not readonly %}
 <div class="card danger-zone">
     <div class="card-body">
         <div>

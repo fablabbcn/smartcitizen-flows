@@ -5,6 +5,7 @@ import asyncio
 from scflows.worker import app
 from scflows.config import config
 from scflows.custom_logger import logger
+from scflows.tools import refresh_metadata
 from celery.result import AsyncResult
 from celery.exceptions import Ignore
 from celery import states
@@ -29,6 +30,9 @@ async def dprocess(device, dry_run = False):
     logger_handler(f'Processing instance for device {device}')
 
     # Create device from SC API
+    # Changes made in flows (calibrations, blueprints) apply without restarting the worker
+    refresh_metadata()
+
     d = sc.Device(params=sc.APIParams(id=device))
     task_state = [None, None]
 

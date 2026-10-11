@@ -144,30 +144,41 @@ def test_devices_to_process(monkeypatch):
     assert checked == ['SCAS1', 'BAD', 'SCAS6']
 
 
-def test_devices_to_back_up(monkeypatch):
-    import smartcitizen_connector
-
-    with_postprocessing = pd.DataFrame([
-        # Long processing: backed up whoever owns it
+def test_devices_to_back_up():
+    devices = pd.DataFrame([
         {'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'LONG'}},
         {'id': 2, 'last_reading_at': None, 'postprocessing': {'hardware_url': 'LONG'}},
         {'id': 3, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'SHORT'}},
+        {'id': 4, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'BACKUP'}},
+        # Hardware not in flows, or none
+        {'id': 5, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'UNKNOWN'}},
+        {'id': 6, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': None},
     ]).set_index('id')
-    device = lambda device_id, hardware=None, readings=True: {
-        'id': device_id, 'last_reading_at': '2026-10-01T00:00:00Z' if readings else None,
-        'postprocessing': {'hardware_url': hardware} if hardware else None}
-    researchers = pd.DataFrame([{'id': 10, 'devices': [
-        device(4),                       # no hardware: backed up as before
-        device(5, 'BACKUP'),             # backup blueprint
-        device(6, 'SHORT'),              # processing only: not backed up
-        device(7, 'UNKNOWN'),            # hardware not in flows (old or wrong url): as without hardware
-        device(8, readings=False),
-    ]}]).set_index('id')
-    monkeypatch.setattr(smartcitizen_connector, 'search_by_query',
-                        lambda endpoint, **kwargs: with_postprocessing if endpoint == 'devices' else researchers)
 
     kinds = {'LONG': {'long'}, 'SHORT': {'process'}, 'BACKUP': {'process', 'backup'}}
-    assert jobs.devices_to_back_up(kinds) == {1, 4, 5, 7}
+    assert jobs.devices_to_back_up(kinds, devices) == {1, 4}
+
+
+def test_sync_searches_the_api_once(app, monkeypatch):
+    import smartcitizen_connector
+    import smartcitizen_connector.device
+
+    devices = pd.DataFrame([{'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z',
+                             'postprocessing': {'hardware_url': 'LONG', 'latest_postprocessing': None}}]).set_index('id')
+    searches = []
+
+    def search_by_query(**kwargs):
+        searches.append(kwargs['endpoint'])
+        return devices
+
+    monkeypatch.setattr(smartcitizen_connector, 'search_by_query', search_by_query)
+    monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', lambda postprocessing: (None, None, True))
+    monkeypatch.setattr(jobs, 'hardware_kinds', lambda: {'LONG': {'process', 'long'}})
+
+    report = jobs.sync_jobs()
+
+    assert searches == ['devices']
+    assert report['process']['created'] == 1 and report['backup']['created'] == 1
 
 
 # Dispatch

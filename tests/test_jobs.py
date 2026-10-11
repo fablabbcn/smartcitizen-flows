@@ -173,6 +173,18 @@ def test_runs_that_cannot_be_sent_fail(app, monkeypatch):
     assert runs[0].message.startswith('NOT_QUEUED: ConnectionError')
 
 
+def test_stale_running_runs_fail(app, queued):
+    old = make_run(state='running', started_at=jobs.now() - timedelta(seconds=jobs.locks.LOCK_SECONDS + 60))
+    recent = make_run(device_id=2, state='running', started_at=jobs.now())
+
+    jobs.dispatch_due_jobs()
+
+    db.session.expire_all()
+    assert db.session.get(JobRun, old.id).state == 'failed'
+    assert db.session.get(JobRun, old.id).message.startswith('STALE')
+    assert db.session.get(JobRun, recent.id).state == 'running'
+
+
 def test_next_run_keeps_the_minute_after_downtime(app):
     item = SimpleNamespace(next_run_at=datetime(2026, 10, 1, 0, 17, tzinfo=timezone.utc), interval_hours=3)
 

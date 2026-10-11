@@ -625,12 +625,12 @@ It writes `~/backups/flows-<date>.sql.gz` (compressed by `pg_dump`, so a failed
 dump is reported instead of leaving a broken file) and deletes dumps older than
 14 days. `BACKUP_DIR` and `RETENTION_DAYS` change both.
 
-Restore into an empty database. When `web` starts it applies any migrations the
+Restore into an empty database (`--force` closes any connection left open). When `web` starts it applies any migrations the
 dump is missing, so an older dump also works with newer code:
 
 ```bash
 docker compose stop web celery beat
-docker compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+docker compose exec -T postgres sh -c 'dropdb --force --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
 gunzip -c ~/backups/flows-2026-10-08.sql.gz | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
 docker compose up -d
 ```

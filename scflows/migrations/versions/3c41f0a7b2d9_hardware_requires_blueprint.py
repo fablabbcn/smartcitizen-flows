@@ -1,7 +1,9 @@
 """Hardware requires a blueprint in flows
 
 Hardware without a blueprint in flows is deleted, the blueprint_url column is
-dropped and blueprints in use cannot be deleted.
+dropped and blueprints in use cannot be deleted. The downgrade restores the
+schema only, not the deleted hardware nor the blueprint_url values: back the
+database up first.
 
 Revision ID: 3c41f0a7b2d9
 Revises: ed77f1ec5762

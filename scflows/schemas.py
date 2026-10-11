@@ -97,7 +97,8 @@ class SensorNameIn(BaseModel):
 
     # Smart Citizen API sensor id. 0: no id in the platform
     id: int = Field(ge=0)
-    description: str = ''
-    unit: str = ''
+    # The sizes of the columns (SensorName)
+    description: str = Field('', max_length=255)
+    unit: str = Field('', max_length=32)
     # Accepted so that items of the list can be sent back as they are
     name: Optional[str] = None

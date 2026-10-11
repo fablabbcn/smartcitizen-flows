@@ -1,4 +1,5 @@
 ''' CSRF protection for the forms of the web interface: a token kept in the session '''
+import hmac
 import secrets
 
 from flask import abort, request, session
@@ -12,7 +13,11 @@ def csrf_token():
 
 def check_csrf():
     ''' before_request for blueprints with forms '''
-    if request.method == 'POST' and request.form.get('csrf') != session.get('csrf'):
+    if request.method != 'POST':
+        return
+    # Without a token in the session (no form was rendered), nothing matches
+    expected, sent = session.get('csrf'), request.form.get('csrf')
+    if not expected or not sent or not hmac.compare_digest(sent, expected):
         abort(400, 'The form expired, reload the page')
 
 

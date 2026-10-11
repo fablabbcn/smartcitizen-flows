@@ -68,13 +68,20 @@ def make_run(device_id=1, task='process', **values):
 
 # Sync
 
+def test_partial_sync_keeps_long_jobs(app):
+    jobs.sync_jobs(to_process=set(), to_back_up=set(), for_long={5: 168})
+
+    report = jobs.sync_jobs(to_process={1}, to_back_up={1})
+
+    assert 'long' not in report and job('long', 5).enabled
+
+
 def test_sync_creates_spread_jobs(app):
     before = jobs.now()
 
     assert jobs.sync_jobs(to_process={1, 2}, to_back_up={3}) == {
         'process': {'created': 2, 'enabled': 0, 'disabled': 0},
-        'backup': {'created': 1, 'enabled': 0, 'disabled': 0},
-        'long': {'created': 0, 'enabled': 0, 'disabled': 0}}
+        'backup': {'created': 1, 'enabled': 0, 'disabled': 0}}
 
     process = job('process', 1)
     assert process.enabled and not process.paused and process.source == 'auto'

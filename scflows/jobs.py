@@ -152,13 +152,15 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     full = to_process is None and to_back_up is None and for_long is None
     # One request for all the lists
     devices = postprocessing_devices() if to_process is None or to_back_up is None or full else None
-    long_every = (devices_for_long(devices) if full else {}) if for_long is None else (
+    long_every = (devices_for_long(devices) if full else None) if for_long is None else (
         dict(for_long) if isinstance(for_long, dict) else {device_id: INTERVALS[Job.LONG] for device_id in for_long})
     if devices is not None:
         logger.info(f'{len(devices)} devices with postprocessing in the Smart Citizen API, {len(kinds or {})} hardware in flows')
     wanted = {Job.PROCESS: devices_to_process(kinds, devices) if to_process is None else set(to_process),
-              Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up),
-              Job.LONG: set(long_every)}
+              Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up)}
+    # A partial sync without the long devices leaves the long jobs as they are
+    if long_every is not None:
+        wanted[Job.LONG] = set(long_every)
     report = {}
     for task, devices in wanted.items():
         logger.info(f'{task}: {len(devices)} devices qualify')

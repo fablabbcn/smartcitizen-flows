@@ -214,8 +214,8 @@ pre code { padding: 0; background: none; font-size: inherit; white-space: pre; }
 a.card { display: block; color: inherit; transition: border-color 0.15s, box-shadow 0.15s; }
 a.card:hover { border-color: var(--color-accent); box-shadow: var(--shadow-lg); text-decoration: none; }
 
-.grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-.grid.wide { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
+.grid.wide { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
 
 /* Stats */
 
@@ -375,7 +375,7 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
   cursor: pointer;
 }
 .segmented a:hover, .segmented button:hover { color: var(--color-text); text-decoration: none; }
-.segmented [aria-current="page"], .segmented [aria-selected="true"] {
+.segmented [aria-current="page"], .segmented [aria-selected="true"], .segmented [aria-pressed="true"] {
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: var(--shadow);

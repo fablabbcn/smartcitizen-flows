@@ -387,7 +387,9 @@ def test_run_page_shows_log_levels(app, client):
 def test_overview_figures(app, client):
     jobs.sync_jobs(to_process={1, 2}, to_back_up={3})
     job('process', 1).paused = True
-    make_run(state='failed')
+    # Counted by when they failed: started two days ago, failed now
+    make_run(state='failed', created_at=jobs.now() - timedelta(days=2), finished_at=jobs.now())
+    make_run(state='failed', created_at=jobs.now() - timedelta(days=2), finished_at=jobs.now() - timedelta(days=2))
 
     sign_in(client, 'admin')
     page = client.get('/').get_data(as_text=True)

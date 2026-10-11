@@ -22,7 +22,7 @@ def job_figures():
     return {'active': count(jobs.filter_by(paused=False)),
             'paused': count(jobs.filter_by(paused=True)),
             'failed': count(db.select(db.func.count(JobRun.id)).where(
-                JobRun.state == JobRun.FAILED, JobRun.created_at >= now() - timedelta(hours=24)))}
+                JobRun.state == JobRun.FAILED, JobRun.finished_at >= now() - timedelta(hours=24)))}
 
 
 def health_figures():

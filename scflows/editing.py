@@ -109,8 +109,11 @@ class NameMismatch(ValueError):
 def save_name(name, data, identity=None, action=None):
     '''
     Creates or replaces a sensor name. New names go to the end of the list (see SensorName).
-    Raises pydantic.ValidationError if invalid, NameMismatch if the body names another one
+    Raises pydantic.ValidationError if invalid, NameMismatch if the body names another one, and
+    ValueError if the name is not a valid key (as the API requires)
     '''
+    if not KEY_PATTERN.match(name or ''):
+        raise ValueError(f'name: {name!r} can only contain letters, numbers, "_" and "-" (64 characters at most)')
     data = SensorNameIn.model_validate(data)
     if data.name is not None and data.name != name:
         raise NameMismatch(f'name: {data.name} in the body, {name} in the path')

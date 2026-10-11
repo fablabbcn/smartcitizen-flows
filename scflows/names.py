@@ -130,6 +130,9 @@ def plan(names, api, firmware, used=None):
     for sensor in firmware:
         if not sensor.id:
             continue
+        if not editing.KEY_PATTERN.match(sensor.name):
+            notices.append(f'{sensor.name!r} (id {sensor.id}) in the firmware is not a valid name: skipped')
+            continue
         current = by_name.get(sensor.name)
         if current is not None:
             if current['id'] == 0:

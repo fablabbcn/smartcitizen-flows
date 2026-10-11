@@ -136,6 +136,40 @@ def test_devices_to_process(monkeypatch):
     assert checked == ['SCAS1', 'BAD', 'SCAS6']
 
 
+def test_devices_to_back_up():
+    devices = pd.DataFrame([
+        {'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'SCAS1'}},
+        # No hardware
+        {'id': 2, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': ''}},
+        {'id': 3, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': None},
+        # No readings
+        {'id': 4, 'last_reading_at': None, 'postprocessing': {'hardware_url': 'SCAS4'}},
+    ]).set_index('id')
+
+    assert jobs.devices_to_back_up(devices) == {1}
+
+
+def test_sync_searches_the_api_once(app, monkeypatch):
+    import smartcitizen_connector
+    import smartcitizen_connector.device
+
+    devices = pd.DataFrame([{'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z',
+                             'postprocessing': {'hardware_url': 'SCAS1', 'latest_postprocessing': None}}]).set_index('id')
+    searches = []
+
+    def search_by_query(**kwargs):
+        searches.append(kwargs['endpoint'])
+        return devices
+
+    monkeypatch.setattr(smartcitizen_connector, 'search_by_query', search_by_query)
+    monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', lambda postprocessing: (None, None, True))
+
+    report = jobs.sync_jobs()
+
+    assert searches == ['devices']
+    assert report['process']['created'] == 1 and report['backup']['created'] == 1
+
+
 # Dispatch
 
 def test_dispatch_due_jobs(app, queued):

@@ -207,8 +207,21 @@ def set_paused(job, paused):
     return job
 
 
+def fail_stale_runs():
+    ''' Runs still running after LOCK_SECONDS: their worker stopped (the lock has expired). Returns how many '''
+    stale = db.session.execute(db.select(JobRun).where(
+        JobRun.state == JobRun.RUNNING, JobRun.started_at < now() - timedelta(seconds=locks.LOCK_SECONDS))).scalars().all()
+    for run in stale:
+        run.state, run.message, run.finished_at = JobRun.FAILED, 'STALE: the worker stopped during the run', now()
+    if stale:
+        db.session.commit()
+        logger.warning(f'Marked {len(stale)} stale runs as failed')
+    return len(stale)
+
+
 def dispatch_due_jobs():
     ''' Queues the runs of active jobs that are due. Returns the queued runs '''
+    fail_stale_runs()
     at = now()
     jobs = db.session.execute(
         db.select(Job).where(Job.enabled.is_(True), Job.paused.is_(False), Job.next_run_at <= at)

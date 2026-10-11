@@ -53,6 +53,13 @@ def test_backup_has_no_dry_run(client, sc_me, process_job, queued):
     assert queued == []
 
 
+def test_run_options_must_be_an_object(client, sc_me, process_job, queued):
+    response = client.post(f'/api/v1/jobs/{process_job.id}/run', json=[1], headers=auth('admin-token'))
+
+    assert response.status_code == 400
+    assert queued == []
+
+
 def test_run_device_without_job(client, sc_me, queued):
     response = client.post('/api/v1/devices/99/backup/run', headers=auth('admin-token'))
 

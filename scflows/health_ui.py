@@ -1,5 +1,5 @@
 ''' Web interface for device health: admins see every device, researchers their own '''
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, current_app, render_template, request
 from flask_login import current_user
 
 from . import db, health, storage
@@ -63,6 +63,8 @@ def long_charts(device_id, blueprint, resample='1h'):
     try:
         data = storage.read_processed(device_id, blueprint)
     except Exception:
+        # Storage or credentials: the page still shows, without charts
+        current_app.logger.exception(f'Cannot read the results of {blueprint} for device {device_id}')
         return []
     if data is None or data.empty:
         return []

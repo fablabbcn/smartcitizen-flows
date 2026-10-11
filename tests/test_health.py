@@ -100,6 +100,10 @@ def test_api_lists_latest_health(app, client, sc_me, monkeypatch):
     assert detail['latest']['checks'][0]['columns']['TEMP']['status'] == 'problem'
     assert [item['status'] for item in detail['history']] == ['problem', 'ok']
     assert client.get('/api/v1/devices/3/health', headers=auth('admin-token')).status_code == 404
+    # The history has at least one item
+    for limit in (0, -1):
+        detail = client.get(f'/api/v1/devices/1/health?limit={limit}', headers=auth('admin-token')).get_json()
+        assert len(detail['history']) == 1
 
 
 def test_researchers_see_their_devices(app, client, sc_me, monkeypatch):

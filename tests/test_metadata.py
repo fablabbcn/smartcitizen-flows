@@ -70,6 +70,18 @@ def test_import_rejects_blueprints_not_in_flows(app, source):
     assert report.errors == [f"{source / 'hardware' / 'SCAS_TEST2.json'}: blueprint sck_21 is not in flows"]
 
 
+def test_import_rejects_invalid_blueprint_kinds(app, source):
+    # Two process blueprints
+    (source / 'blueprints' / 'test_air_copy.json').write_text((source / 'blueprints' / 'test_air.json').read_text())
+    edit_json(source / 'hardware' / 'SCAS_TEST2.json', lambda data: data.update(blueprints=['test_air', 'test_air_copy']))
+
+    report = import_metadata(str(source))
+
+    assert report.created['hardware'] == 1
+    assert report.errors == [f"{source / 'hardware' / 'SCAS_TEST2.json'}: blueprints: two process blueprints, "
+                             'only one of each kind']
+
+
 def test_import_reports_invalid_files(app, source):
     (source / 'hardware' / 'SCAS_BAD_DATE.json').write_text(json.dumps(
         {'blueprint_url': None, 'description': 'x', 'versions': [{'ids': {}, 'from': '2024-13-01', 'to': None}]}))

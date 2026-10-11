@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container" id="main-container">
+    <p><a href="{{ url_for('ui.index') }}">Metadata</a> / Calibrations</p>
+    <h1>{% if new %}New calibration{% else %}Calibration {{ sensor_id }}{% endif %} <small>{{ kind }}</small></h1>
+    {% if not new %}<p><a href="{{ url_for('ui.history', kind='calibration', key=sensor_id) }}">History</a> · <a href="{{ url_for('api.get_calibration', sensor_id=sensor_id) }}">JSON</a></p>{% endif %}
+    {% include "metadata/_messages.html" %}
+    <form method="POST">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        {% if new %}
+        <div class="form-group"><label>Sensor id</label><input class="form-control" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required></div>
+        <div class="form-group"><label>Kind</label>
+            <select class="form-control" name="kind">
+                {% for item in kinds %}<option value="{{ item }}" {% if item == kind %}selected{% endif %}>{{ item }}</option>{% endfor %}
+            </select>
+            <button class="btn btn-secondary btn-sm" name="action" value="change_kind" formnovalidate>Change kind</button>
+        </div>
+        {% else %}
+        <input type="hidden" name="kind" value="{{ kind }}">
+        {% endif %}
+        {% for field in fields %}
+        <div class="form-group"><label>{{ field }}{% if field in optional %} (optional){% endif %}</label>
+            <input class="form-control" name="{{ field }}" value="{{ data.get(field, '') }}"></div>
+        {% endfor %}
+        <button class="btn btn-primary" name="action" value="save">Save</button>
+    </form>
+    {% if not new and current_user.role == 'admin' %}
+    <form method="POST" action="{{ url_for('ui.delete', kind='calibration', key=sensor_id) }}" onsubmit="return confirm('Delete calibration {{ sensor_id }}?')" style="margin-top: 2em">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn btn-danger btn-sm">Delete</button>
+    </form>
+    {% endif %}
+</div>
+{% endblock %}

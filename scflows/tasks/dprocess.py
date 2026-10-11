@@ -2,12 +2,9 @@ import scdata as sc
 
 import sys
 import asyncio
-from scflows.worker import app
 from scflows.config import config
 from scflows.custom_logger import logger
-from celery.result import AsyncResult
-from celery.exceptions import Ignore
-from celery import states
+from scflows.tools import refresh_metadata
 
 async def dprocess(device, dry_run = False):
     '''
@@ -29,6 +26,9 @@ async def dprocess(device, dry_run = False):
     logger_handler(f'Processing instance for device {device}')
 
     # Create device from SC API
+    # Changes made in flows (calibrations, blueprints) apply without restarting the worker
+    refresh_metadata()
+
     d = sc.Device(params=sc.APIParams(id=device))
     task_state = [None, None]
 
@@ -91,64 +91,14 @@ async def dprocess(device, dry_run = False):
 
     return task_log, task_state
 
-@app.task(bind=True,track_started=True, name='scflows.tasks.dprocess_task')
-def dprocess_task(self, device, dry_run=False):
-    result, state = asyncio.run(dprocess(device, dry_run))
-    logger.info('dprocess')
-    logger.info(result)
-    logger.info(state)
-
-    # Raise custom state
-    if state[0] != 'SUCCESS':
-
-        self.update_state(
-            state=state[0],
-            meta={'message': state[1]})
-        with self.app.events.default_dispatcher() as dispatcher:
-            dispatcher.send('task-custom_state', field1='value1', field2='value2')
-
-        raise Ignore()
-    return result
 
 if __name__ == '__main__':
+    import argparse
 
-    if '-h' in sys.argv or '--help' in sys.argv or '-help' in sys.argv:
-        print('dprocess: Process device of SC API')
-        print('USAGE:\n\rdprocess.py [options]')
-        print('options:')
-        print('--device <device-number>: device to process')
-        print('--celery: task execution is managed via celery worker')
-        print('--dry-run: dry run')
-        sys.exit()
+    parser = argparse.ArgumentParser(description='Process a device of the Smart Citizen API')
+    parser.add_argument('--device', type=int, required=True)
+    parser.add_argument('--dry-run', action='store_true', help='Process without posting')
+    args = parser.parse_args()
 
-    if '--dry-run' in sys.argv: dry_run = True
-    else: dry_run = False
-
-    loop = asyncio.get_event_loop()
-
-    if '--device' in sys.argv:
-        device = int(sys.argv[sys.argv.index('--device')+1])
-    else:
-        logger.error('Missing device')
-        sys.exit()
-
-    logger.info(f'Processing device: {device}')
-
-    if '--celery' in sys.argv:
-        logger.info(f'Using celery backend...')
-        task_id = dprocess_task.s().delay(device = device, dry_run = dry_run)
-        logger.info(f'Task ID: {task_id}')
-
-        # Wait for result
-        result = AsyncResult(task_id, app=app)
-        result.wait(timeout=60)
-
-        logger.info('Task result:')
-        for res in result.get():
-            logger.info(res)
-    else:
-        loop.run_until_complete(dprocess(device, dry_run))
-
-    loop.close()
-
-
+    log, state = asyncio.run(dprocess(args.device, dry_run=args.dry_run))
+    logger.info(f'Result: {state}')

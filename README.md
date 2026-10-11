@@ -1,69 +1,70 @@
 # Smart Citizen Flows
 
-This repository contains a data processing application for loading, transforming and pushing data from various data streams from [scdata](https://github.com/fablabbcn/smartcitizen-data). `scdata` can connect to various custom API connectors (such as [smartcitizen-connector](https://github.com/fablabbcn/smartcitizen-connector)) among others. This data processing application allows to create tasks to process data, using periodic schedules, and workers based on [celery](https://docs.celeryq.dev/en/stable/getting-started/introduction.html). A small [flask](https://flask.palletsprojects.com/en/3.0.x/) application is used to manage the tasks, with a [gunicorn](https://gunicorn.org/) server.
+Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows processes and backs up the data of devices in the Smart Citizen API periodically, with [scdata](https://github.com/fablabbcn/smartcitizen-data) and [smartcitizen-connector](https://github.com/fablabbcn/smartcitizen-connector), and serves the processing metadata (blueprints, hardware, calibrations). It is a [flask](https://flask.palletsprojects.com) application with [celery](https://docs.celeryq.dev) workers.
 
 ![](assets/flows.png)
 
-## Tasks
+## Jobs
 
-Tasks are managed by the `flows.py` script. This file manages various task routines such as periodic schedules (via cron). The script can program tasks in a automated or manual way. If done automatically, it can schedule them `@daily`, `@hourly` and `@minute`, with optional load balancing (not scheduling them all at the same time, but randomly in low load times).
+Each device has a job per task: `process` (calculate channels from the blueprint and post them to the Smart Citizen API, every 3 hours) and `backup` (store the data in S3, every 6 hours). Jobs are stored in the database:
 
-In addition, you can use a task queue with workers with [celery](https://docs.celeryq.dev/en/stable/getting-started/introduction.html).
+- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every day: devices with valid postprocessing (hardware in flows) and new readings are processed, devices of researchers are backed up. Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
+- `celery` workers run them. A device task never runs twice at the same time (lock in Redis)
+- Each run is recorded with its result and log
 
-#### Start scheduling
-
-This will schedule based on postprocessing information in the platform having a non-null value:
-
-```
-python flows.py auto-schedule
-```
-
-Or with `celery` as an `backend` for data processing:
+Admins see the jobs and runs in `/jobs/`, or in the API (`/api/v1/jobs`, `/api/v1/runs/<id>`). From the command line:
 
 ```
-python flows.py auto-schedule --celery
+flask --app scflows jobs sync                                     # sync with the Smart Citizen API now
+flask --app scflows jobs list [--task process|backup]
+flask --app scflows jobs run <device> process --dry-run [--inline] # run now (--inline: here, not in the workers)
 ```
 
-For this option to work, you need to lunch `celery` and a `message` broker. In this case, we use [rabbitmq](https://www.rabbitmq.com/) as a broker. You can launch the `message` broker via the provided `docker` containers, or on your own. The celery app can be run with:
+## Processing metadata
+
+Flows serves the processing metadata (blueprints, hardware and calibrations) that used to live as json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data). The paths follow the layout of that repository, so `https://<host>/api/v1/` can be used as the base url by `smartcitizen-connector` (`BASE_POSTPROCESSING_URL`) and `scdata`.
+
+| Endpoint | Content |
+|---|---|
+| `GET /api/v1/` | Links to the endpoints |
+| `GET /api/v1/blueprints` | List of blueprints |
+| `GET /api/v1/blueprints/<name>[.json]` | Blueprint |
+| `GET /api/v1/hardware` | List of hardware |
+| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json`, plus `blueprint` (name). `blueprint_url` links to the blueprint in flows |
+| `GET /api/v1/calibrations` (or `/calibrations/calibrations.json`) | All calibrations. Filter with `?kind=alphasense_sensor` or `?kind=afe_board` |
+| `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
+| `GET /api/v1/health` | Health check |
+
+Links use `PUBLIC_URL` (e.g. `https://flows.smartcitizen.me`), or the request host when it is not set. The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it. The `postgres` host of `SQLALCHEMY_DATABASE_URI` is only reachable inside the compose network: run these commands in the `web` container (`docker compose exec web flask --app scflows ...`), or point the URI to a database reachable from where they run.
 
 ```
-cd scflows
-celery --app worker:app worker -l info
+git clone --depth 1 https://github.com/fablabbcn/smartcitizen-data.git /tmp/smartcitizen-data
+flask --app scflows metadata import /tmp/smartcitizen-data
+flask --app scflows metadata verify /tmp/smartcitizen-data
+flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/
 ```
 
-If you want to `dry-run` for checking if your workflow works, `force-first-run` and `overwrite` the tasks:
+`import` keeps items that already exist, unless `--overwrite` is passed. `verify` compares hardware by blueprint name, as flows links its own blueprints instead of the GitHub urls. Every hardware must use a blueprint in flows: import blueprints first, hardware whose blueprint is not in flows is not imported.
 
-- For running processing tasks:
-```
-python flows.py auto-schedule --task process --dry-run --force-first-run --overwrite
-```
+### Editing metadata
 
-- For running backup tasks:
-```
-python flows.py auto-schedule --task backup --dry-run --force-first-run --overwrite
-```
+Admins and researchers of the Smart Citizen platform can create and update metadata, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for an hour. That call returns all the devices visible to the user: for admins it can take 30 seconds, so the first request with a token is slow.
 
-#### Logs
+| Endpoint | Who | |
+|---|---|---|
+| `PUT /api/v1/blueprints/<name>` | admin, researcher | Create or replace a blueprint (validated with `scdata`) |
+| `PUT /api/v1/hardware/<name>` | admin, researcher | Create or replace a hardware description, same structure as the hardware files. Refer to the blueprint with `blueprint` (name of a blueprint in flows) or `blueprint_url` |
+| `PUT /api/v1/calibrations/<sensor_id>` | admin, researcher | Create or replace a calibration (Alphasense sensor or AFE board) |
+| `DELETE /api/v1/<blueprints\|hardware\|calibrations>/<name>` | admin | Delete |
+| `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
+| `GET /api/v1/<blueprints\|hardware\|calibrations>/<name>/revisions` | anyone | History of changes |
 
-Logs are stored in the `public/tasks` directory, as a volume in `docker` as well. Otherwise, the `flask` app can access those logs.
-
-```
-➜  tasks tree -L 2
-.
-├── 13238
-│   └── 13238.log
-├── 13486
-├── README.md
-├── scheduler.log
-└── tabfile.tab
-```
-
-#### Manual scheduling
-
-This will schedule a device regardless the auto-scheduling:
+Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint. Blueprints used by hardware cannot be deleted.
 
 ```
-python flows.py manual-schedule --device <device> --dry-run --force-first-run --overwrite
+curl -X PUT https://flows.smartcitizen.me/api/v1/calibrations/212830246 \
+  -H "Authorization: Bearer $SC_TOKEN" -H "Content-Type: application/json" \
+  -d @calibration.json
 ```
 
 ## Local deployment
@@ -83,17 +84,23 @@ Copy `env.example` to `.env` and fill it in. `.env` is never committed nor copie
 ```
 #TOKENS
 SC_BEARER=sc-bearer
-# CELERY
-CELERY_BROKER=amqp://guest:guest@rabbitmq:5672//
-CELERY_RESULTS_BACKEND=rpc://
+# CELERY (broker) and locks: redis service
+CELERY_BROKER=redis://redis:6379/0
+REDIS_URL=redis://redis:6379/1
 CELERY_TIMEZONE=Europe/Madrid
 FLOWER_PORT=5555
 # FLASK
 FLASK_ENV=production
 FLASK_APP=scflows
-FLASK_DEBUG=1
-SQLALCHEMY_DATABASE_URI=sqlite:///db.sqlite
+FLASK_DEBUG=0
+# Keep the user, password and database in line with POSTGRES_* below
+SQLALCHEMY_DATABASE_URI=postgresql+psycopg://flows:change-me@postgres:5432/flows
 FLASK_SECRET_KEY=change-me
+PUBLIC_URL=https://flows.smartcitizen.me
+# POSTGRES
+POSTGRES_USER=flows
+POSTGRES_PASSWORD=change-me
+POSTGRES_DB=flows
 # BACKUPS
 S3_DATA_BUCKET=bucket-name
 AWS_ACCESS_KEY_ID=key-id
@@ -125,60 +132,42 @@ gunicorn --workers 1 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-l
 
 ### Celery workers
 
-You can run `celery` with
-
 ```
-celery --app worker:app worker -l info
+celery --app scflows.worker:app worker -l info
+celery --app scflows.worker:app beat -l info   # only one instance
 ```
 
 #### Flower
 
-[Flower](https://flower.readthedocs.io/en/latest/) is a front-end application for monitoring and managing `celery` clusters. There is a docker container for it to work, or you can run it by:
-
-```
-celery flower -l info -app worker:tasks
-```
-
-![](assets/flower.png)
-
-Note that you need to add the [url-prefix](https://flower.readthedocs.io/en/latest/config.html#url-prefix) to run behind the proxy:
-
-```
-celery flower -l info -app worker:tasks -url-prefix=flower
-```
-
-In addition, you will need to protect `flower` when running behind the proxy (see [Deploying](#deploying)). Create the basic auth credentials (the file is not committed):
+[Flower](https://flower.readthedocs.io/en/latest/) monitors the celery workers. It runs behind the proxy under `/flower`, protected with basic auth. Create the credentials (the file is not committed):
 
 ```
 scflows/public/caddy/flower_auth.sh <user> <password>
 ```
 
-More info in the [flower docs](https://flower.readthedocs.io/en/latest/auth.html).
+![](assets/flower.png)
 
 ### Running with Docker
 
-You can build:
-
 ```
-docker compose build -t scflows:latest .
-```
-
-And run:
-
-```
-docker compose up -d rabbitmq flows celery flower web
+docker compose build
+docker compose up -d
 ```
 
-Which will run the `flask` app in `localhost:5000` and `flower` in `localhost:5555`. The `flows` container runs `cron`, which does not inherit the container environment: its entrypoint writes it to `/etc/environment` on start. You can jump into the flows `docker` `flows` container and run the `auto-schedule`, to start processing tasks.
+Services: `postgres`, `redis`, `web` (flask app and API), `celery` (workers), `beat` (schedule), `flower` and `proxy` (Caddy). Only the proxy publishes ports (80 and 443). For local use without the proxy, publish the web app in a `compose.override.yml`:
 
 ```
-doco exec -it flows bash
+services:
+  web:
+    ports:
+      - "5000:5000"
 ```
 
-You should see in the IP address. Then:
+Then load the metadata and create the jobs:
 
 ```
-python flows.py auto-schedule --celery
+docker compose exec web flask --app scflows metadata import <smartcitizen-data checkout>
+docker compose exec web flask --app scflows jobs sync
 ```
 
 ### Deploying

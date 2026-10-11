@@ -171,6 +171,23 @@ def test_forms_require_csrf_token(client):
     assert hardware('SCAS_TEST1').description == '1SEN55-2ELEC-AFE'
 
 
+def test_forms_without_a_token_in_the_session_are_rejected(client):
+    sign_in(client, 'researcher')
+    with client.session_transaction() as session:
+        session.pop('csrf')
+
+    data = {key: value for key, value in hardware_form(description='x').items() if key != 'csrf'}
+    assert client.post('/metadata/hardware/SCAS_TEST1', data=data).status_code == 400
+    assert hardware('SCAS_TEST1').description == '1SEN55-2ELEC-AFE'
+
+
+def test_delete_confirmation_is_escaped(client):
+    sign_in(client, 'admin')
+
+    page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
+    assert 'data-confirm="Delete hardware SCAS_TEST1?"' in page
+
+
 def test_delete_requires_admin(client):
     sign_in(client, 'researcher')
     assert client.post('/metadata/hardware/SCAS_TEST1/delete', data=form()).status_code == 403

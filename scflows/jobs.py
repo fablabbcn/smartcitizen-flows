@@ -119,14 +119,24 @@ def next_run(job, at):
     return following
 
 
-def queue_run(device_id, task, job=None, dry_run=False, username=None):
-    ''' Creates a run and sends it to the workers '''
+def send(run):
+    ''' Sends a committed run to the workers. If the broker cannot be reached, the run fails (callers commit) '''
     from .worker import run_job
 
+    try:
+        run_job.delay(run.id)
+    except Exception as error:
+        logger.exception(f'Run {run.id} could not be sent to the workers')
+        run.state, run.message, run.finished_at = JobRun.FAILED, f'NOT_QUEUED: {type(error).__name__}: {error}', now()
+
+
+def queue_run(device_id, task, job=None, dry_run=False, username=None):
+    ''' Creates a run and sends it to the workers '''
     run = JobRun(job=job, device_id=device_id, task=task, dry_run=dry_run, username=username)
     db.session.add(run)
     db.session.commit()
-    run_job.delay(run.id)
+    send(run)
+    db.session.commit()
     return run
 
 
@@ -145,9 +155,9 @@ def dispatch_due_jobs():
         runs.append(run)
     db.session.commit()
 
-    from .worker import run_job
     for run in runs:
-        run_job.delay(run.id)
+        send(run)
+    db.session.commit()
     if runs:
         logger.info(f'Queued {len(runs)} runs')
     return runs
@@ -187,9 +197,12 @@ def execute_run(run_id):
         run = db.session.get(JobRun, run_id)
         run.state, run.message = JobRun.FAILED, f'{type(error).__name__}: {error}'
     finally:
-        run.finished_at = now()
-        db.session.commit()
-        locks.release(key, token)
+        try:
+            run.finished_at = now()
+            db.session.commit()
+        finally:
+            # Even if the commit fails: a held lock would abort every run of the device for LOCK_SECONDS
+            locks.release(key, token)
     return run
 
 

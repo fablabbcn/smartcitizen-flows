@@ -101,3 +101,15 @@ def test_secure_cookie_with_https_public_url(monkeypatch, tmp_path):
 
     assert app.config['SESSION_COOKIE_SECURE'] is True
     assert app.config['SESSION_COOKIE_SAMESITE'] == 'Lax'
+
+
+def test_placeholders_are_rejected(monkeypatch):
+    from scflows import create_app
+
+    monkeypatch.setenv('FLASK_SECRET_KEY', 'change-me')
+    with pytest.raises(RuntimeError, match='change-me'):
+        create_app()
+    monkeypatch.setenv('FLASK_SECRET_KEY', 'a-real-key')
+    monkeypatch.setenv('SQLALCHEMY_DATABASE_URI', 'postgresql+psycopg://flows:change-me@postgres:5432/flows')
+    with pytest.raises(RuntimeError, match='change-me'):
+        create_app()

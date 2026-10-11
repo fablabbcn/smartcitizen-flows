@@ -196,6 +196,93 @@ def test_devices_for_long(app, long_hardware, monkeypatch):
     assert jobs.devices_for_long() == {1: 7 * 24}
 
 
+# Results: API and interface
+
+from flask import g
+
+from scflows import health
+from scflows.models import JobRun
+
+from conftest import USERS, auth
+
+
+def long_record(device_id, status_ratio=0.0):
+    run = JobRun(device_id=device_id, task='long', state='success')
+    db.session.add(run)
+    item = health.record(device_id, {'start': None, 'end': None, 'rows': 2000, 'device_name': 'Kit',
+                                     'blueprint': 'test_long', 'checks': [
+                                         {'name': 'GAPS', 'status': 'ok', 'columns': {
+                                             'CO2': {'flagged': 0, 'checked': 10, 'ratio': status_ratio,
+                                                     'intervals': [], 'more_intervals': 0}}}]}, run=run)
+    db.session.commit()
+    return item
+
+
+@pytest.fixture
+def stored(app, root):
+    index = pd.date_range('2026-08-01', periods=3 * 1440, freq='1min', tz='UTC')
+    data = pd.DataFrame({'CO2': 400.0, 'NO2': 10.0}, index=index)
+    storage.write_processed(1, 'test_long', data, {'start': '2026-08-01T00:00:00+00:00',
+                                                   'end': '2026-08-04T00:00:00+00:00', 'rows': len(data),
+                                                   'parameters': {'CO2': {'lam': 1e10}}})
+    long_record(1)
+
+
+def test_series_api(app, client, sc_me, stored):
+    data = client.get('/api/v1/devices/1/series', headers=auth('admin-token')).get_json()
+
+    assert data['blueprint'] == 'test_long' and data['resample'] == '1h'
+    assert len(data['index']) == 72 and set(data['channels']) == {'CO2', 'NO2'}
+    assert data['run']['parameters'] == {'CO2': {'lam': 1e10}}
+
+    data = client.get('/api/v1/devices/1/series?channels=NO2&from=2026-08-02&to=2026-08-02T23:59&resample=1D',
+                      headers=auth('admin-token')).get_json()
+    assert list(data['channels']) == ['NO2'] and data['index'] == ['2026-08-02T00:00:00+00:00']
+
+    csv = client.get('/api/v1/devices/1/series?format=csv&resample=1D', headers=auth('admin-token'))
+    assert csv.mimetype == 'text/csv' and csv.get_data(as_text=True).splitlines()[0] == 'TIME,CO2,NO2'
+    assert client.get('/api/v1/devices/1/series?resample=raw', headers=auth('admin-token')).status_code == 200
+    assert client.get('/api/v1/devices/1/series?resample=often', headers=auth('admin-token')).status_code == 400
+
+
+def test_series_access(app, client, sc_me, stored, monkeypatch):
+    monkeypatch.setitem(USERS, 'researcher-token', dict(USERS['researcher-token'], devices=[{'id': 1}]))
+
+    assert client.get('/api/v1/devices/1/series', headers=auth('researcher-token')).status_code == 200
+    assert client.get('/api/v1/devices/2/series', headers=auth('researcher-token')).status_code == 403
+    assert client.get('/api/v1/devices/2/series', headers=auth('admin-token')).status_code == 404
+    assert client.get('/api/v1/devices/1/series').status_code == 401
+
+
+def test_long_health_is_kept_apart(app):
+    process = health.record(1, {'rows': 10, 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]})
+    db.session.commit()
+    long_record(1, status_ratio=0.5)
+
+    assert [item.id for item in health.latest(device_ids={1})] == [process.id]
+    assert [item.status for item in health.latest(device_ids={1}, task='long')] == ['problem']
+    assert [item.id for item in health.history(1)] == [process.id]
+
+
+def sign_in(client, role):
+    user = next(user for user in USERS.values() if user['role'] == role)
+    g.pop('_login_user', None)
+    with client.session_transaction() as session:
+        session['identity'] = dict(user)
+        session['_user_id'] = str(user['id'])
+
+
+def test_device_page_shows_long_results(app, client, stored):
+    health.record(1, {'rows': 10, 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]})
+    db.session.commit()
+
+    sign_in(client, 'admin')
+    page = client.get('/health/1').get_data(as_text=True)
+
+    assert 'Long processing' in page and 'test_long' in page
+    assert page.count('<svg class="chart"') == 2 and '2026-08-01 to 2026-08-04' in page
+    assert 'Parameters of the last run' in page
+
 def test_back_up_is_skipped_with_local_storage(app, root):
     log = []
 

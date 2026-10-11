@@ -150,4 +150,9 @@ def sign_in(username, password):
             abort(503, f'Cannot sign in: the Smart Citizen API answered {response.status_code}')
         return None
 
-    return verify_token(response.json()['access_token'])
+    try:
+        token = response.json()['access_token']
+    except (ValueError, TypeError, KeyError):
+        # json.JSONDecodeError is a ValueError
+        abort(503, 'Cannot sign in: the Smart Citizen API answered an unexpected body')
+    return verify_token(token)

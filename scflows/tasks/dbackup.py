@@ -51,6 +51,10 @@ async def dbackup(device):
                 task_log.append(logger_handler('No last date available'))
                 # This is a shot in the dark - we don't have a way to know if data is going to be available
                 d.options.max_date = d.handler.json.created_at + datetime.timedelta(days=config._backup_interval_days)
+                # Not past the last reading either: the next run starts from the date stored after this one
+                last_reading = d.handler.json.last_reading_at
+                if last_reading is not None and d.options.max_date > last_reading:
+                    d.options.max_date = last_reading
                 mode = 'overwrite'
             else:
                 # Something else has gone wrong.

@@ -186,6 +186,20 @@ def test_sync_creates_long_jobs(app):
     assert not db.session.get(Job, long_job.id).enabled
 
 
+def test_sync_updates_long_intervals(app):
+    jobs.sync_jobs(to_process=set(), to_back_up=set(), for_long={1: 168})
+    long_job = db.session.execute(db.select(Job).filter_by(task='long', device_id=1)).scalar_one()
+    long_job.next_run_at = jobs.now() + timedelta(hours=100)
+    db.session.commit()
+
+    jobs.sync_jobs(to_process=set(), to_back_up=set(), for_long={1: 48})
+
+    db.session.expire_all()
+    long_job = db.session.get(Job, long_job.id)
+    assert long_job.interval_hours == 48
+    assert jobs.aware(long_job.next_run_at) <= jobs.now() + timedelta(hours=48)
+
+
 def test_devices_for_long(app, long_hardware, monkeypatch):
     import smartcitizen_connector
 

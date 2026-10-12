@@ -457,9 +457,17 @@ def run_sync(source='schedule', run_id=None):
             run.state, run.message, run.finished_at = state, message, now()
             run.log = log.lines + [line for line in warnings.lines if line not in log.lines]
             db.session.commit()
-            locks.client().set(LAST_SYNC, json.dumps(result))
+            # Redis down now must not hide the result of the sync (already in the run) or its error
+            try:
+                locks.client().set(LAST_SYNC, json.dumps(result))
+            except Exception:
+                logger.exception('Sync: cannot store the last result')
         finally:
-            locks.release(SYNC_LOCK, token)
+            try:
+                locks.release(SYNC_LOCK, token)
+            except Exception:
+                # The lock expires after SYNC_LOCK_SECONDS
+                logger.exception('Sync: cannot release the lock')
 
 
 def last_sync():

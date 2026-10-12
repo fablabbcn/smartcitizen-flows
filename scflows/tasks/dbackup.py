@@ -13,9 +13,12 @@ from scflows.config import config
 from scflows.custom_logger import logger
 from scflows.tools import refresh_metadata
 
-async def dbackup(device):
+async def dbackup(device, up_to_date=False):
     '''
-        This function makes a backup of a device from SC API into a S3 bucket for later recovery
+        This function makes a backup of a device from SC API into a S3 bucket for later recovery.
+        Backups wait for their period (_backup_interval_days) to end, so that each one appends a whole
+        period. up_to_date backs up to the last reading without waiting (long processing reads the
+        backups and should not lag behind)
     '''
     task_log = []
 
@@ -77,10 +80,12 @@ async def dbackup(device):
                 d.options.min_date = last_requested_data
                 d.options.max_date = last_requested_data + datetime.timedelta(days=config._backup_interval_days)
 
-                # Up to the last reading, without waiting for the period to end: long processing
-                # reads the backups, they should not lag behind. The next run continues from there
-                # (the reading at the boundary is stored twice and dropped when reading)
-                if d.options.max_date > d.handler.json.last_reading_at:
+                if d.options.max_date > datetime.datetime.now(tz=datetime.timezone.utc) and not up_to_date:
+                    task_log.append(logger_handler(f'Best to wait until period is complete, skip'))
+                    skip = True
+                # The next run continues from there (the reading at the boundary is stored twice and
+                # dropped when reading)
+                elif d.options.max_date > d.handler.json.last_reading_at:
                     d.options.max_date = d.handler.json.last_reading_at
 
             else:
@@ -137,7 +142,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Back up a device of the Smart Citizen API')
     parser.add_argument('--device', type=int, required=True)
+    parser.add_argument('--up-to-date', action='store_true', help='Back up to the last reading, without waiting for the period to end')
     args = parser.parse_args()
 
-    log, state = asyncio.run(dbackup(args.device))
+    log, state = asyncio.run(dbackup(args.device, up_to_date=args.up_to_date))
     logger.info(f'Result: {state}')

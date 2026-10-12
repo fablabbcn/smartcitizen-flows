@@ -44,7 +44,8 @@ async def back_up(device_id, logger_handler, task_log):
         task_log.append(logger_handler('A backup of the device is running: using the backups as they are', 'warning'))
         return True
     try:
-        backup_log, backup_state = await dbackup(device_id)
+        # Without waiting for the backup period to end: the window ends now
+        backup_log, backup_state = await dbackup(device_id, up_to_date=True)
     finally:
         locks.release(key, token)
     task_log += [f'backup {line}' for line in backup_log]

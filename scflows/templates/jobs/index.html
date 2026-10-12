@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, csrf, datetime, device_link, duration, hardware_link, job_status, table_tools with context %}
+{% from "_macros.html" import badge, csrf, datetime, device_link, short_datetime, duration, hardware_link, job_status, table_tools with context %}
 {% block title %}Jobs{% endblock %}
 {% block content %}
 <div class="page-header">
@@ -53,28 +53,26 @@
                 <a href="{{ url_for('jobs_ui.index', task='backup') }}" {% if task == 'backup' %}aria-current="page"{% endif %}>Backups<span class="count">{{ counts.get('backup', 0) }}</span></a>
             </nav>
         </div>
-        {{ table_tools('Filter by device, name, hardware, status or result') }}
+        {{ table_tools('Filter by device, hardware or status') }}
         <div class="table-wrap scroll">
-            <table class="table">
+            <table class="table compact">
                 <thead><tr>
-                    <th data-sort="number">Device</th><th data-sort>Name</th><th data-sort>Hardware</th><th data-sort>Task</th><th data-sort>Status</th><th data-sort="number" class="num">Every</th>
+                    <th data-sort>Device</th><th data-sort>Hardware</th><th data-sort>Task</th><th data-sort>Status</th>
                     <th data-sort>Next run</th><th data-sort>Last run</th><th class="actions"><span class="sr-only">Actions</span></th>
                 </tr></thead>
                 <tbody>
                 {% for job in jobs %}
                     {% set last = latest.get(job.id) %}
                     <tr>
-                        <td data-value="{{ job.device_id }}"><a href="{{ url_for('jobs_ui.device', device_id=job.device_id) }}">{{ job.device_id }}</a></td>
-                        <td class="clip narrow" title="{{ names.get(job.device_id, '') }}">{{ names.get(job.device_id, '') }}</td>
+                        <td class="clip narrow" title="{{ names.get(job.device_id, '') }} #{{ job.device_id }}"><a href="{{ url_for('jobs_ui.device', device_id=job.device_id) }}">{{ names.get(job.device_id) or 'Device' }}</a> <span class="muted small">#{{ job.device_id }}</span></td>
                         <td class="nowrap">{% if job.hardware %}{{ hardware_link(job.hardware) if job.hardware in hardware else job.hardware }}
-                            {%- if job.hardware not in hardware %} <span class="badge warning" title="Not in flows">not in flows</span>
-                            {%- elif uncalibrated.get(job.hardware) %} <span class="badge warning" title="Without calibration: {{ uncalibrated[job.hardware] | join(', ') }}">{{ uncalibrated[job.hardware] | length }} uncalibrated</span>{% endif %}
+                            {%- if job.hardware not in hardware %} <span class="badge warning" title="This hardware is not in flows">missing</span>
+                            {%- elif uncalibrated.get(job.hardware) %} <span class="badge warning" title="{{ uncalibrated[job.hardware] | length }} sensor ids without calibration: {{ uncalibrated[job.hardware] | join(', ') }}">{{ uncalibrated[job.hardware] | length }} uncal.</span>{% endif %}
                         {%- endif %}</td>
-                        <td>{{ job.task }}</td>
-                        <td>{{ job_status(job) }}</td>
-                        <td class="num" data-value="{{ job.interval_hours }}">{{ job.interval_hours }} h</td>
-                        <td class="nowrap">{{ datetime(job.next_run_at) }}</td>
-                        <td>{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
+                        <td class="nowrap">{{ job.task }} <span class="muted small">{{ job.interval_hours }} h</span></td>
+                        <td class="nowrap">{{ job_status(job) }}</td>
+                        <td class="nowrap" data-value="{{ job.next_run_at.isoformat() }}">{{ short_datetime(job.next_run_at) }}</td>
+                        <td class="clip narrow" title="{{ last.message if last and last.message else '' }}">{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
                         <td class="actions"><div class="row-actions">
                             <form id="run-{{ job.id }}" method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}">{{ csrf() }}</form>
                             {% if job.task in ('process', 'long') %}<label class="check small" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run" form="run-{{ job.id }}"> Dry run</label>{% else %}<span></span>{% endif %}
@@ -86,7 +84,7 @@
                         </div></td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="9" class="empty">No jobs yet. They are created by the daily sync, or with "Add job".</td></tr>
+                    <tr><td colspan="7" class="empty">No jobs yet. They are created by the daily sync, or with "Add job".</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

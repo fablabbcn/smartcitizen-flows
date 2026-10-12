@@ -21,6 +21,9 @@
 {%- if job.source == 'manual' %} <span class="badge plain">manual</span>{% endif %}
 {%- endmacro %}
 
+{# Without the year, the full date on hover: for tight tables #}
+{% macro short_datetime(value) %}{% if value %}<time datetime="{{ value.isoformat() }}" title="{{ value.strftime('%Y-%m-%d %H:%M') }} UTC">{{ value.strftime('%m-%d %H:%M') }}</time>{% endif %}{% endmacro %}
+
 {% macro datetime(value, seconds=False) %}{% if value %}<time datetime="{{ value.isoformat() }}">{{ value.strftime('%Y-%m-%d %H:%M:%S' if seconds else '%Y-%m-%d %H:%M') }}</time>{% endif %}{% endmacro %}
 
 {% macro duration(run) -%}

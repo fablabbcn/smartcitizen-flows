@@ -47,7 +47,7 @@ def test_jobs_table_links_devices_and_hardware(client):
 
     assert 'href="/jobs/devices/1"' in text and 'href="/metadata/hardware/SCAS_TEST1"' in text
     # SCAS_TEST2 mounts 202760040, without calibration
-    assert '1 uncalibrated' in text and '202760040' in text
+    assert '1 uncal.' in text and '202760040' in text
 
 
 def test_device_page(client):

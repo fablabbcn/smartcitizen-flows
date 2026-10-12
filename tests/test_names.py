@@ -246,3 +246,42 @@ def test_malformed_names_file_is_reported(app, tmp_path):
 
     assert len(report.errors) == 1 and 'SCDevice.json: cannot be read as JSON' in report.errors[0]
     assert report.created['names'] == 0 and report.created['hardware'] == 2
+
+
+def test_names_file_that_is_not_a_list_is_reported(app, tmp_path):
+    import shutil
+    source = tmp_path / 'smartcitizen-data'
+    shutil.copytree(DATA, source)
+    (source / 'names' / 'SCDevice.json').write_text('{"TEMP": {"id": 55}}')
+
+    report = import_metadata(str(source))
+
+    assert report.errors == [f"{source / 'names' / 'SCDevice.json'}: is not a list"]
+    assert report.created['names'] == 0 and report.created['hardware'] == 2
+
+
+def test_verify_reports_malformed_names(app, client, tmp_path):
+    import shutil
+    source = tmp_path / 'smartcitizen-data'
+    shutil.copytree(DATA, source)
+    (source / 'names' / 'SCDevice.json').write_text('[{"name": "TEMP"}]')
+
+    differences = verify_metadata(str(source))
+
+    assert differences == ["names/SCDevice.json: cannot be compared (KeyError: 'id')"]
+
+
+def test_sync_keeps_accepted_changes_when_one_fails(app, client, sources, monkeypatch):
+    save_name = names_module.editing.save_name
+
+    def failing(name, data, **kwargs):
+        if name == 'SCD4X_CO2':
+            raise ValueError('description: too long')
+        return save_name(name, data, **kwargs)
+
+    monkeypatch.setattr(names_module.editing, 'save_name', failing)
+    result = sync(app, '--yes')
+
+    assert 'not applied: description: too long' in result.output and '1 of 2 changes applied' in result.output
+    db.session.expire_all()
+    assert client.get('/api/v1/names/BATT_VOLT').get_json()['id'] == 222

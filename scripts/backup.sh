@@ -12,6 +12,8 @@ set -a
 . ./.env
 set +a
 
+# The dumps hold the whole database: readable by this user only
+umask 077
 mkdir -p "$BACKUP_DIR"
 file="$BACKUP_DIR/flows-$(date +%F).sql.gz"
 # A failed dump leaves no temporary file behind

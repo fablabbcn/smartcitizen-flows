@@ -156,10 +156,16 @@ def test_dry_run_stores_nothing(run, root):
     ({'hardware': 'SCAS_TEST2'}, ['ABORTED', 'NO_LONG_BLUEPRINT']),
     ({'empty': True}, ['ABORTED', 'EMPTY_DATA']),
     ({'process': False}, ['ABORTED', 'PROCESSING_FAILED']),
-    ({'process_raises': True}, ['ABORTED', 'PROCESSING_FAILED']),
 ])
 def test_long_run_aborts(run, root, options, state):
     assert run(**options)[0] == state
+    assert not (root / 'devices').exists()
+
+
+def test_long_run_fails_when_processing_raises(run, root):
+    state = run(process_raises=True)[0]
+
+    assert state[0] == 'FAILED' and state[1].startswith('PROCESSING_ERROR: ')
     assert not (root / 'devices').exists()
 
 

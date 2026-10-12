@@ -6,11 +6,11 @@
 <div class="breadcrumbs"><a href="{{ url_for('jobs_ui.index') }}">Jobs</a><span>Run #{{ run.id }}</span></div>
 <div class="page-header">
     <div>
-        <h1 class="row">{{ run.task | capitalize }} device {{ run.device_id }} {{ badge(run.state) }}{% if run.dry_run %} <span class="badge plain">dry run</span>{% endif %}</h1>
+        <h1 class="row">{% if run.device_id %}{{ run.task | capitalize }} device {{ run.device_id }}{% else %}{{ run.task | capitalize }} of the jobs{% endif %} {{ badge(run.state) }}{% if run.dry_run %} <span class="badge plain">dry run</span>{% endif %}</h1>
         <p class="subtitle">{{ run.message or ('Waiting for a worker' if run.state == 'queued' else 'Running' if run.state == 'running' else '') }}{% if run.state in ('queued', 'running') %} · refreshes every 5 seconds{% endif %}</p>
     </div>
     <div class="actions">
-        <a class="btn" href="https://smartcitizen.me/kits/{{ run.device_id }}" target="_blank" rel="noopener">Device page</a>
+        {% if run.device_id %}<a class="btn" href="https://smartcitizen.me/kits/{{ run.device_id }}" target="_blank" rel="noopener">Device page</a>{% endif %}
         <a class="btn" href="{{ url_for('api.get_run', run_id=run.id) }}">JSON</a>
     </div>
 </div>

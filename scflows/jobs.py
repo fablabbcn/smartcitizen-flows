@@ -6,6 +6,8 @@
 - execute_run: runs a task for a device, holding a lock so that it never runs twice at the same time
 '''
 import asyncio
+import json
+import logging
 import random
 from datetime import datetime, timedelta, timezone
 
@@ -139,6 +141,13 @@ def devices_to_back_up(kinds=None, devices=None):
     return result
 
 
+def device_names(devices):
+    ''' {device id: name} of the devices of the Smart Citizen API '''
+    if devices is None or 'name' not in devices.columns:
+        return {}
+    return {int(device_id): name[:255] for device_id, name in devices['name'].items() if isinstance(name, str) and name}
+
+
 def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     '''
     Creates or enables the jobs of the devices that qualify and disables the automatic ones that do not.
@@ -152,21 +161,26 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     devices = postprocessing_devices() if to_process is None or to_back_up is None or full else None
     long_every = (devices_for_long(devices) if full else None) if for_long is None else (
         dict(for_long) if isinstance(for_long, dict) else {device_id: INTERVALS[Job.LONG] for device_id in for_long})
+    if devices is not None:
+        logger.info(f'{len(devices)} devices with postprocessing in the Smart Citizen API, {len(kinds or {})} hardware in flows')
     wanted = {Job.PROCESS: devices_to_process(kinds, devices) if to_process is None else set(to_process),
               Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up)}
     # A partial sync without the long devices leaves the long jobs as they are
     if long_every is not None:
         wanted[Job.LONG] = set(long_every)
+    names = device_names(devices)
     report = {}
-    for task, devices in wanted.items():
+    for task, qualified in wanted.items():
+        logger.info(f'{task}: {len(qualified)} devices qualify')
         counts = {'created': 0, 'enabled': 0, 'disabled': 0}
         jobs = {job.device_id: job for job in db.session.execute(db.select(Job).filter_by(task=task)).scalars()}
-        for device_id in devices:
+        for device_id in qualified:
             job = jobs.get(device_id)
             if job is None:
                 interval = long_every[device_id] if task == Job.LONG else INTERVALS[task]
                 # Spread the first runs over the interval
-                db.session.add(Job(device_id=device_id, task=task, interval_hours=interval, enabled=True,
+                db.session.add(Job(device_id=device_id, device_name=names.get(device_id), task=task,
+                                   interval_hours=interval, enabled=True,
                                    next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1))))
                 counts['created'] += 1
             elif not job.enabled:
@@ -179,7 +193,10 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
                 # A shorter interval brings the next run closer; a longer one applies after it
                 job.next_run_at = min(aware(job.next_run_at), now() + timedelta(hours=job.interval_hours))
         for device_id, job in jobs.items():
-            if device_id not in devices and job.enabled and job.source == Job.AUTO:
+            # Devices can be renamed
+            if names.get(device_id) and job.device_name != names[device_id]:
+                job.device_name = names[device_id]
+            if device_id not in qualified and job.enabled and job.source == Job.AUTO:
                 job.enabled = False
                 counts['disabled'] += 1
         report[task] = counts
@@ -294,7 +311,8 @@ def task_function(task):
 def execute_run(run_id):
     ''' Runs a queued run, unless the same task is already running for the device '''
     run = db.session.get(JobRun, run_id)
-    if run is None or run.state != JobRun.QUEUED:
+    # Syncs run with run_sync
+    if run is None or run.state != JobRun.QUEUED or run.task == JobRun.SYNC:
         return run
 
     key = f'scflows:lock:{run.task}:{run.device_id}'
@@ -336,12 +354,153 @@ def execute_run(run_id):
     return run
 
 
+# Syncs: hourly from beat, or on request (/jobs/, the API, the command line)
+
+SYNC_LOCK = 'scflows:lock:sync'
+LAST_SYNC = 'scflows:last_sync'
+# A sync takes a few minutes: the lock expires after this if a worker dies
+SYNC_LOCK_SECONDS = 30 * 60
+
+
+class RunLog(logging.Handler):
+    ''' Log lines of a run, as runs keep them ("level: message") '''
+    def __init__(self, level=logging.INFO):
+        super().__init__(level)
+        self.lines = []
+
+    def emit(self, record):
+        message = record.getMessage()
+        if record.exc_info and record.exc_info[1] is not None:
+            message += f' ({type(record.exc_info[1]).__name__}: {record.exc_info[1]})'
+        self.lines.append(f'{record.levelname.lower()}: {message}')
+
+
+def sync_summary(report):
+    return ' · '.join(f'{task} {counts["created"]} created, {counts["enabled"]} enabled, {counts["disabled"]} disabled'
+                      for task, counts in report.items())
+
+
+def queue_sync(username):
+    ''' Creates a sync run and sends it to the workers (it shows queued in /jobs/ until it starts) '''
+    from .worker import sync_jobs as sync_task
+
+    run = JobRun(task=JobRun.SYNC, username=username)
+    db.session.add(run)
+    db.session.commit()
+    try:
+        sync_task.delay(run_id=run.id)
+    except Exception as error:
+        logger.exception(f'Sync run {run.id} could not be sent to the workers')
+        run.state, run.message, run.finished_at = JobRun.FAILED, f'NOT_QUEUED: {type(error).__name__}: {error}', now()
+    db.session.commit()
+    return run
+
+
+def run_sync(source='schedule', run_id=None):
+    '''
+    Syncs the jobs with the Smart Citizen API, one sync at a time, as a run (task sync) with its log, and keeps
+    its result for /jobs/. run_id: the run created when it was requested. Returns the report, or None if a sync
+    was already running
+    '''
+    run = db.session.get(JobRun, run_id) if run_id is not None else None
+    if run is not None and run.username:
+        source = run.username
+    if run is None:
+        run = JobRun(task=JobRun.SYNC, username=None if source == 'schedule' else source)
+        db.session.add(run)
+    try:
+        token = locks.acquire(SYNC_LOCK, seconds=SYNC_LOCK_SECONDS)
+    except Exception as error:
+        # Redis cannot be reached: the run would otherwise stay queued (and block Sync now)
+        logger.exception(f'Sync run: cannot take the lock {SYNC_LOCK}')
+        run.state, run.message, run.finished_at = JobRun.FAILED, f'LOCK_FAILED: {type(error).__name__}: {error}', now()
+        db.session.commit()
+        raise
+    if token is None:
+        logger.info('A sync is already running')
+        run.state, run.message, run.finished_at = JobRun.ABORTED, 'ALREADY_RUNNING', now()
+        db.session.commit()
+        return None
+
+    run.state, run.started_at = JobRun.RUNNING, now()
+    db.session.commit()
+    run_id = run.id
+    result = {'source': source, 'run_id': run_id, 'started_at': run.started_at.isoformat()}
+    # What the sync logs (and the warnings of the Smart Citizen API client) goes to the run
+    log = RunLog()
+    connector_log = logging.getLogger('smartcitizen_connector')
+    # Logging configurations (e.g. alembic's) can disable the logger or raise its level: not for the run log
+    previous = logger.disabled, logger.level
+    logger.disabled = False
+    logger.setLevel(min(logger.level or logging.INFO, logging.INFO))
+    logger.addHandler(log)
+    connector_log.addHandler(warnings := RunLog(logging.WARNING))
+    state, message = JobRun.FAILED, 'INTERRUPTED'
+    try:
+        logger.info(f'Sync requested by {source}')
+        result['report'] = sync_jobs()
+        state, message = JobRun.SUCCESS, sync_summary(result['report'])
+        return result['report']
+    except Exception as error:
+        logger.exception('Sync failed')
+        db.session.rollback()
+        result['error'] = message = f'{type(error).__name__}: {error}'
+        raise
+    finally:
+        logger.removeHandler(log)
+        connector_log.removeHandler(warnings)
+        logger.disabled = previous[0]
+        logger.setLevel(previous[1])
+        result['finished_at'] = now().isoformat()
+        try:
+            run = db.session.get(JobRun, run_id)
+            run.state, run.message, run.finished_at = state, message, now()
+            run.log = log.lines + [line for line in warnings.lines if line not in log.lines]
+            db.session.commit()
+            # Redis down now must not hide the result of the sync (already in the run) or its error
+            try:
+                locks.client().set(LAST_SYNC, json.dumps(result))
+            except Exception:
+                logger.exception('Sync: cannot store the last result')
+        finally:
+            try:
+                locks.release(SYNC_LOCK, token)
+            except Exception:
+                # The lock expires after SYNC_LOCK_SECONDS
+                logger.exception('Sync: cannot release the lock')
+
+
+def last_sync():
+    ''' Result of the last sync ({source, run_id, started_at, finished_at, report or error}), or None '''
+    try:
+        value = locks.client().get(LAST_SYNC)
+    except Exception:
+        return None
+    return json.loads(value) if value else None
+
+
+def sync_running():
+    ''' A sync holds the lock, or was requested and has not started yet '''
+    try:
+        if locks.client().exists(SYNC_LOCK):
+            return True
+    except Exception:
+        pass
+    queued = db.select(JobRun.id).where(JobRun.task == JobRun.SYNC, JobRun.state == JobRun.QUEUED,
+                                        JobRun.created_at >= now() - timedelta(seconds=SYNC_LOCK_SECONDS))
+    return db.session.execute(queued.limit(1)).first() is not None
+
+
 # Command line
 
 @jobs_cli.command('sync')
 def sync_command():
     ''' Create, enable and disable jobs from the Smart Citizen API '''
-    for task, counts in sync_jobs().items():
+    report = run_sync(source='command line')
+    if report is None:
+        click.echo('A sync is already running')
+        raise SystemExit(1)
+    for task, counts in report.items():
         click.echo(f'{task}: {counts["created"]} created, {counts["enabled"]} enabled, {counts["disabled"]} disabled')
 
 

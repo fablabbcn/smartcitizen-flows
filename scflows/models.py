@@ -238,6 +238,8 @@ class Job(TimestampMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.Integer, nullable=False)
+    # From the Smart Citizen API, updated by the sync
+    device_name = db.Column(db.String(255))
     task = db.Column(db.String(16), nullable=False)
     source = db.Column(db.String(16), nullable=False, default=AUTO)
     # enabled: the device qualifies (set by the sync). paused: stopped by an admin
@@ -256,7 +258,8 @@ class Job(TimestampMixin, db.Model):
 
     def to_json(self):
         return {
-            'id': self.id, 'device_id': self.device_id, 'task': self.task, 'source': self.source,
+            'id': self.id, 'device_id': self.device_id, 'device_name': self.device_name, 'task': self.task,
+            'source': self.source,
             'enabled': self.enabled, 'paused': self.paused, 'interval_hours': self.interval_hours,
             'next_run_at': self.next_run_at.isoformat() if self.next_run_at else None,
             'last_queued_at': self.last_queued_at.isoformat() if self.last_queued_at else None,
@@ -264,7 +267,8 @@ class Job(TimestampMixin, db.Model):
 
 
 class JobRun(db.Model):
-    ''' One execution of a job, or of a task requested once '''
+    ''' One execution of a job, of a task requested once, or of a sync of the jobs (task sync, no device) '''
+    SYNC = 'sync'
     QUEUED = 'queued'
     RUNNING = 'running'
     SUCCESS = 'success'
@@ -274,7 +278,8 @@ class JobRun(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     job_id = db.Column(db.Integer, db.ForeignKey('job.id', ondelete='SET NULL'), index=True)
     job = db.relationship('Job', back_populates='runs')
-    device_id = db.Column(db.Integer, nullable=False, index=True)
+    # Empty for syncs
+    device_id = db.Column(db.Integer, index=True)
     task = db.Column(db.String(16), nullable=False)
     dry_run = db.Column(db.Boolean, nullable=False, default=False)
     state = db.Column(db.String(16), nullable=False, default=QUEUED)

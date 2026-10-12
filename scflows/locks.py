@@ -20,7 +20,9 @@ def client():
     global _client
     if _client is None:
         import redis
-        _client = redis.Redis.from_url(environ.get('REDIS_URL', 'redis://redis:6379/1'))
+        # Short timeouts: pages that show the sync status do not hang if Redis is down
+        _client = redis.Redis.from_url(environ.get('REDIS_URL', 'redis://redis:6379/1'),
+                                       socket_connect_timeout=2, socket_timeout=5)
     return _client
 
 

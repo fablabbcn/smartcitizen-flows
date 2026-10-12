@@ -8,7 +8,7 @@ Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows
 
 Each device has a job per task: `process` (calculate channels from the blueprint and post them to the Smart Citizen API, every 3 hours) and `backup` (store the data in S3, every 6 hours). Jobs are stored in the database:
 
-- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every day. Which jobs a device gets depends on the blueprints of its hardware (see Blueprint kinds): `process` if its hardware has a process blueprint and it has new readings; `backup` if its hardware has a long or a backup blueprint. Devices are read from the Smart Citizen API by their postprocessing (the API cannot search users by role). Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
+- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour (or on request: "Sync now" in `/jobs/`, `POST /api/v1/jobs/sync`, `flask --app scflows jobs sync`; one sync at a time). Each sync is a run (task `sync`, no device) with its log and result, in the latest runs of `/jobs/`; the last one also shows in `GET /api/v1/jobs/sync`. Which jobs a device gets depends on the blueprints of its hardware (see Blueprint kinds): `process` if its hardware has a process blueprint and it has new readings; `backup` if its hardware has a long or a backup blueprint. Devices are read from the Smart Citizen API by their postprocessing (the API cannot search users by role). Jobs that do not qualify anymore are disabled; jobs paused by admins stay paused
 - `celery` workers run them. A device task never runs twice at the same time (lock in Redis)
 - Each run is recorded with its result and log
 

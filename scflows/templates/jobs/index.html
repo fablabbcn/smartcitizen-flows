@@ -5,7 +5,19 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
-        <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced daily with the Smart Citizen API.</p>
+        <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced every hour with the Smart Citizen API.</p>
+        <p class="hint">
+            {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
+            {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}:
+                {% for task, counts in last_sync.report.items() %}{{ task }} {{ counts.created }} created, {{ counts.enabled }} enabled, {{ counts.disabled }} disabled{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+            {% else %}No sync recorded yet.{% endif %}
+        </p>
+    </div>
+    <div class="actions">
+        <form method="POST" action="{{ url_for('jobs_ui.sync_now') }}">
+            {{ csrf() }}
+            <button class="btn" type="submit" {% if sync_running %}disabled{% endif %} title="Create, enable and disable jobs from the Smart Citizen API now">Sync now</button>
+        </form>
     </div>
 </div>
 
@@ -41,11 +53,11 @@
                 <a href="{{ url_for('jobs_ui.index', task='backup') }}" {% if task == 'backup' %}aria-current="page"{% endif %}>Backups<span class="count">{{ counts.get('backup', 0) }}</span></a>
             </nav>
         </div>
-        {{ table_tools('Filter by device, status or result') }}
+        {{ table_tools('Filter by device, name, status or result') }}
         <div class="table-wrap scroll">
             <table class="table">
                 <thead><tr>
-                    <th data-sort="number">Device</th><th data-sort>Task</th><th data-sort>Status</th><th data-sort="number" class="num">Every</th>
+                    <th data-sort="number">Device</th><th data-sort>Name</th><th data-sort>Task</th><th data-sort>Status</th><th data-sort="number" class="num">Every</th>
                     <th data-sort>Next run</th><th data-sort>Last run</th><th class="actions"><span class="sr-only">Actions</span></th>
                 </tr></thead>
                 <tbody>
@@ -53,25 +65,24 @@
                     {% set last = latest.get(job.id) %}
                     <tr>
                         <td><a href="https://smartcitizen.me/kits/{{ job.device_id }}" target="_blank" rel="noopener">{{ job.device_id }}</a></td>
+                        <td class="clip narrow" title="{{ names.get(job.device_id, '') }}">{{ names.get(job.device_id, '') }}</td>
                         <td>{{ job.task }}</td>
                         <td>{{ job_status(job) }}</td>
                         <td class="num" data-value="{{ job.interval_hours }}">{{ job.interval_hours }} h</td>
                         <td class="nowrap">{{ datetime(job.next_run_at) }}</td>
                         <td>{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
-                        <td class="actions">
-                            <form method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}">
-                                {{ csrf() }}
-                                {% if job.task in ('process', 'long') %}<label class="check small" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run"> Dry run</label>{% endif %}
-                                <button class="btn sm" type="submit">Run now</button>
-                            </form>
+                        <td class="actions"><div class="row-actions">
+                            <form id="run-{{ job.id }}" method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}">{{ csrf() }}</form>
+                            {% if job.task in ('process', 'long') %}<label class="check small" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run" form="run-{{ job.id }}"> Dry run</label>{% else %}<span></span>{% endif %}
+                            <button class="btn sm" type="submit" form="run-{{ job.id }}">Run now</button>
                             <form method="POST" action="{{ url_for('jobs_ui.resume_job' if job.paused else 'jobs_ui.pause_job', job_id=job.id) }}">
                                 {{ csrf() }}
                                 <button class="btn sm {{ 'success' if job.paused else 'warning' }}" type="submit">{{ 'Resume' if job.paused else 'Pause' }}</button>
                             </form>
-                        </td>
+                        </div></td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="7" class="empty">No jobs yet. They are created by the daily sync, or with "Add job".</td></tr>
+                    <tr><td colspan="8" class="empty">No jobs yet. They are created by the hourly sync, or with "Add job".</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -89,7 +100,7 @@
                 {% for item in runs %}
                     <tr>
                         <td class="num"><a href="{{ url_for('jobs_ui.run', run_id=item.id) }}">#{{ item.id }}</a></td>
-                        <td>{{ item.device_id }}</td>
+                        <td>{% if item.device_id %}{{ names.get(item.device_id) or item.device_id }} <span class="muted small">#{{ item.device_id }}</span>{% endif %}</td>
                         <td>{{ item.task }}{% if item.dry_run %} <span class="badge plain">dry run</span>{% endif %}</td>
                         <td>{{ badge(item.state) }}</td>
                         <td class="clip" title="{{ item.message or '' }}">{{ item.message or '' }}</td>

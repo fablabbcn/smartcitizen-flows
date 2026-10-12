@@ -356,8 +356,8 @@ def run_options(task):
     if not isinstance(body, dict):
         abort(400, 'The body must be a json object')
     dry_run = bool(body.get('dry_run', False))
-    if dry_run and task != Job.PROCESS:
-        abort(400, 'dry_run is only available for process')
+    if dry_run and task not in (Job.PROCESS, Job.LONG):
+        abort(400, 'dry_run is only available for process and long')
     return dry_run
 
 

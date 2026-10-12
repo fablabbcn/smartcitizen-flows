@@ -23,6 +23,8 @@ jobs_cli = AppGroup('jobs', help='Device jobs (processing and backups)')
 INTERVALS = {
     Job.PROCESS: config._postprocessing_task_exec_interval_hours,
     Job.BACKUP: config._backup_task_exec_interval_hours,
+    # Weekly unless the long blueprint says otherwise (meta.every_days)
+    Job.LONG: 7 * 24,
 }
 # Results of the tasks: SUCCESS, FAILED or ABORTED (anything else)
 STATES = {'SUCCESS': JobRun.SUCCESS, 'FAILED': JobRun.FAILED}
@@ -96,6 +98,30 @@ def devices_to_process(kinds=None, devices=None):
     return result
 
 
+def devices_for_long(devices=None):
+    ''' {device id: hours between runs} of devices with readings whose hardware has a long blueprint '''
+    from .identity import hardware_name
+    from .models import Blueprint, Hardware
+
+    every = {}
+    for item in db.session.execute(db.select(Hardware)).scalars():
+        blueprint = item.blueprint_of(Blueprint.LONG)
+        if blueprint is not None:
+            every[item.name] = int((blueprint.meta.get('every_days') or 7) * 24)
+
+    devices = postprocessing_devices() if devices is None else devices
+    result = {}
+    for device_id in devices.index:
+        device = devices.loc[device_id, :]
+        postprocessing = device.postprocessing
+        if not postprocessing or not postprocessing.get('hardware_url') or pd.isna(device.last_reading_at):
+            continue
+        name = hardware_name(postprocessing['hardware_url'])
+        if name in every:
+            result[int(device_id)] = every[name]
+    return result
+
+
 def devices_to_back_up(kinds=None, devices=None):
     '''
     Devices with readings whose hardware has a backup blueprint, or a long one (long processing reads
@@ -113,16 +139,24 @@ def devices_to_back_up(kinds=None, devices=None):
     return result
 
 
-def sync_jobs(to_process=None, to_back_up=None):
+def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     '''
     Creates or enables the jobs of the devices that qualify and disables the automatic ones that do not.
     Paused jobs stay paused. Returns {task: {'created': n, 'enabled': n, 'disabled': n}}
     '''
     kinds = hardware_kinds() if to_process is None or to_back_up is None else None
+    # Long jobs run every few days, as their blueprint says: {device id: hours}
+    # From the Smart Citizen API only on a full sync (no lists given)
+    full = to_process is None and to_back_up is None and for_long is None
     # One request for all the lists
-    devices = postprocessing_devices() if to_process is None or to_back_up is None else None
+    devices = postprocessing_devices() if to_process is None or to_back_up is None or full else None
+    long_every = (devices_for_long(devices) if full else None) if for_long is None else (
+        dict(for_long) if isinstance(for_long, dict) else {device_id: INTERVALS[Job.LONG] for device_id in for_long})
     wanted = {Job.PROCESS: devices_to_process(kinds, devices) if to_process is None else set(to_process),
               Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up)}
+    # A partial sync without the long devices leaves the long jobs as they are
+    if long_every is not None:
+        wanted[Job.LONG] = set(long_every)
     report = {}
     for task, devices in wanted.items():
         counts = {'created': 0, 'enabled': 0, 'disabled': 0}
@@ -130,7 +164,7 @@ def sync_jobs(to_process=None, to_back_up=None):
         for device_id in devices:
             job = jobs.get(device_id)
             if job is None:
-                interval = INTERVALS[task]
+                interval = long_every[device_id] if task == Job.LONG else INTERVALS[task]
                 # Spread the first runs over the interval
                 db.session.add(Job(device_id=device_id, task=task, interval_hours=interval, enabled=True,
                                    next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1))))
@@ -138,6 +172,12 @@ def sync_jobs(to_process=None, to_back_up=None):
             elif not job.enabled:
                 job.enabled = True
                 counts['enabled'] += 1
+            # The blueprint of a long job can change every_days
+            if job is not None and task == Job.LONG and job.source == Job.AUTO \
+                    and job.interval_hours != long_every[device_id]:
+                job.interval_hours = long_every[device_id]
+                # A shorter interval brings the next run closer; a longer one applies after it
+                job.next_run_at = min(aware(job.next_run_at), now() + timedelta(hours=job.interval_hours))
         for device_id, job in jobs.items():
             if device_id not in devices and job.enabled and job.source == Job.AUTO:
                 job.enabled = False
@@ -244,6 +284,9 @@ def task_function(task):
     if task == Job.PROCESS:
         from .tasks.dprocess import dprocess
         return lambda device_id, dry_run: dprocess(device_id, dry_run=dry_run)
+    if task == Job.LONG:
+        from .tasks.dlong import dlong
+        return lambda device_id, dry_run: dlong(device_id, dry_run=dry_run)
     from .tasks.dbackup import dbackup
     return lambda device_id, dry_run: dbackup(device_id)
 

@@ -5,7 +5,7 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
-        <p class="subtitle">Devices are processed every few hours and backed up periodically. The list is synced daily with the Smart Citizen API.</p>
+        <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced daily with the Smart Citizen API.</p>
     </div>
 </div>
 
@@ -15,8 +15,8 @@
             {{ csrf() }}
             <span class="title">Run now</span>
             <input class="input short" name="device_id" placeholder="Device id" inputmode="numeric" aria-label="Device id" required>
-            <select class="input" name="task" aria-label="Task"><option value="process">process</option><option value="backup">backup</option></select>
-            <label class="check" title="Process without posting the results"><input type="checkbox" name="dry_run"> Dry run</label>
+            <select class="input" name="task" aria-label="Task"><option value="process">process</option><option value="long">long</option><option value="backup">backup</option></select>
+            <label class="check" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run"> Dry run</label>
             <button class="btn primary" type="submit">Run</button>
         </form>
     </div></div>
@@ -25,7 +25,7 @@
             {{ csrf() }}
             <span class="title">Add job</span>
             <input class="input short" name="device_id" placeholder="Device id" inputmode="numeric" aria-label="Device id" required>
-            <select class="input" name="task" aria-label="Task"><option value="process">process</option><option value="backup">backup</option></select>
+            <select class="input" name="task" aria-label="Task"><option value="process">process</option><option value="long">long</option><option value="backup">backup</option></select>
             <button class="btn" type="submit">Add</button>
         </form>
     </div></div>
@@ -37,6 +37,7 @@
             <nav class="segmented" aria-label="Task">
                 <a href="{{ url_for('jobs_ui.index') }}" {% if not task %}aria-current="page"{% endif %}>All<span class="count">{{ counts.values() | sum }}</span></a>
                 <a href="{{ url_for('jobs_ui.index', task='process') }}" {% if task == 'process' %}aria-current="page"{% endif %}>Processing<span class="count">{{ counts.get('process', 0) }}</span></a>
+                <a href="{{ url_for('jobs_ui.index', task='long') }}" {% if task == 'long' %}aria-current="page"{% endif %}>Long<span class="count">{{ counts.get('long', 0) }}</span></a>
                 <a href="{{ url_for('jobs_ui.index', task='backup') }}" {% if task == 'backup' %}aria-current="page"{% endif %}>Backups<span class="count">{{ counts.get('backup', 0) }}</span></a>
             </nav>
         </div>
@@ -60,7 +61,7 @@
                         <td class="actions">
                             <form method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}">
                                 {{ csrf() }}
-                                {% if job.task == 'process' %}<label class="check small" title="Process without posting the results"><input type="checkbox" name="dry_run"> Dry run</label>{% endif %}
+                                {% if job.task in ('process', 'long') %}<label class="check small" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run"> Dry run</label>{% endif %}
                                 <button class="btn sm" type="submit">Run now</button>
                             </form>
                             <form method="POST" action="{{ url_for('jobs_ui.resume_job' if job.paused else 'jobs_ui.pause_job', job_id=job.id) }}">

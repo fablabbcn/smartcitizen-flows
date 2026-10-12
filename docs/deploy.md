@@ -94,7 +94,7 @@ reclaim it (see [Updating](#updating)).
 |---|---|---|
 | `proxy` | `caddy:2-alpine` | TLS (Let's Encrypt), HTTP to HTTPS redirect, `/flower` behind basic auth, everything else to `web`. The only service with published ports. |
 | `web` | `scflows:latest` | Flask app: web interface, metadata API (`/api/v1/`). Applies database migrations before serving. |
-| `celery` | `scflows:latest` | Workers that run the jobs: `dprocess` (processing) and `dbackup` (backups to S3). |
+| `celery` | `scflows:latest` | Workers that run the jobs: `dprocess` (processing), `dlong` (long processing from the backups, results to S3) and `dbackup` (backups to S3). |
 | `beat` | `scflows:latest` | Scheduler, **one instance only**: queues the due jobs every minute, syncs the jobs with the Smart Citizen API every day at 03:00 (`CELERY_TIMEZONE`), and deletes device health older than 30 days at 03:30. |
 | `flower` | `scflows:latest` | Celery monitoring, under `/flower`. |
 | `postgres` | `postgres:16-alpine` | Metadata (blueprints, hardware, calibrations), their revision history, jobs and runs. |

@@ -37,7 +37,7 @@ A `long` job (weekly by default, `every_days` of the blueprint) backs the device
 
 The baseline parameters need tuning away from the defaults of the long blueprint, and the same values usually work for every sensor of a type. Parameter sets (`/metadata/` Parameters tab, `GET/PUT/DELETE /api/v1/parameters/<type>`) hold kwargs per channel for a sensor type: Alphasense types (`ASB4_NO2`, `ASA4_CO`..., read from the sensor id) apply to the channel whose sensor is of that type, in each hardware version; NDIR types (`SCD30`, `SCD4X`) when the blueprint reads that sensor. A hardware can override them for its devices (`parameters`: `{channel: kwargs}`), and `function` switches the algorithm of a channel (e.g. `{"O3": {"function": "alphasense_803_04"}}` keeps the 803 algorithm for O3). Each run stores the sets and parameters it used.
 
-Backups now write up to the last reading on every run instead of waiting for their 20 day period to end, so long processing works on recent data. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
+Backups wait for their 20 day period to end, so that each one appends a whole period. Before reading the backups, a long job backs its device up to the last reading, so long processing works on recent data. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
 
 ## Device health
 

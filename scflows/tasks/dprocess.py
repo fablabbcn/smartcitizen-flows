@@ -57,10 +57,12 @@ async def dprocess(device, dry_run = False):
                 task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
                 # Process it (a channel graph with a cycle raises): the checks run anyway
+                error = None
                 try:
                     processed = d.process()
-                except Exception as error:
-                    task_log.append(logger_handler(f'Processing failed: {type(error).__name__}: {error}', 'error'))
+                except Exception as exception:
+                    error = f'{type(exception).__name__}: {exception}'
+                    task_log.append(logger_handler(f'Processing failed: {error}', 'error'))
                     processed = False
                 # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
                 health = health_checks(d, logger_handler, task_log)
@@ -80,6 +82,9 @@ async def dprocess(device, dry_run = False):
                     else:
                         task_log.append(logger_handler(f'Device {device} was not posted', 'warning'))
                         task_state = ['ABORTED', 'POSTPROCESSING_UPDATE_FAILED']
+                elif error:
+                    # An error, as when it failed the celery task: not a device that cannot be processed
+                    task_state = ['FAILED', f'PROCESSING_ERROR: {error}']
                 else:
                     task_state = ['ABORTED', 'PROCESSING_FAILED']
             else:

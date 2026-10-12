@@ -238,7 +238,14 @@ def sync_command(firmware_location, yes, dry_run):
             if answer == 'n':
                 continue
             apply_all = answer == 'a'
-        editing.save_name(change.name, change.after, identity=SYNC_USER)
+        try:
+            editing.save_name(change.name, change.after, identity=SYNC_USER)
+            # Each change on its own: an error or Ctrl+C later keeps the ones already accepted
+            db.session.commit()
+        except ValueError as error:  # pydantic's ValidationError is a ValueError
+            db.session.rollback()
+            click.echo(f'    not applied: {error}')
+            continue
         applied += 1
 
     if dry_run:

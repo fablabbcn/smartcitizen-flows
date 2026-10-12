@@ -637,18 +637,26 @@ Restore into an empty database (`--force` closes any connection left open). When
 dump is missing, so an older dump also works with newer code:
 
 ```bash
+dump=~/backups/flows-2026-10-08.sql.gz
+# Check the archive before touching the database, and dump the current one first (in its own folder)
+gunzip -t "$dump" && BACKUP_DIR=~/backups/before-restore RETENTION_DAYS=365 scripts/backup.sh
 docker compose stop web celery beat
 docker compose exec -T postgres sh -c 'dropdb --force --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
-gunzip -c ~/backups/flows-2026-10-08.sql.gz | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
+gunzip -c "$dump" | docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"'
 docker compose up -d
 ```
+
+Stop if `gunzip -t` or the backup fails.
 
 Store the dumps off the server: a backup on the same disk is not one. `.env`
 belongs in a password manager, not with the dumps.
 
 ### Daily, with cron
 
+The folder of the log must exist before the first run (cron cannot open the log otherwise):
+
 ```bash
+mkdir -p /home/deploy/backups
 crontab -e
 ```
 

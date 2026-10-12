@@ -418,7 +418,11 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 .table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .actions { text-align: right; white-space: nowrap; }
 .table .actions form { display: inline-flex; align-items: center; gap: var(--space-2); margin-left: var(--space-2); }
+/* Same columns in every row: dry run (or nothing), run now, pause or resume */
+.table .row-actions { display: inline-grid; grid-template-columns: auto auto 5.5rem; align-items: center; gap: var(--space-2); }
+.table .row-actions form { display: contents; }
 .table .clip { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table .clip.narrow { max-width: 16rem; }
 .table .empty { padding: var(--space-6); color: var(--color-text-muted); text-align: center; }
 
 .table th[data-sort] { cursor: pointer; user-select: none; }

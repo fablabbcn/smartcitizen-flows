@@ -376,3 +376,20 @@ def test_changed_fields_tell_missing_from_null():
 
     revision = SimpleNamespace(before={'t20': 20}, after={'t20': 20, 'ae_total_zero_mv': None})
     assert changed_fields(revision) == ['ae_total_zero_mv']
+
+
+def test_jobs_page_shows_device_names(client):
+    import scflows.jobs as jobs
+    from scflows.health import record
+
+    jobs.sync_jobs(to_process={1, 2}, to_back_up=set())
+    jobs.find_job(1, 'process').device_name = 'Rooftop'
+    # A device without a name from the sync: the name of its latest health check
+    record(2, {'device_name': 'Old name', 'checks': [{'name': 'x', 'status': 'ok'}]})
+    record(2, {'device_name': 'Balcony', 'checks': [{'name': 'x', 'status': 'ok'}]})
+    db.session.commit()
+    sign_in(client, 'admin')
+
+    page = client.get('/jobs/').get_data(as_text=True)
+
+    assert '>Rooftop</td>' in page and '>Balcony</td>' in page and 'Old name' not in page

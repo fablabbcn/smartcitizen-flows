@@ -141,6 +141,13 @@ def devices_to_back_up(kinds=None, devices=None):
     return result
 
 
+def device_names(devices):
+    ''' {device id: name} of the devices of the Smart Citizen API '''
+    if devices is None or 'name' not in devices.columns:
+        return {}
+    return {int(device_id): name[:255] for device_id, name in devices['name'].items() if isinstance(name, str) and name}
+
+
 def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     '''
     Creates or enables the jobs of the devices that qualify and disables the automatic ones that do not.
@@ -161,17 +168,19 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     # A partial sync without the long devices leaves the long jobs as they are
     if long_every is not None:
         wanted[Job.LONG] = set(long_every)
+    names = device_names(devices)
     report = {}
-    for task, devices in wanted.items():
-        logger.info(f'{task}: {len(devices)} devices qualify')
+    for task, qualified in wanted.items():
+        logger.info(f'{task}: {len(qualified)} devices qualify')
         counts = {'created': 0, 'enabled': 0, 'disabled': 0}
         jobs = {job.device_id: job for job in db.session.execute(db.select(Job).filter_by(task=task)).scalars()}
-        for device_id in devices:
+        for device_id in qualified:
             job = jobs.get(device_id)
             if job is None:
                 interval = long_every[device_id] if task == Job.LONG else INTERVALS[task]
                 # Spread the first runs over the interval
-                db.session.add(Job(device_id=device_id, task=task, interval_hours=interval, enabled=True,
+                db.session.add(Job(device_id=device_id, device_name=names.get(device_id), task=task,
+                                   interval_hours=interval, enabled=True,
                                    next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1))))
                 counts['created'] += 1
             elif not job.enabled:
@@ -184,7 +193,10 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
                 # A shorter interval brings the next run closer; a longer one applies after it
                 job.next_run_at = min(aware(job.next_run_at), now() + timedelta(hours=job.interval_hours))
         for device_id, job in jobs.items():
-            if device_id not in devices and job.enabled and job.source == Job.AUTO:
+            # Devices can be renamed
+            if names.get(device_id) and job.device_name != names[device_id]:
+                job.device_name = names[device_id]
+            if device_id not in qualified and job.enabled and job.source == Job.AUTO:
                 job.enabled = False
                 counts['disabled'] += 1
         report[task] = counts

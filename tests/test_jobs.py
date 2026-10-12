@@ -417,3 +417,26 @@ def test_overview_figures(app, client):
     sign_in(client, 'researcher')
     page = client.get('/').get_data(as_text=True)
     assert 'active' not in page and 'hardware' in page
+
+
+def test_sync_stores_device_names(app, monkeypatch):
+    import smartcitizen_connector
+    import smartcitizen_connector.device
+
+    def devices(name):
+        return pd.DataFrame([{'id': 1, 'name': name, 'last_reading_at': '2026-10-01T00:00:00Z',
+                              'postprocessing': {'hardware_url': 'LONG', 'latest_postprocessing': None}}]).set_index('id')
+
+    monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', lambda postprocessing: (None, None, True))
+    monkeypatch.setattr(jobs, 'hardware_kinds', lambda: {'LONG': {'process', 'long'}})
+    monkeypatch.setattr(smartcitizen_connector, 'search_by_query', lambda **kwargs: devices('Rooftop'))
+    jobs.sync_jobs()
+    assert job('process', 1).device_name == 'Rooftop' and job('backup', 1).device_name == 'Rooftop'
+
+    # Renamed in the API
+    monkeypatch.setattr(smartcitizen_connector, 'search_by_query', lambda **kwargs: devices('Balcony'))
+    jobs.sync_jobs()
+    assert job('backup', 1).device_name == 'Balcony'
+    # A partial sync does not search the API, and keeps the names
+    jobs.sync_jobs(to_process={1}, to_back_up=set())
+    assert job('process', 1).device_name == 'Balcony'

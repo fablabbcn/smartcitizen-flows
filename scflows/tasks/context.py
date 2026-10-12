@@ -68,6 +68,8 @@ class TaskLogHandler(logging.Handler):
     def __init__(self, task_log, level):
         super().__init__(level)
         self.task_log = task_log
+        # A message repeated (e.g. once per channel) is kept once, with a count: {line: [position, count]}
+        self.seen = {}
 
     def emit(self, record):
         # Only to the innermost task: the outer one gets its log afterwards
@@ -76,7 +78,17 @@ class TaskLogHandler(logging.Handler):
         message = record.getMessage().strip()
         if record.exc_info and record.exc_info[1] is not None:
             message += f' ({type(record.exc_info[1]).__name__}: {record.exc_info[1]})'
-        self.task_log.append(f'{record.levelname.lower()}: [{record.name.split(".")[0]}] {message}')
+        line = f'{record.levelname.lower()}: [{record.name.split(".")[0]}] {message}'
+        if line in self.seen:
+            self.seen[line][1] += 1
+            return
+        self.seen[line] = [len(self.task_log), 1]
+        self.task_log.append(line)
+
+    def count_repeats(self):
+        for line, (position, count) in self.seen.items():
+            if count > 1 and position < len(self.task_log) and self.task_log[position] == line:
+                self.task_log[position] = f'{line} ({count} times)'
 
 
 @contextmanager
@@ -99,6 +111,7 @@ def library_warnings(task_log, names=('scdata', 'smartcitizen_connector'), level
         yield
     finally:
         ACTIVE.remove(handler)
+        handler.count_repeats()
         for item, (disabled, item_level) in zip(loggers, previous):
             item.removeHandler(handler)
             item.disabled = disabled

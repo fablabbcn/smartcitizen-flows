@@ -160,3 +160,15 @@ def test_library_warnings_go_to_the_innermost_task():
 
     assert outer == ['warning: [smartcitizen_connector] outer warning']
     assert inner == ['error: [scdata] cannot post']
+
+
+def test_repeated_warnings_are_counted():
+    task_log = []
+    with library_warnings(task_log):
+        for _ in range(3):
+            logging.getLogger('scdata').warning('Requested channel is None')
+            logging.getLogger('scdata').warning('WARNING_NULL_CHANNEL')
+        task_log.append('info: done')
+
+    assert task_log == ['warning: [scdata] Requested channel is None (3 times)',
+                        'warning: [scdata] WARNING_NULL_CHANNEL (3 times)', 'info: done']

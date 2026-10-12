@@ -64,3 +64,42 @@ def test_first_backup_stops_at_the_last_reading(s3, monkeypatch):
     assert state == ['SUCCESS', 'BACKUP_DONE']
     stored = json.loads(s3['devices/1/request.json'])
     assert datetime.datetime.fromisoformat(stored['last_requested_data']) == last
+
+
+def stored_backup(s3, until):
+    s3['devices/1/request.json'] = json.dumps({'last_requested_data': until.isoformat()}).encode()
+
+
+def test_backups_wait_for_their_period_to_end(s3, monkeypatch):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stored_backup(s3, now - datetime.timedelta(days=5))
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(now - datetime.timedelta(days=100), now))
+
+    _, state = asyncio.run(dbackup_module.dbackup(1))
+
+    assert state == ['ABORTED', 'NO_NEW_DATA']
+
+
+def test_up_to_date_backups_reach_the_last_reading(s3, monkeypatch):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    last = now - datetime.timedelta(hours=1)
+    stored_backup(s3, now - datetime.timedelta(days=5))
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(now - datetime.timedelta(days=100), last))
+
+    _, state = asyncio.run(dbackup_module.dbackup(1, up_to_date=True))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    assert datetime.datetime.fromisoformat(json.loads(s3['devices/1/request.json'])['last_requested_data']) == last
+
+
+def test_whole_periods_are_backed_up(s3, monkeypatch):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    start = now - datetime.timedelta(days=50)
+    stored_backup(s3, start)
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(now - datetime.timedelta(days=100), now))
+
+    _, state = asyncio.run(dbackup_module.dbackup(1))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    until = datetime.datetime.fromisoformat(json.loads(s3['devices/1/request.json'])['last_requested_data'])
+    assert until == start + datetime.timedelta(days=dbackup_module.config._backup_interval_days)

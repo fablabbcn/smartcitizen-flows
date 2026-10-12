@@ -35,7 +35,7 @@ Each blueprint has a kind (`meta.kind`, `process` when missing) and each hardwar
 
 A `long` job (weekly by default, `every_days` of the blueprint) backs the device up, reads the last `window_days` (90 by default) of its backups from the first day of that month, processes them with the long blueprint filled with the hardware's sensors (per hardware version), runs its health checks and stores the result in `devices/<id>/processed/<blueprint>/month=YYYY-MM/` (Parquet, one partition per month, replaced by each run) next to the backups, with the window and the parameters used in `devices/<id>/processed/<blueprint>.json`. Nothing is posted to the Smart Citizen API: the results are in the device's health page (hourly charts, CSV) and in `GET /api/v1/devices/<id>/series`, for admins and the researchers who own the device. The health checks of long runs are kept apart from those of the process runs. `STORAGE_ROOT` overrides `s3://<S3_DATA_BUCKET>` (e.g. a local folder).
 
-Backups now write up to the last reading on every run instead of waiting for their 20 day period to end, so long processing works on recent data. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
+Backups wait for their 20 day period to end, so that each one appends a whole period. Before reading the backups, a long job backs its device up to the last reading, so long processing works on recent data. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
 
 ## Device health
 

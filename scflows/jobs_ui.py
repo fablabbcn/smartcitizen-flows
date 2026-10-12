@@ -2,7 +2,7 @@
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from . import db
+from . import db, devices
 from .auth import admin_required
 from .forms import protect
 from .jobs import add_manual_job, find_job, last_sync, queue_run, queue_sync, set_paused, sync_running
@@ -10,6 +10,11 @@ from .models import DeviceHealth, Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
 protect(jobs_ui)
+
+
+@jobs_ui.app_template_filter('storage_link')
+def storage_link(location):
+    return devices.storage_link(location)
 
 
 def device_names():
@@ -42,9 +47,34 @@ def index():
     jobs = db.session.execute(query).scalars().all()
     counts = dict(db.session.execute(db.select(Job.task, db.func.count(Job.id)).group_by(Job.task)).all())
     runs = db.session.execute(db.select(JobRun).order_by(JobRun.id.desc()).limit(50)).scalars().all()
+    hardware = devices.hardware_by_name(job.hardware for job in jobs)
     return render_template('jobs/index.html', jobs=jobs, latest=latest_runs([job.id for job in jobs]), runs=runs,
                            task=task, counts=counts, names=device_names(), last_sync=last_sync(),
-                           sync_running=sync_running())
+                           sync_running=sync_running(), hardware=hardware,
+                           uncalibrated=devices.uncalibrated(hardware.values()))
+
+
+@jobs_ui.get('/devices/<int:device_id>')
+@admin_required
+def device(device_id):
+    ''' A device in flows: its jobs, hardware, calibrations, storage and latest runs '''
+    jobs = db.session.execute(db.select(Job).filter_by(device_id=device_id).order_by(Job.task)).scalars().all()
+    runs = db.session.execute(db.select(JobRun).filter_by(device_id=device_id).order_by(JobRun.id.desc())
+                              .limit(30)).scalars().all()
+    hardware_name = devices.device_hardware_name(device_id)
+    hardware = devices.hardware_by_name([hardware_name]).get(hardware_name)
+    calibrated = None
+    if hardware is not None:
+        missing = set(devices.uncalibrated([hardware])[hardware.name])
+        calibrated = {sensor_id: sensor_id not in missing for sensor_id in hardware.sensor_ids}
+    health = db.session.execute(db.select(DeviceHealth).filter_by(device_id=device_id)
+                                .order_by(DeviceHealth.id.desc()).limit(1)).scalar()
+    long_results = next((run.context.get('results') for run in runs if run.task == Job.LONG and run.context
+                         and run.context.get('results')), None)
+    return render_template('jobs/device.html', device_id=device_id, name=devices.device_name(device_id), jobs=jobs,
+                           runs=runs, latest=latest_runs([job.id for job in jobs]), hardware_name=hardware_name,
+                           hardware=hardware, calibrated=calibrated, health=health,
+                           backups=devices.backup_location(device_id), long_results=long_results)
 
 
 @jobs_ui.post('/sync')
@@ -65,7 +95,15 @@ def run(run_id):
     item = db.session.get(JobRun, run_id)
     if item is None:
         abort(404)
-    return render_template('jobs/run.html', run=item)
+    context = item.context or {}
+    # Sensor ids of the hardware as the run saw them: {sensor id: calibrated}
+    missing = set(context.get('uncalibrated') or [])
+    calibrated = {sensor_id: sensor_id not in missing for version in context.get('versions') or []
+                  for sensor_id in version.get('ids', {}).values()}
+    known = devices.hardware_by_name([context.get('hardware')]) if context.get('hardware') else {}
+    return render_template('jobs/run.html', run=item, context=context, calibrated=calibrated,
+                           hardware_in_flows=context.get('hardware') in known,
+                           name=context.get('device_name') or (devices.device_name(item.device_id) if item.device_id else None))
 
 
 def get_job(job_id):

@@ -436,6 +436,7 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 .details { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-5); margin: 0; font-size: var(--text-sm); }
 .details dt { color: var(--color-text-muted); }
 .details dd { margin: 0; }
+.plain-list { margin: 0; padding: 0; list-style: none; display: grid; gap: var(--space-1); }
 
 /* Log viewer */
 

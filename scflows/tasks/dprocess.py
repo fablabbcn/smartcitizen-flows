@@ -4,15 +4,37 @@ import sys
 import asyncio
 from scflows.config import config
 from scflows.custom_logger import logger
+from scflows.tasks.context import describe, device_context, iso, library_warnings
 from scflows.tools import refresh_metadata
 
-async def dprocess(device, dry_run = False):
+
+def period(data):
+    ''' Rows and time span of the data, for the log '''
+    if data is None or data.empty:
+        return 'no rows'
+    return f'{len(data)} rows, {data.index.min()} to {data.index.max()}'
+
+
+async def dprocess(device, dry_run = False, context = None):
     '''
         This function processes a device from SC API assuming there
         is postprocessing information in it and that it's valid for doing
-        so
+        so. context (a dict) gets what the run used: device, hardware, blueprint, period, channels
     '''
     task_log = []
+    context = {} if context is None else context
+    # Why a load or a post failed is in the warnings of scdata and of the Smart Citizen API client
+    with library_warnings(task_log):
+        try:
+            return await process_device(device, dry_run, task_log, context)
+        except Exception as error:
+            # The run keeps the log up to the error
+            logger.exception(f'Processing device {device} raised')
+            task_log.append(f'error: {type(error).__name__}: {error}')
+            return task_log, ['FAILED', f'{type(error).__name__}: {error}'], None
+
+
+async def process_device(device, dry_run, task_log, context):
 
     def logger_handler(msg, level='info'):
         if level == 'info':
@@ -35,6 +57,10 @@ async def dprocess(device, dry_run = False):
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
+        context.update(device_context(d), blueprint=d.blueprint, blueprint_url=getattr(d.handler, 'blueprint_url', None))
+        for line in describe(context):
+            task_log.append(logger_handler(line))
+        task_log.append(logger_handler(f'Blueprint {d.blueprint}'))
 
         if d.handler.postprocessing['latest_postprocessing'] is not None:
             d.options.min_date = d.handler.postprocessing['latest_postprocessing']
@@ -45,16 +71,19 @@ async def dprocess(device, dry_run = False):
         task_log.append(logger_handler(f'Sensors to load: {d.options.channels}'))
 
         d.options.limit = config._max_load_amount
+        context.update(min_date=iso(d.options.min_date), sensors=list(d.options.channels or []), limit=d.options.limit)
 
         if not d.options.channels:
             # An empty list would make the handler load all sensors
             task_log.append(logger_handler(f'Device {device} has no sensors needed by its blueprint', 'error'))
             task_state = ['ABORTED', 'NO_SENSORS_TO_LOAD']
         elif d.valid_for_processing:
-            task_log.append(logger_handler('Device is valid for processing. Attempting load'))
+            task_log.append(logger_handler(f'Device is valid for processing. Loading from {d.options.min_date} '
+                                           f'(at most {d.options.limit} readings)'))
 
             if await d.load():
-                task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
+                task_log.append(logger_handler(f'Device was loaded: {period(d.data)}'))
+                context.update(rows=len(d.data), loaded_from=iso(d.data.index.min()), loaded_to=iso(d.data.index.max()))
 
                 # Process it (a channel graph with a cycle raises): the checks run anyway
                 error = None
@@ -67,17 +96,24 @@ async def dprocess(device, dry_run = False):
                 # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
                 health = health_checks(d, logger_handler, task_log)
                 if processed:
-                    task_log.append(logger_handler(f'Device was processed: {d.processed}'))
+                    channels = [channel.name for channel in getattr(d, 'channels', []) if channel.name in d.data.columns]
+                    context['channels'] = channels
+                    task_log.append(logger_handler(f'Device was processed: {len(channels)} channels ({", ".join(channels)})'))
 
                     # Update postprocessing date
                     d.update_postprocessing_date()
+                    latest = iso(getattr(d.handler, 'latest_postprocessing', None))
+                    context['new_latest_postprocessing'] = latest
+                    task_log.append(logger_handler(f'Latest postprocessing: {context.get("latest_postprocessing")} -> {latest}'))
 
                     # Post results
                     if d.postprocessing_updated:
+                        task_log.append(logger_handler(f'Posting {len(channels)} channels{" (dry run)" if dry_run else ""}'))
                         if await d.post(columns = 'channels', dry_run=dry_run, max_retries=3, with_postprocessing=True):
                             task_log.append(logger_handler(f'Device {device} was posted'))
                             task_state = ['SUCCESS', 'PROCESSED AND UPLOADED']
                         else:
+                            task_log.append(logger_handler(f'Device {device} was not posted (see the warnings above)', 'error'))
                             task_state = ['FAILED', 'DATA_POSTING_FAILED']
                     else:
                         task_log.append(logger_handler(f'Device {device} was not posted', 'warning'))
@@ -88,7 +124,7 @@ async def dprocess(device, dry_run = False):
                 else:
                     task_state = ['ABORTED', 'PROCESSING_FAILED']
             else:
-                task_log.append(logger_handler(f'Device {device} was not loaded', 'warning'))
+                task_log.append(logger_handler(f'Device {device} was not loaded (see the warnings above)', 'warning'))
 
                 if d.data.empty:
                     task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))

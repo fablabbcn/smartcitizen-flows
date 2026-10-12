@@ -2,7 +2,8 @@
 from flask import Blueprint, abort, current_app, render_template, request
 from flask_login import current_user
 
-from . import db, health, storage
+from . import db, devices, editing, health, storage
+from .access import can_see
 from .auth import requires_ui_role
 from .identity import EDITORS
 from .models import DeviceHealth, Job
@@ -51,7 +52,11 @@ def device(device_id):
         if selected is None or selected.device_id != device_id:
             abort(404)
     long_latest = long_items[0] if long_items else None
+    hardware_name = devices.device_hardware_name(device_id)
     return render_template('health/device.html', device_id=device_id, items=items, selected=selected,
+                           hardware_name=hardware_name,
+                           can_see_hardware=bool(hardware_name) and can_see(current_user.identity, 'hardware', hardware_name)
+                           and editing.find('hardware', hardware_name) is not None,
                            latest=items[0], problem_ratio=health.PROBLEM_RATIO, keep_days=health.KEEP_DAYS,
                            long_latest=long_latest, long_items=long_items,
                            long_run=storage.read_run_info(device_id, long_latest.blueprint) if long_latest else None,

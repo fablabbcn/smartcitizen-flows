@@ -11,16 +11,37 @@ import botocore
 
 from scflows.config import config
 from scflows.custom_logger import logger
+from scflows.tasks.context import describe, device_context, iso, library_warnings
 from scflows.tools import refresh_metadata
 
-async def dbackup(device, up_to_date=False):
+
+def backup_location(device_id):
+    ''' Where the backups of a device are: parquet files in data/, the last date backed up in request.json '''
+    return f"s3://{os.environ.get('S3_DATA_BUCKET', '')}/devices/{device_id}/"
+
+
+async def dbackup(device, up_to_date=False, context=None):
+    ''' See back_up_device. context (a dict) gets what the run used: device, storage, period '''
+    task_log = []
+    context = {} if context is None else context
+    # Why a load or a write failed is in the warnings of scdata and of the Smart Citizen API client
+    with library_warnings(task_log):
+        try:
+            return await back_up_device(device, up_to_date, task_log, context)
+        except Exception as error:
+            # The run keeps the log up to the error
+            logger.exception(f'Backing up device {device} raised')
+            task_log.append(f'error: {type(error).__name__}: {error}')
+            return task_log, ['FAILED', f'{type(error).__name__}: {error}']
+
+
+async def back_up_device(device, up_to_date, task_log, context):
     '''
         This function makes a backup of a device from SC API into a S3 bucket for later recovery.
         Backups wait for their period (_backup_interval_days) to end, so that each one appends a whole
         period. up_to_date backs up to the last reading without waiting (long processing reads the
         backups and should not lag behind)
     '''
-    task_log = []
 
     def logger_handler(msg, level='info'):
         if level == 'info':
@@ -43,6 +64,10 @@ async def dbackup(device, up_to_date=False):
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
+        context.update(device_context(d), storage=backup_location(d.id), up_to_date=up_to_date)
+        for line in describe(context):
+            task_log.append(logger_handler(line))
+        task_log.append(logger_handler(f"Backups in {context['storage']}"))
         skip = False
         error = False
 
@@ -61,18 +86,15 @@ async def dbackup(device, up_to_date=False):
                 mode = 'overwrite'
             else:
                 # Something else has gone wrong.
-                logger_handler(e.response, 'error')
+                task_log.append(logger_handler(f"Cannot read {context['storage']}request.json: {e.response.get('Error')}", 'error'))
                 error = True
-        except botocore.exceptions.ClientError as e:
-            # Something else has gone wrong.
-            logger_handler(e.response, 'error')
-            error = True
         else:
             # The object does exist.
             task_log.append(logger_handler('Already requested data...'))
             response = json.loads(metadata['Body'].read().decode('utf-8'))
             last_requested_data = datetime.datetime.fromisoformat(response['last_requested_data'])
             task_log.append(logger_handler(f'Last requested date: {last_requested_data}'))
+            context['last_requested_data'] = iso(last_requested_data)
             mode = 'append'
 
             if last_requested_data < d.handler.json.last_reading_at:
@@ -81,7 +103,7 @@ async def dbackup(device, up_to_date=False):
                 d.options.max_date = last_requested_data + datetime.timedelta(days=config._backup_interval_days)
 
                 if d.options.max_date > datetime.datetime.now(tz=datetime.timezone.utc) and not up_to_date:
-                    task_log.append(logger_handler(f'Best to wait until period is complete, skip'))
+                    task_log.append(logger_handler(f'Best to wait until period is complete ({d.options.max_date}), skip'))
                     skip = True
                 # The next run continues from there (the reading at the boundary is stored twice and
                 # dropped when reading)
@@ -95,9 +117,11 @@ async def dbackup(device, up_to_date=False):
             if not skip:
                 task_log.append(logger_handler(f'Min date: {d.options.min_date}'))
                 task_log.append(logger_handler(f'Max date: {d.options.max_date}'))
+                context.update(min_date=iso(d.options.min_date), max_date=iso(d.options.max_date), mode=mode)
 
                 if await d.load():
-                    task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
+                    task_log.append(logger_handler(f'Device was loaded: {len(d.data)} rows, {len(d.data.columns)} columns ({mode})'))
+                    context['rows'] = len(d.data)
 
                     # Back it up it
                     if d.backup_to_storage(mode=mode):
@@ -107,8 +131,10 @@ async def dbackup(device, up_to_date=False):
                             Body=(bytes(json.dumps({"last_requested_data": d.options.max_date.isoformat()}).encode('UTF-8')))
                         )
                         task_state = ['SUCCESS', 'BACKUP_DONE']
-                        task_log.append(logger_handler(f'Device was backed-up'))
+                        context['new_last_requested_data'] = iso(d.options.max_date)
+                        task_log.append(logger_handler(f'Device was backed-up until {d.options.max_date}'))
                     else:
+                        task_log.append(logger_handler('The backup could not be written (see the warnings above)', 'error'))
                         task_state = ['ABORTED', 'BACKUP_FAILED']
                 else:
                     task_log.append(logger_handler(f'Device {device} was not loaded', 'warning'))

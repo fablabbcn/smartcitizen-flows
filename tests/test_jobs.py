@@ -44,8 +44,9 @@ def task(monkeypatch):
     result = {'state': ['SUCCESS', 'PROCESSED AND UPLOADED'], 'error': None}
 
     def task_function(name):
-        async def run(device_id, dry_run):
+        async def run(device_id, dry_run, context):
             calls.append((name, device_id, dry_run))
+            context.update(result.get('context', {}))
             if result['error']:
                 raise result['error']
             return ['info: done'], result['state']
@@ -388,7 +389,7 @@ def test_jobs_page_requires_admin(app, client):
 
     sign_in(client, 'admin')
     page = client.get('/jobs/').get_data(as_text=True)
-    assert 'kits/1' in page and 'kits/2' in page and 'PROCESSED AND UPLOADED' in page
+    assert '/jobs/devices/1' in page and '/jobs/devices/2' in page and 'PROCESSED AND UPLOADED' in page
     assert 'info: done' in client.get(f'/jobs/runs/{run.id}').get_data(as_text=True)
 
 

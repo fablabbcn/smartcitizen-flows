@@ -151,7 +151,7 @@ def test_health_checks_also_when_processing_fails(run):
 def test_health_checks_when_processing_raises(run):
     state, device = run(process_raises=True)
 
-    assert state == ['ABORTED', 'PROCESSING_FAILED']
+    assert state[0] == 'FAILED' and state[1].startswith('PROCESSING_ERROR: ')
     assert device.returned_health['rows'] == 1
 
 

@@ -93,12 +93,16 @@ async def dlong(device_id, dry_run=False):
     task_log.append(logger_handler(f'Loaded {len(device.data)} rows from the backups'))
 
     # A channel graph with a cycle raises: the checks run anyway
+    error = None
     try:
         processed = device.process()
-    except Exception as error:
-        task_log.append(logger_handler(f'Processing failed: {type(error).__name__}: {error}', 'error'))
+    except Exception as exception:
+        error = f'{type(exception).__name__}: {exception}'
+        task_log.append(logger_handler(f'Processing failed: {error}', 'error'))
         processed = False
     health = health_checks(device, logger_handler, task_log)
+    if error:
+        return done('FAILED', f'PROCESSING_ERROR: {error}', health)
     if not processed:
         return done('ABORTED', 'PROCESSING_FAILED', health)
 

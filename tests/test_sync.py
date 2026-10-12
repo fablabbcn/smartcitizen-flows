@@ -59,6 +59,18 @@ def test_one_sync_at_a_time(app, redis, report):
     assert [(run.state, run.message) for run in sync_runs()] == [('aborted', 'ALREADY_RUNNING')]
 
 
+def test_redis_down_after_the_sync_keeps_its_result(app, redis, report, monkeypatch):
+    def down(*args, **kwargs):
+        raise ConnectionError('Redis down')
+
+    monkeypatch.setattr(redis, 'set', lambda key, value, nx=False, ex=None: True if nx else down())
+    monkeypatch.setattr(redis, 'eval', down)
+
+    assert jobs.run_sync(source='oscar') == report
+    [run] = sync_runs()
+    assert run.state == 'success'
+
+
 def test_failed_sync_is_recorded(app, redis, monkeypatch):
     def fail():
         raise RuntimeError('API down')

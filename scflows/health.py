@@ -9,12 +9,14 @@ device.health). flows stores the result with a status per column, check and devi
 - error: the check could not run (e.g. wrong settings in the blueprint)
 
 Records older than KEEP_DAYS are deleted every day; the latest of each device is always kept.
+Long runs (task long) check months of data every few days: their records are kept apart from those
+of the process runs (see of_task).
 '''
 from datetime import datetime, timedelta, timezone
 
 from . import db
 from .identity import ADMIN
-from .models import DeviceHealth
+from .models import DeviceHealth, Job, JobRun
 
 PROBLEM_RATIO = 0.2
 KEEP_DAYS = 30
@@ -77,9 +79,20 @@ def can_see_device(identity, device_id):
     return ids is None or device_id in ids
 
 
-def latest(identity=None, device_ids=None):
-    ''' Latest record of each device the identity can see, ordered by device id '''
-    newest = db.select(db.func.max(DeviceHealth.id)).group_by(DeviceHealth.device_id)
+def of_task(query, task):
+    '''
+    Records of process runs (also those without run) or of long runs (task 'long'): long runs check
+    months of data every few days, process runs the latest hours
+    '''
+    long_runs = db.select(JobRun.id).where(JobRun.task == Job.LONG)
+    if task == Job.LONG:
+        return query.where(DeviceHealth.run_id.in_(long_runs))
+    return query.where(db.or_(DeviceHealth.run_id.is_(None), DeviceHealth.run_id.not_in(long_runs)))
+
+
+def latest(identity=None, device_ids=None, task=Job.PROCESS):
+    ''' Latest record of each device the identity can see (of process or long runs), by device id '''
+    newest = of_task(db.select(db.func.max(DeviceHealth.id)), task).group_by(DeviceHealth.device_id)
     query = db.select(DeviceHealth).where(DeviceHealth.id.in_(newest)).order_by(DeviceHealth.device_id)
     ids = device_ids_of(identity) if identity is not None else device_ids
     if ids is not None:
@@ -87,18 +100,18 @@ def latest(identity=None, device_ids=None):
     return db.session.execute(query).scalars().all()
 
 
-def history(device_id, limit=50):
-    ''' Records of a device, newest first '''
-    return db.session.execute(db.select(DeviceHealth).filter_by(device_id=device_id)
+def history(device_id, limit=50, task=Job.PROCESS):
+    ''' Records of a device (of process or long runs), newest first '''
+    return db.session.execute(of_task(db.select(DeviceHealth).filter_by(device_id=device_id), task)
                               .order_by(DeviceHealth.id.desc()).limit(limit)).scalars().all()
 
 
 def recent_statuses(device_ids, per_device=12):
     ''' {device_id: [status, ...]} of the latest records, oldest first (for a small timeline) '''
-    rows = db.session.execute(
+    rows = db.session.execute(of_task(
         db.select(DeviceHealth.device_id, DeviceHealth.status, DeviceHealth.id)
-        .where(DeviceHealth.device_id.in_(device_ids), DeviceHealth.created_at >= now() - timedelta(days=KEEP_DAYS))
-        .order_by(DeviceHealth.id.desc())).all()
+        .where(DeviceHealth.device_id.in_(device_ids), DeviceHealth.created_at >= now() - timedelta(days=KEEP_DAYS)),
+        Job.PROCESS).order_by(DeviceHealth.id.desc())).all()
     result = {}
     for device_id, status, _ in rows:
         statuses = result.setdefault(device_id, [])
@@ -119,9 +132,11 @@ def issues(item, limit=3):
 
 
 def prune(days=KEEP_DAYS):
-    ''' Deletes records older than days, except the latest of each device. Returns how many '''
-    newest = db.select(db.func.max(DeviceHealth.id)).group_by(DeviceHealth.device_id)
+    ''' Deletes records older than days, except the latest of each device and task. Returns how many '''
+    keep = [of_task(db.select(db.func.max(DeviceHealth.id)), task).group_by(DeviceHealth.device_id)
+            for task in (Job.PROCESS, Job.LONG)]
     result = db.session.execute(db.delete(DeviceHealth).where(
-        DeviceHealth.created_at < now() - timedelta(days=days), DeviceHealth.id.not_in(newest)))
+        DeviceHealth.created_at < now() - timedelta(days=days),
+        DeviceHealth.id.not_in(keep[0]), DeviceHealth.id.not_in(keep[1])))
     db.session.commit()
     return result.rowcount

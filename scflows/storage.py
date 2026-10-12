@@ -67,3 +67,30 @@ def read_run_info(device_id, blueprint):
             return json.loads(stream.read())
     except (FileNotFoundError, OSError):
         return None
+
+
+def read_processed(device_id, blueprint, channels=None, start=None, end=None):
+    ''' Result of the long runs of a device in [start, end] (index: TIME), or None if there is none '''
+    import pyarrow as pa
+    import pyarrow.dataset as ds
+
+    fs, path = filesystem(processed_location(device_id, blueprint))
+    try:
+        dataset = ds.dataset(path, filesystem=fs, format='parquet', partitioning='hive')
+    except (FileNotFoundError, OSError):
+        return None
+    if 'TIME' not in dataset.schema.names:
+        return None
+    time_type = dataset.schema.field('TIME').type
+    expression = None
+    for value, compare in ((start, lambda field, scalar: field >= scalar), (end, lambda field, scalar: field <= scalar)):
+        if value is None:
+            continue
+        timestamp = pd.Timestamp(value)
+        timestamp = timestamp.tz_localize('UTC') if timestamp.tzinfo is None else timestamp.tz_convert('UTC')
+        condition = compare(ds.field('TIME'), pa.scalar(timestamp, type=time_type))
+        expression = condition if expression is None else expression & condition
+    names = [name for name in dataset.schema.names if name not in ('TIME', 'month')]
+    columns = ['TIME'] + [name for name in (channels or names) if name in names]
+    data = dataset.to_table(filter=expression, columns=columns).to_pandas().set_index('TIME').sort_index()
+    return data[~data.index.duplicated(keep='last')]

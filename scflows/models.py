@@ -60,6 +60,8 @@ class Hardware(TimestampMixin, db.Model):
     description = db.Column(db.Text)
     comment = db.Column(db.Text)
     forwarding = db.Column(db.String(64))
+    # Long processing parameters for the devices of this hardware: {channel: kwargs}
+    parameters = db.Column(JSONType)
     # One or two blueprints in flows, of different kinds (see Blueprint)
     links = db.relationship('HardwareBlueprint', cascade='all, delete-orphan', order_by='HardwareBlueprint.position')
     versions = db.relationship('HardwareVersion', back_populates='hardware', cascade='all, delete-orphan',
@@ -114,6 +116,8 @@ class Hardware(TimestampMixin, db.Model):
             result['comment'] = self.comment
         if self.forwarding is not None:
             result['forwarding'] = self.forwarding
+        if self.parameters:
+            result['parameters'] = self.parameters
         result['versions'] = [version.to_json() for version in self.versions]
         return result
 
@@ -173,6 +177,20 @@ class SensorName(TimestampMixin, db.Model):
 
     def to_json(self):
         return {'name': self.name, 'id': self.sensor_id, 'description': self.description, 'unit': self.unit}
+
+
+class ParameterSet(TimestampMixin, db.Model):
+    ''' Parameters of long processing for a sensor type: {channel: kwargs} (see parameters.py) '''
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), unique=True, nullable=False)
+    description = db.Column(db.Text)
+    channels = db.Column(JSONType, nullable=False)
+
+    def to_json(self):
+        result = {'channels': self.channels}
+        if self.description:
+            result['description'] = self.description
+        return result
 
 
 class Revision(db.Model):

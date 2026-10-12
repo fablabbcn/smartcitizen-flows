@@ -66,6 +66,7 @@ def test_index(client, path):
         'hardware': 'http://localhost/api/v1/hardware',
         'calibrations': 'http://localhost/api/v1/calibrations',
         'names': 'http://localhost/api/v1/names',
+        'parameters': 'http://localhost/api/v1/parameters',
         'device_health': 'http://localhost/api/v1/devices/health',
         'health': 'http://localhost/api/v1/health',
     }

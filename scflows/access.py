@@ -33,8 +33,8 @@ def visible_calibrations(identity):
 
 
 def can_see(identity, kind, key):
-    ''' kind: hardware, calibration or name. Sensor names are the same for every device: everyone sees them '''
-    if identity.role == ADMIN or kind == 'name':
+    ''' kind: hardware, calibration, name or parameters. Names and parameters are not per device: everyone sees them '''
+    if identity.role == ADMIN or kind in ('name', 'parameters'):
         return True
     if kind == 'hardware':
         return key in identity.hardware

@@ -6,8 +6,9 @@ import re
 from datetime import date
 
 from . import db
-from .models import Blueprint, Calibration, Hardware, HardwareBlueprint, HardwareVersion, Revision, SensorName
-from .schemas import HardwareIn, SensorNameIn, validate_calibration
+from .models import (Blueprint, Calibration, Hardware, HardwareBlueprint, HardwareVersion, ParameterSet, Revision,
+                     SensorName)
+from .schemas import HardwareIn, ParameterSetIn, SensorNameIn, validate_calibration
 
 # Names of blueprints and hardware, and sensor ids
 KEY_PATTERN = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
@@ -17,6 +18,7 @@ KINDS = {
     'hardware': (Hardware, 'name'),
     'calibration': (Calibration, 'sensor_id'),
     'name': (SensorName, 'name'),
+    'parameters': (ParameterSet, 'name'),
 }
 
 
@@ -88,6 +90,7 @@ def save_hardware(name, hardware, identity=None, action=None):
     item.description = hardware.description
     item.comment = hardware.comment
     item.forwarding = hardware.forwarding
+    item.parameters = hardware.parameters or None
     item.versions = [HardwareVersion(ids=version.ids, from_date=version.from_date, to_date=version.to_date)
                      for version in sorted(hardware.versions, key=lambda version: version.from_date or date.min)]
     record('hardware', name, action or (Revision.UPDATE if before else Revision.CREATE), before, item.to_json(),
@@ -135,6 +138,31 @@ def save_name(name, data, identity=None, action=None):
     item.description = data.description
     item.unit = data.unit
     record('name', name, action or (Revision.UPDATE if before else Revision.CREATE), before, item.to_json(),
+           identity)
+    return item, before is None
+
+
+class UnknownSensorType(ValueError):
+    pass
+
+
+def save_parameter_set(name, data, identity=None, action=None):
+    '''
+    Creates or replaces the parameters of a sensor type. Raises pydantic.ValidationError if invalid,
+    UnknownSensorType if no parameters can apply to that type
+    '''
+    from .parameters import sensor_types
+    if name not in sensor_types():
+        raise UnknownSensorType(f'{name} is not a sensor type: {", ".join(sensor_types())}')
+    data = ParameterSetIn.model_validate(data)
+    item = find('parameters', name)
+    before = item.to_json() if item else None
+    if item is None:
+        item = ParameterSet(name=name)
+        db.session.add(item)
+    item.channels = data.channels
+    item.description = data.description
+    record('parameters', name, action or (Revision.UPDATE if before else Revision.CREATE), before, item.to_json(),
            identity)
     return item, before is None
 

@@ -4,8 +4,8 @@
 {% block page_class %}narrow{% endblock %}
 {% block content %}
 {% set edit_url = {'hardware': url_for('ui.edit_hardware', name=key), 'calibration': url_for('ui.edit_calibration', sensor_id=key),
-                   'name': url_for('ui.edit_name', name=key)}[kind] %}
-{% set tab = {'hardware': 'hardware', 'calibration': 'calibrations', 'name': 'names'}[kind] %}
+                   'name': url_for('ui.edit_name', name=key), 'parameters': url_for('ui.edit_parameters', name=key)}[kind] %}
+{% set tab = {'hardware': 'hardware', 'calibration': 'calibrations', 'name': 'names', 'parameters': 'parameters'}[kind] %}
 <div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#{{ tab }}">Metadata</a><span><a href="{{ edit_url }}">{{ key }}</a></span><span>History</span></div>
 <div class="page-header">
     <div>

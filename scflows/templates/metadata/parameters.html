@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}Parameters of {{ name }}{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#parameters">Metadata</a><span>Parameters</span><span>{{ name }}</span></div>
+<div class="page-header">
+    <div>
+        <h1>Parameters of <span class="mono">{{ name }}</span></h1>
+        <p class="subtitle">Long processing of every device with a {{ name }} sensor uses these values over those of its long blueprint. {% if exists %}{% else %}None yet: the blueprint values apply.{% endif %}</p>
+    </div>
+    {% if exists %}
+    <div class="actions">
+        <a class="btn" href="{{ url_for('ui.history', kind='parameters', key=name) }}">History</a>
+        <a class="btn" href="{{ url_for('api.get_parameters', name=name) }}">JSON</a>
+    </div>
+    {% endif %}
+</div>
+{% include "metadata/_messages.html" %}
+{% if readonly %}<div class="alerts"><div class="alert info">Read only: only admins can change metadata.</div></div>{% endif %}
+
+<form method="POST">
+    {{ csrf() }}
+    <fieldset class="plain" {% if readonly %}disabled{% endif %}>
+    <div class="card">
+        <div class="card-body">
+            <div class="field">
+                <label for="channels">Channels</label>
+                <textarea class="input" id="channels" name="channels" rows="12" spellcheck="false">{{ channels }}</textarea>
+                <span class="hint">kwargs per channel of the long blueprint, e.g. <code>{"NO2": {"lam": 10000000000, "p": 1e-10}}</code>. <code>function</code> changes the algorithm.</span>
+            </div>
+            <div class="field">
+                <label for="description">Description <span class="optional">(optional)</span></label>
+                <input class="input" id="description" name="description" value="{{ description or '' }}" placeholder="How these values were tuned">
+            </div>
+        </div>
+    </div>
+    </fieldset>
+    {% if not readonly %}
+    <div class="form-actions"><button class="btn primary" name="action" value="save">Save</button></div>
+    {% endif %}
+</form>
+
+{% if exists and not readonly %}
+<div class="card danger-zone">
+    <div class="card-body">
+        <div>
+            <h3>Delete parameters</h3>
+            <p class="hint">Devices with {{ name }} sensors go back to the values of the blueprint on their next long run.</p>
+        </div>
+        <form method="POST" action="{{ url_for('ui.delete', kind='parameters', key=name) }}" data-confirm="Delete the parameters of {{ name }}?">
+            {{ csrf() }}
+            <button class="btn danger" type="submit">Delete</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

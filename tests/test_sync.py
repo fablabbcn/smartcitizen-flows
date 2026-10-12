@@ -143,6 +143,18 @@ def test_sync_command(app, redis, report):
     assert result.exit_code == 1 and 'already running' in result.output
 
 
+def test_sync_fails_when_the_lock_cannot_be_taken(app, redis, report, monkeypatch):
+    def acquire(key, seconds=None):
+        raise ConnectionError('redis unreachable')
+    monkeypatch.setattr(jobs.locks, 'acquire', acquire)
+
+    with pytest.raises(ConnectionError):
+        jobs.run_sync()
+
+    [run] = sync_runs()
+    assert run.state == 'failed' and run.message.startswith('LOCK_FAILED')
+
+
 def test_sync_that_cannot_be_queued_fails(app, client, redis, monkeypatch):
     def delay(run_id):
         raise ConnectionError('broker unreachable')

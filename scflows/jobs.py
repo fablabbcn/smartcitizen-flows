@@ -390,7 +390,14 @@ def run_sync(source='schedule', run_id=None):
     if run is None:
         run = JobRun(task=JobRun.SYNC, username=None if source == 'schedule' else source)
         db.session.add(run)
-    token = locks.acquire(SYNC_LOCK, seconds=SYNC_LOCK_SECONDS)
+    try:
+        token = locks.acquire(SYNC_LOCK, seconds=SYNC_LOCK_SECONDS)
+    except Exception as error:
+        # Redis cannot be reached: the run would otherwise stay queued (and block Sync now)
+        logger.exception(f'Sync run: cannot take the lock {SYNC_LOCK}')
+        run.state, run.message, run.finished_at = JobRun.FAILED, f'LOCK_FAILED: {type(error).__name__}: {error}', now()
+        db.session.commit()
+        raise
     if token is None:
         logger.info('A sync is already running')
         run.state, run.message, run.finished_at = JobRun.ABORTED, 'ALREADY_RUNNING', now()

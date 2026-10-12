@@ -101,15 +101,33 @@ class Calibration(TimestampMixin, db.Model):
         return self.data
 
 
+class SensorName(TimestampMixin, db.Model):
+    '''
+    Name that scdata (and the blueprints) give a Smart Citizen sensor id
+    (smartcitizen-data/names/SCDevice.json). Served in order: for an id with several
+    names, scdata uses the first one
+    '''
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64), unique=True, nullable=False)
+    # Smart Citizen API sensor id. 0: no id in the platform
+    sensor_id = db.Column(db.Integer, nullable=False, index=True)
+    description = db.Column(db.String(255), nullable=False, default='')
+    unit = db.Column(db.String(32), nullable=False, default='')
+    position = db.Column(db.Integer, nullable=False, index=True)
+
+    def to_json(self):
+        return {'name': self.name, 'id': self.sensor_id, 'description': self.description, 'unit': self.unit}
+
+
 class Revision(db.Model):
-    ''' History of changes to blueprints, hardware and calibrations '''
+    ''' History of changes to blueprints, hardware, calibrations and sensor names '''
     CREATE = 'create'
     UPDATE = 'update'
     DELETE = 'delete'
     IMPORT = 'import'
 
     id = db.Column(db.Integer, primary_key=True)
-    # blueprint, hardware or calibration, and its name or sensor_id
+    # blueprint, hardware, calibration or name, and its name or sensor_id
     kind = db.Column(db.String(32), nullable=False)
     key = db.Column(db.String(64), nullable=False)
     action = db.Column(db.String(16), nullable=False)

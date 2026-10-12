@@ -172,6 +172,12 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
             elif not job.enabled:
                 job.enabled = True
                 counts['enabled'] += 1
+            # The blueprint of a long job can change every_days
+            if job is not None and task == Job.LONG and job.source == Job.AUTO \
+                    and job.interval_hours != long_every[device_id]:
+                job.interval_hours = long_every[device_id]
+                # A shorter interval brings the next run closer; a longer one applies after it
+                job.next_run_at = min(aware(job.next_run_at), now() + timedelta(hours=job.interval_hours))
         for device_id, job in jobs.items():
             if device_id not in devices and job.enabled and job.source == Job.AUTO:
                 job.enabled = False

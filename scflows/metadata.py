@@ -97,6 +97,9 @@ def import_metadata(path, overwrite=False):
     names_path = join(path, NAMES_FILE)
     # Optional: older checkouts have no names. A file that cannot be read is reported
     names = (load_or_report(names_path, report) or []) if exists(names_path) else []
+    if not isinstance(names, list):
+        report.errors.append(f'{names_path}: is not a list')
+        names = []
     for item in names:
         name = item.get('name') if isinstance(item, dict) else None
         if not name:
@@ -133,7 +136,14 @@ def verify_metadata(source):
         expected = read_source(source, relative_path)
         if expected is None:
             differences.append(f'{relative_path}: not in source')
-        elif normalise(served) != normalise(expected):
+            return
+        try:
+            same = normalise(served) == normalise(expected)
+        except (KeyError, ValueError, TypeError, AttributeError) as error:
+            # Malformed items in the source (e.g. a name without id)
+            differences.append(f'{relative_path}: cannot be compared ({type(error).__name__}: {error})')
+            return
+        if not same:
             differences.append(f'{relative_path}: served content differs')
 
     def hardware_by_blueprint_name(data):

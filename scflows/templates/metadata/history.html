@@ -3,8 +3,10 @@
 {% block title %}History of {{ key }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
 {% block content %}
-{% set edit_url = url_for('ui.edit_hardware', name=key) if kind == 'hardware' else url_for('ui.edit_calibration', sensor_id=key) %}
-<div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#{{ 'hardware' if kind == 'hardware' else 'calibrations' }}">Metadata</a><span><a href="{{ edit_url }}">{{ key }}</a></span><span>History</span></div>
+{% set edit_url = {'hardware': url_for('ui.edit_hardware', name=key), 'calibration': url_for('ui.edit_calibration', sensor_id=key),
+                   'name': url_for('ui.edit_name', name=key)}[kind] %}
+{% set tab = {'hardware': 'hardware', 'calibration': 'calibrations', 'name': 'names'}[kind] %}
+<div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#{{ tab }}">Metadata</a><span><a href="{{ edit_url }}">{{ key }}</a></span><span>History</span></div>
 <div class="page-header">
     <div>
         <h1>History of {{ label | lower }} <span class="mono">{{ key }}</span></h1>

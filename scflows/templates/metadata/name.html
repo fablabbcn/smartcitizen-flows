@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import csrf with context %}
+{% block title %}{{ 'New name' if new else name }}{% endblock %}
+{% block page_class %}narrow{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#names">Metadata</a><span>Names</span><span>{{ 'New' if new else name }}</span></div>
+<div class="page-header">
+    <div>
+        <h1>{% if new %}New sensor name{% else %}Name <span class="mono">{{ name }}</span>{% endif %}</h1>
+        <p class="subtitle">Processing renames the readings of this Smart Citizen sensor id to this name, and the blueprints use it.</p>
+    </div>
+    {% if not new %}
+    <div class="actions">
+        <a class="btn" href="{{ url_for('ui.history', kind='name', key=name) }}">History</a>
+        <a class="btn" href="{{ url_for('api.get_name', name=name) }}">JSON</a>
+    </div>
+    {% endif %}
+</div>
+{% include "metadata/_messages.html" %}
+{% if readonly %}<div class="alerts"><div class="alert info">Read only: only admins can change metadata.</div></div>{% endif %}
+{% if others %}
+<div class="alerts"><div class="alert warning">Sensor {{ data.id }} also has the name{{ 's' if others | length > 1 }} {{ others | join(', ') }}. Processing uses {{ first }}, the first one in the list.</div></div>
+{% endif %}
+
+<form method="POST">
+    {{ csrf() }}
+    <fieldset class="plain" {% if readonly %}disabled{% endif %}>
+    <div class="card">
+        <div class="card-body form-grid">
+            {% if new %}
+            <div class="field full">
+                <label for="name">Name</label>
+                <input class="input mono" id="name" name="name" value="{{ name }}" placeholder="SCD4X_CO2" required>
+                <span class="hint">As the blueprints write it. The firmware short title (lib/Sensors/Sensors.h) for new sensors.</span>
+            </div>
+            {% endif %}
+            <div class="field">
+                <label for="id">Sensor id</label>
+                <input class="input mono" id="id" name="id" value="{{ data.id }}" inputmode="numeric" required>
+                <span class="hint">Id in the Smart Citizen API. 0 if the sensor has none.</span>
+            </div>
+            <div class="field">
+                <label for="unit">Unit</label>
+                <input class="input mono" id="unit" name="unit" value="{{ data.unit }}">
+                <span class="hint">Processing converts readings with it (e.g. ppm, ppb).</span>
+            </div>
+            <div class="field full">
+                <label for="description">Description</label>
+                <input class="input" id="description" name="description" value="{{ data.description }}">
+            </div>
+        </div>
+    </div>
+    {% if used %}<p class="hint section">Used by the blueprint{{ 's' if used | length > 1 }}: {{ used | join(', ') }}.</p>{% endif %}
+    </fieldset>
+    {% if not readonly %}
+    <div class="form-actions">
+        <button class="btn primary" name="action" value="save">Save</button>
+    </div>
+    {% endif %}
+</form>
+
+{% if not new and not readonly %}
+<div class="card danger-zone">
+    <div class="card-body">
+        <div>
+            <h3>Delete name</h3>
+            <p class="hint">{% if used %}The blueprint{{ 's' if used | length > 1 }} {{ used | join(', ') }} use{{ 's' if used | length == 1 }} it: those channels stop being processed.{% elif others %}Sensor {{ data.id }} is then processed as {{ (others | reject('equalto', name) | list)[0] }}. The history is kept.{% else %}Readings of sensor {{ data.id }} keep their API name. The history is kept.{% endif %}</p>
+        </div>
+        <form method="POST" action="{{ url_for('ui.delete', kind='name', key=name) }}" data-confirm="Delete name {{ name }}?">
+            {{ csrf() }}
+            <button class="btn danger" type="submit">Delete</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

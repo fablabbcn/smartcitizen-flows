@@ -1,4 +1,6 @@
 ''' Admin operations on device jobs: run now, pause and resume, manual jobs '''
+from datetime import timedelta
+
 import pytest
 from flask import g
 
@@ -70,6 +72,11 @@ def test_run_device_without_job(client, sc_me, queued):
 def test_pause_and_resume(client, sc_me, process_job):
     response = client.patch(f'/api/v1/jobs/{process_job.id}', json={'paused': True}, headers=auth('admin-token'))
     assert response.get_json()['paused'] is True
+    # Due now; the backup job of the device far away (new jobs start at a random time)
+    db.session.expire_all()
+    jobs.find_job(1, 'process').next_run_at = jobs.now() - timedelta(minutes=10)
+    jobs.find_job(1, 'backup').next_run_at = jobs.now() + timedelta(hours=1)
+    db.session.commit()
     assert jobs.dispatch_due_jobs() == []
 
     assert client.patch(f'/api/v1/jobs/{process_job.id}', json={'paused': 'no'},

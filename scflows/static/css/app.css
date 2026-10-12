@@ -346,6 +346,11 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 .badge.aborted, .badge.paused, .badge.update { background: var(--color-warning-soft); color: var(--color-warning); }
 .badge.queued, .badge.running, .badge.create, .badge.import { background: var(--color-info-soft); color: var(--color-info); }
 .badge.running::before { animation: pulse 1.2s ease-in-out infinite; }
+/* Device health */
+.badge.ok { background: var(--color-success-soft); color: var(--color-success); }
+.badge.warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge.problem, .badge.error { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge.error::before { border-radius: 1px; }
 
 @keyframes pulse { 50% { opacity: 0.25; } }
 
@@ -532,3 +537,27 @@ details > summary:hover { text-decoration: underline; }
 /* Groups form sections without a visible box (disabled for read only forms) */
 fieldset.plain { min-width: 0; margin: 0; padding: 0; border: 0; }
 fieldset.plain:disabled .input { background: var(--color-surface-muted); color: var(--color-text); opacity: 1; cursor: default; }
+
+/* Device health: ratio meters and a timeline of statuses */
+
+.meter { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 9rem; font-variant-numeric: tabular-nums; }
+.meter-bar { position: relative; flex: 1; height: 6px; min-width: 5rem; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-surface-muted); }
+.meter-bar span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--color-success); }
+.meter.warning .meter-bar span { background: var(--color-warning); }
+.meter.problem .meter-bar span { background: var(--color-danger); }
+.meter .value { width: 3.5rem; text-align: right; font-size: var(--text-xs); color: var(--color-text-muted); }
+
+.dots { display: inline-flex; align-items: center; gap: 3px; }
+.dots .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--color-neutral-soft); }
+.dots a.dot:hover { outline: 2px solid var(--color-accent); }
+.dots .dot.ok { background: var(--color-success); }
+.dots .dot.warning { background: var(--color-warning); }
+.dots .dot.problem, .dots .dot.error { background: var(--color-danger); }
+.dots .dot.selected { outline: 2px solid var(--color-text); outline-offset: 1px; }
+.dots.large .dot { width: 14px; height: 14px; }
+
+.issues { margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.issues li { white-space: nowrap; }
+.intervals { margin: 0; padding: 0; list-style: none; font-size: var(--text-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.check-card + .check-card { margin-top: var(--space-4); }
+.check-card .card-header h2 { display: flex; align-items: center; gap: var(--space-2); }

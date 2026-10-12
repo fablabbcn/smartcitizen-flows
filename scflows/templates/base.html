@@ -34,6 +34,7 @@
                     {% if current_user.role == 'admin' %}
                     <li><a href="{{ url_for('jobs_ui.index') }}" {% if request.blueprint == 'jobs_ui' %}aria-current="page"{% endif %}>Jobs</a></li>
                     {% endif %}
+                    <li><a href="{{ url_for('health_ui.index') }}" {% if request.blueprint == 'health_ui' %}aria-current="page"{% endif %}>Health</a></li>
                     <li><a href="{{ url_for('ui.index') }}" {% if request.blueprint == 'ui' %}aria-current="page"{% endif %}>Metadata</a></li>
                 </ul>
             </nav>

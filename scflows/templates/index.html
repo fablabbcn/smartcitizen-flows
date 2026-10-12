@@ -23,6 +23,16 @@
         </div>
     </a>
     {% endif %}
+    <a class="card section-card" href="{{ url_for('health_ui.index') }}">
+        <h2>Health</h2>
+        <p>{% if current_user.is_admin %}Gaps, implausible and flat values and outliers found in the data of each device, run by run.{% else %}Gaps, implausible and flat values and outliers found in the data of your devices.{% endif %}</p>
+        <div class="figures">
+            {% if health.problem %}{{ badge('problem', health.problem ~ ' with problems') }}{% endif %}
+            {% if health.warning %}{{ badge('warning', health.warning ~ ' with warnings') }}{% endif %}
+            {{ badge('ok', health.ok ~ ' ok') }}
+            {% if health.error %}{{ badge('error', health.error ~ ' check errors') }}{% endif %}
+        </div>
+    </a>
     <a class="card section-card" href="{{ url_for('ui.index') }}">
         <h2>Metadata</h2>
         <p>{% if current_user.is_admin %}Hardware of each device, with its blueprint and the sensors mounted in each period, and sensor calibrations.{% else %}The hardware of your devices, with the sensors mounted in each period, and their calibrations (read only).{% endif %}</p>

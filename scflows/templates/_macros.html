@@ -37,3 +37,11 @@
     <span class="count" data-count></span>
 </div>
 {% endmacro %}
+
+{# Device health #}
+{% macro meter(summary) -%}
+{%- set ratio = summary.ratio or 0 -%}
+<span class="meter {{ summary.status }}" title="{{ (ratio * 100) | round(1) }}% flagged"><span class="meter-bar"><span style="width: {{ [ratio * 100, 100] | min }}%"></span></span><span class="value">{{ (ratio * 100) | round(1) }}%</span></span>
+{%- endmacro %}
+
+{% macro short_time(value) %}{{ value[:16] | replace('T', ' ') if value else '' }}{% endmacro %}

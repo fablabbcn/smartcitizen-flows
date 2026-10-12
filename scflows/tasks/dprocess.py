@@ -31,6 +31,7 @@ async def dprocess(device, dry_run = False):
 
     d = sc.Device(params=sc.APIParams(id=device))
     task_state = [None, None]
+    health = None
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
@@ -55,8 +56,17 @@ async def dprocess(device, dry_run = False):
             if await d.load():
                 task_log.append(logger_handler(f'Device was loaded: {d.loaded}'))
 
-                # Process it
-                if d.process():
+                # Process it (a channel graph with a cycle raises): the checks run anyway
+                error = None
+                try:
+                    processed = d.process()
+                except Exception as exception:
+                    error = f'{type(exception).__name__}: {exception}'
+                    task_log.append(logger_handler(f'Processing failed: {error}', 'error'))
+                    processed = False
+                # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
+                health = health_checks(d, logger_handler, task_log)
+                if processed:
                     task_log.append(logger_handler(f'Device was processed: {d.processed}'))
 
                     # Update postprocessing date
@@ -72,6 +82,9 @@ async def dprocess(device, dry_run = False):
                     else:
                         task_log.append(logger_handler(f'Device {device} was not posted', 'warning'))
                         task_state = ['ABORTED', 'POSTPROCESSING_UPDATE_FAILED']
+                elif error:
+                    # An error, as when it failed the celery task: not a device that cannot be processed
+                    task_state = ['FAILED', f'PROCESSING_ERROR: {error}']
                 else:
                     task_state = ['ABORTED', 'PROCESSING_FAILED']
             else:
@@ -89,7 +102,23 @@ async def dprocess(device, dry_run = False):
 
     task_log.append(logger_handler(f'Concluded job for {device}'))
 
-    return task_log, task_state
+    return task_log, task_state, health
+
+
+def health_checks(d, logger_handler, task_log):
+    ''' Runs the checks of the blueprint on the data of the run. Returns device.health, or None '''
+    if not d.checks:
+        return None
+    try:
+        d.health_checks()
+    except Exception as error:
+        task_log.append(logger_handler(f'Health checks failed: {type(error).__name__}: {error}', 'warning'))
+        return None
+    health = getattr(d, 'health', None)
+    if not health:
+        return None
+    task_log.append(logger_handler(f'Health checks done: {len(health["checks"])} checks on {health["rows"]} rows'))
+    return dict(health, device_name=getattr(d.handler.json, 'name', None), blueprint=d.blueprint)
 
 
 if __name__ == '__main__':
@@ -100,5 +129,5 @@ if __name__ == '__main__':
     parser.add_argument('--dry-run', action='store_true', help='Process without posting')
     args = parser.parse_args()
 
-    log, state = asyncio.run(dprocess(args.device, dry_run=args.dry_run))
+    log, state, _ = asyncio.run(dprocess(args.device, dry_run=args.dry_run))
     logger.info(f'Result: {state}')

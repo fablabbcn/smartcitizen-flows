@@ -79,6 +79,7 @@ def auth(token):
 
 def served_hardware(source, blueprint='test_air', base='http://localhost'):
     ''' A hardware file as flows serves it: the blueprint by name and its url in flows '''
-    served = {'blueprint': blueprint, 'blueprint_url': f'{base}/api/v1/blueprints/{blueprint}.json'}
-    served.update({key: value for key, value in source.items() if key not in ('blueprint', 'blueprint_url')})
+    served = {'blueprint': blueprint, 'blueprint_url': f'{base}/api/v1/blueprints/{blueprint}.json',
+              'blueprints': source.get('blueprints', [blueprint])}
+    served.update({key: value for key, value in source.items() if key not in ('blueprint', 'blueprint_url', 'blueprints')})
     return served

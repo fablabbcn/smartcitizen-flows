@@ -34,7 +34,9 @@ class HardwareIn(BaseModel):
     ''' Same structure as the hardware files of smartcitizen-data, plus the blueprint name '''
     model_config = ConfigDict(extra='forbid')
 
-    # Name of a blueprint in flows. blueprint_url is accepted too (e.g. from the hardware files)
+    # Blueprints in flows: one or two of different kinds (process, long, backup). A single
+    # blueprint (name) or blueprint_url is accepted too (e.g. from the hardware files)
+    blueprints: Optional[List[str]] = None
     blueprint: Optional[str] = Field(default=None, pattern=r'^[A-Za-z0-9_-]{1,64}$')
     blueprint_url: Optional[str] = None
     description: Optional[str] = None
@@ -46,12 +48,22 @@ class HardwareIn(BaseModel):
     def check_blueprint(self):
         if self.blueprint and self.blueprint_url and url_name(self.blueprint_url) != self.blueprint:
             raise ValueError('"blueprint" and "blueprint_url" refer to different blueprints')
+        # The single blueprint served with the list (e.g. a hardware sent back as received) must be in it
+        if self.blueprints is not None and self.blueprint_name and self.blueprint_name not in self.blueprints:
+            raise ValueError(f'"blueprint" {self.blueprint_name} is not in "blueprints"')
         return self
 
     @property
     def blueprint_name(self):
         ''' Name of the referenced blueprint, from blueprint or blueprint_url '''
         return self.blueprint or (url_name(self.blueprint_url) if self.blueprint_url else None)
+
+    @property
+    def blueprint_names(self):
+        ''' The blueprints of the hardware: blueprints, or the single blueprint given '''
+        if self.blueprints is not None:
+            return list(dict.fromkeys(self.blueprints))
+        return [self.blueprint_name] if self.blueprint_name else []
 
 
 class AlphasenseCalibration(BaseModel):

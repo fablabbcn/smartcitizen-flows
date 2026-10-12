@@ -1,7 +1,7 @@
 ''' Device jobs: which devices are processed or backed up, when, and their runs
 
-- sync_jobs: creates and enables jobs from the Smart Citizen API (devices with valid postprocessing
-  are processed, devices of researchers are backed up), and disables the ones that do not qualify
+- sync_jobs: creates and enables jobs for the devices with postprocessing in the Smart Citizen API, as the
+  blueprints of their hardware in flows say, and disables the ones that do not qualify
 - dispatch_due_jobs: queues the runs of the jobs that are due
 - execute_run: runs a task for a device, holding a lock so that it never runs twice at the same time
 '''
@@ -41,22 +41,42 @@ def aware(value):
     return value.replace(tzinfo=timezone.utc) if value is not None and value.tzinfo is None else value
 
 
-# Which devices qualify, from the Smart Citizen API
+# Which devices qualify, from the Smart Citizen API and the blueprints of their hardware in flows
+
+def hardware_kinds():
+    ''' {hardware name: {blueprint kinds}} of the hardware in flows '''
+    from .models import Hardware
+    return {item.name: set(item.kinds) for item in db.session.execute(db.select(Hardware)).scalars()}
+
+
+def kinds_of(device, kinds):
+    ''' Blueprint kinds of a device's hardware (from its postprocessing), or None if it has no hardware in flows '''
+    from .identity import hardware_name
+    postprocessing = device.get('postprocessing') if isinstance(device, dict) else device.postprocessing
+    if not postprocessing or not postprocessing.get('hardware_url'):
+        return None
+    return kinds.get(hardware_name(postprocessing['hardware_url']))
+
 
 def postprocessing_devices():
     '''
     Devices with postprocessing in the Smart Citizen API. It is the only search the sync makes: the API
-    cannot search users by role, so each device's postprocessing says which jobs it has
+    cannot search users by role, so the blueprints of each device's hardware say which jobs it has
     '''
     from smartcitizen_connector import search_by_query
     return search_by_query(endpoint='devices',
                            search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
 
 
-def devices_to_process(devices=None):
-    ''' Devices with valid postprocessing and readings newer than their last processing '''
+def devices_to_process(kinds=None, devices=None):
+    '''
+    Devices whose hardware has a process blueprint, with valid postprocessing and readings newer than
+    their last processing
+    '''
     from smartcitizen_connector.device import check_postprocessing
+    from .models import Blueprint
 
+    kinds = hardware_kinds() if kinds is None else kinds
     devices = postprocessing_devices() if devices is None else devices
     result = set()
     for device_id in devices.index:
@@ -64,6 +84,8 @@ def devices_to_process(devices=None):
         postprocessing = device.postprocessing
         # Most postprocessing entries are empty
         if not postprocessing or not postprocessing.get('hardware_url') or pd.isna(device.last_reading_at):
+            continue
+        if Blueprint.PROCESS not in (kinds_of(device, kinds) or set()):
             continue
         latest = postprocessing.get('latest_postprocessing')
         if latest is not None and timestamp(latest) > timestamp(device.last_reading_at):
@@ -74,14 +96,19 @@ def devices_to_process(devices=None):
     return result
 
 
-def devices_to_back_up(devices=None):
-    ''' Devices with hardware in their postprocessing and readings '''
+def devices_to_back_up(kinds=None, devices=None):
+    '''
+    Devices with readings whose hardware has a backup blueprint, or a long one (long processing reads
+    the backups)
+    '''
+    from .models import Blueprint
+
+    kinds = hardware_kinds() if kinds is None else kinds
     devices = postprocessing_devices() if devices is None else devices
     result = set()
     for device_id in devices.index:
         device = devices.loc[device_id, :]
-        postprocessing = device.postprocessing
-        if postprocessing and postprocessing.get('hardware_url') and not pd.isna(device.last_reading_at):
+        if not pd.isna(device.last_reading_at) and (kinds_of(device, kinds) or set()) & {Blueprint.BACKUP, Blueprint.LONG}:
             result.add(int(device_id))
     return result
 
@@ -91,10 +118,11 @@ def sync_jobs(to_process=None, to_back_up=None):
     Creates or enables the jobs of the devices that qualify and disables the automatic ones that do not.
     Paused jobs stay paused. Returns {task: {'created': n, 'enabled': n, 'disabled': n}}
     '''
+    kinds = hardware_kinds() if to_process is None or to_back_up is None else None
     # One request for all the lists
     devices = postprocessing_devices() if to_process is None or to_back_up is None else None
-    wanted = {Job.PROCESS: devices_to_process(devices) if to_process is None else set(to_process),
-              Job.BACKUP: devices_to_back_up(devices) if to_back_up is None else set(to_back_up)}
+    wanted = {Job.PROCESS: devices_to_process(kinds, devices) if to_process is None else set(to_process),
+              Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up)}
     report = {}
     for task, devices in wanted.items():
         counts = {'created': 0, 'enabled': 0, 'disabled': 0}

@@ -31,6 +31,18 @@ def slot_channels(slot, sensor_id):
     return [name for item in channels for name in item]
 
 
+def blueprint_kind_errors(blueprints):
+    ''' Errors of the kinds of the blueprints of a hardware: one of each kind, not long and backup together '''
+    errors = []
+    kinds = [blueprint.kind for blueprint in blueprints]
+    for kind in sorted(set(kinds)):
+        if kinds.count(kind) > 1:
+            errors.append(f'blueprints: two {kind} blueprints, only one of each kind')
+    if Blueprint.LONG in kinds and Blueprint.BACKUP in kinds:
+        errors.append('blueprints: long processing always backs up the device, do not add a backup blueprint')
+    return errors
+
+
 def check_hardware(body):
     '''
     Checks a hardware description.
@@ -48,13 +60,19 @@ def check_hardware(body):
         return check
 
     hardware = check.hardware
-    name = hardware.blueprint_name
-    blueprint = db.session.execute(db.select(Blueprint).filter_by(name=name)).scalar_one_or_none() if name else None
-    if name is None:
-        check.errors.append('blueprint: required, the name of a blueprint in flows')
-    elif blueprint is None:
-        check.errors.append(f'blueprint: {name} is not in flows')
-    blueprint_channels = {channel['name'] for channel in blueprint.body.get('channels', [])} if blueprint else set()
+    names = hardware.blueprint_names
+    found = {item.name: item for item in db.session.execute(
+        db.select(Blueprint).where(Blueprint.name.in_(names))).scalars()} if names else {}
+    if not names:
+        check.errors.append('blueprints: required, one or two blueprints in flows')
+    elif len(names) > 2:
+        check.errors.append('blueprints: at most two (process and long, or process and backup)')
+    for name in names:
+        if name not in found:
+            check.errors.append(f'blueprints: {name} is not in flows')
+    check.errors += blueprint_kind_errors([found[name] for name in names if name in found])
+    # Slots must have their channels in the blueprints that process data
+    processing = [found[name] for name in names if name in found and found[name].kind != Blueprint.BACKUP]
 
     sensor_ids = {sensor_id for version in hardware.versions for sensor_id in version.ids.values()}
     calibrated = set(db.session.execute(
@@ -74,10 +92,11 @@ def check_hardware(body):
                 continue
             if sensor_id not in calibrated:
                 check.warnings.append(f'{where}: no calibration for {sensor_id}')
-            if blueprint:
+            for blueprint in processing:
+                blueprint_channels = {channel['name'] for channel in blueprint.body.get('channels', [])}
                 missing = [channel for channel in slot_channels(slot, sensor_id) if channel not in blueprint_channels]
                 if missing:
-                    check.warnings.append(f'{where}: channels not in blueprint {name}: {", ".join(missing)}')
+                    check.warnings.append(f'{where}: channels not in blueprint {blueprint.name}: {", ".join(missing)}')
 
     versions = sorted(hardware.versions, key=lambda version: version.from_date or date.min)
     for previous, current in zip(versions, versions[1:]):

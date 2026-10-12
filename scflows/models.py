@@ -18,13 +18,39 @@ class TimestampMixin:
 
 
 class Blueprint(TimestampMixin, db.Model):
-    ''' Processing blueprint (smartcitizen-data/blueprints/<name>.json) '''
+    '''
+    Processing blueprint (smartcitizen-data/blueprints/<name>.json). Its kind (meta.kind) says how
+    it is used: process (every few hours, latest data from the Smart Citizen API, posted back), long
+    (every few days, a long window of the backups, results in S3) or backup (backups only)
+    '''
+    PROCESS = 'process'
+    LONG = 'long'
+    BACKUP = 'backup'
+    KINDS = (PROCESS, LONG, BACKUP)
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64), unique=True, nullable=False)
     body = db.Column(JSONType, nullable=False)
 
+    @property
+    def meta(self):
+        return self.body.get('meta') or {}
+
+    @property
+    def kind(self):
+        ''' Blueprints without meta.kind are processing blueprints '''
+        return self.meta.get('kind') or self.PROCESS
+
     def to_json(self):
         return self.body
+
+
+class HardwareBlueprint(db.Model):
+    ''' Blueprints of a hardware, in order. Blueprints in use cannot be deleted '''
+    hardware_id = db.Column(db.Integer, db.ForeignKey('hardware.id', ondelete='CASCADE'), primary_key=True)
+    blueprint_id = db.Column(db.Integer, db.ForeignKey('blueprint.id', ondelete='RESTRICT'), primary_key=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
+    blueprint = db.relationship('Blueprint')
 
 
 class Hardware(TimestampMixin, db.Model):
@@ -34,11 +60,40 @@ class Hardware(TimestampMixin, db.Model):
     description = db.Column(db.Text)
     comment = db.Column(db.Text)
     forwarding = db.Column(db.String(64))
-    # Every hardware uses a blueprint in flows: blueprints in use cannot be deleted
-    blueprint_id = db.Column(db.Integer, db.ForeignKey('blueprint.id', ondelete='RESTRICT'), nullable=False)
-    blueprint = db.relationship('Blueprint')
+    # One or two blueprints in flows, of different kinds (see Blueprint)
+    links = db.relationship('HardwareBlueprint', cascade='all, delete-orphan', order_by='HardwareBlueprint.position')
     versions = db.relationship('HardwareVersion', back_populates='hardware', cascade='all, delete-orphan',
                                order_by='HardwareVersion.from_date')
+
+    @property
+    def blueprints(self):
+        return [link.blueprint for link in self.links]
+
+    @blueprints.setter
+    def blueprints(self, blueprints):
+        # Links kept for blueprints already in the list: a new one with the same key would clash on flush
+        existing = {link.blueprint_id: link for link in self.links if link.blueprint_id is not None}
+        links = []
+        for position, blueprint in enumerate(blueprints):
+            link = existing.get(blueprint.id) or HardwareBlueprint(blueprint=blueprint)
+            link.position = position
+            links.append(link)
+        self.links = links
+
+    def blueprint_of(self, kind):
+        return next((blueprint for blueprint in self.blueprints if blueprint.kind == kind), None)
+
+    @property
+    def blueprint(self):
+        '''
+        The blueprint smartcitizen-connector and scdata get from the hardware (blueprint_url):
+        the processing blueprint, or the first one
+        '''
+        return self.blueprint_of(Blueprint.PROCESS) or next(iter(self.blueprints), None)
+
+    @property
+    def kinds(self):
+        return [blueprint.kind for blueprint in self.blueprints]
 
     @property
     def sensor_ids(self):
@@ -50,9 +105,10 @@ class Hardware(TimestampMixin, db.Model):
         Same structure as the hardware files, with the blueprint name. Optional keys are left out when empty.
         blueprint_url: url of the blueprint in flows (built by the API)
         '''
-        result = {'blueprint': self.blueprint.name}
+        result = {'blueprint': self.blueprint.name if self.blueprint else None}
         if blueprint_url:
             result['blueprint_url'] = blueprint_url
+        result['blueprints'] = [blueprint.name for blueprint in self.blueprints]
         result['description'] = self.description
         if self.comment is not None:
             result['comment'] = self.comment

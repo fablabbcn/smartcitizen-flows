@@ -76,9 +76,9 @@ def test_index(client, path):
 
 def test_hardware_list(client):
     assert client.get('/api/v1/hardware').get_json() == [
-        {'name': 'SCAS_TEST1', 'description': '1SEN55-2ELEC-AFE', 'blueprint': 'test_air',
+        {'name': 'SCAS_TEST1', 'description': '1SEN55-2ELEC-AFE', 'blueprint': 'test_air', 'blueprints': ['test_air'],
          'url': 'http://localhost/api/v1/hardware/SCAS_TEST1.json'},
-        {'name': 'SCAS_TEST2', 'description': 'Forwarded kit', 'blueprint': 'test_air',
+        {'name': 'SCAS_TEST2', 'description': 'Forwarded kit', 'blueprint': 'test_air', 'blueprints': ['test_air'],
          'url': 'http://localhost/api/v1/hardware/SCAS_TEST2.json'},
     ]
 
@@ -86,7 +86,7 @@ def test_hardware_list(client):
 def test_blueprint(client):
     assert client.get('/api/v1/blueprints/test_air.json').get_json() == source_json('blueprints', 'test_air.json')
     assert client.get('/api/v1/blueprints').get_json() == [
-        {'name': 'test_air', 'url': 'http://localhost/api/v1/blueprints/test_air.json'}]
+        {'name': 'test_air', 'kind': 'process', 'url': 'http://localhost/api/v1/blueprints/test_air.json'}]
 
 
 def test_blueprint_keeps_key_order(client):

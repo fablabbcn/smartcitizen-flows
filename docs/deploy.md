@@ -479,9 +479,10 @@ from the Smart Citizen API:
 docker compose exec web flask --app scflows jobs sync
 ```
 
-It creates a processing job for every device with valid postprocessing (hardware in
-flows) and new readings, and a backup job for every device of a researcher with
-readings: about **70 processing** and **540 backup** jobs. The first runs are
+It reads the devices with postprocessing from the Smart Citizen API and creates a
+processing job for every device whose hardware has a process blueprint, with valid
+postprocessing and new readings, and a backup job for every device with readings
+whose hardware has a long or a backup blueprint. The first runs are
 spread over the interval (3 h for processing, 6 h for backups) instead of all
 starting at once. `beat` repeats the sync every day at 03:00: new devices get
 jobs, and jobs of devices that no longer qualify are disabled. Jobs an admin

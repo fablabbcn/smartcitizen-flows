@@ -122,6 +122,10 @@ def test_devices_to_process(monkeypatch):
         # Never processed
         {'id': 6, 'last_reading_at': '2026-10-01T00:00:00Z',
          'postprocessing': {'hardware_url': 'SCAS6', 'latest_postprocessing': None}},
+        # Hardware with long processing only
+        {'id': 7, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'LONG'}},
+        # Hardware not in flows
+        {'id': 8, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'UNKNOWN'}},
     ]).set_index('id')
     checked = []
 
@@ -132,21 +136,26 @@ def test_devices_to_process(monkeypatch):
     monkeypatch.setattr(smartcitizen_connector, 'search_by_query', lambda **kwargs: devices)
     monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', check_postprocessing)
 
-    assert jobs.devices_to_process() == {1, 6}
+    kinds = {name: {'process'} for name in ('SCAS1', 'SCAS2', 'SCAS4', 'BAD', 'SCAS6')}
+    kinds['LONG'] = {'long'}
+
+    assert jobs.devices_to_process(kinds) == {1, 6}
     assert checked == ['SCAS1', 'BAD', 'SCAS6']
 
 
 def test_devices_to_back_up():
     devices = pd.DataFrame([
-        {'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'SCAS1'}},
-        # No hardware
-        {'id': 2, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': ''}},
-        {'id': 3, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': None},
-        # No readings
-        {'id': 4, 'last_reading_at': None, 'postprocessing': {'hardware_url': 'SCAS4'}},
+        {'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'LONG'}},
+        {'id': 2, 'last_reading_at': None, 'postprocessing': {'hardware_url': 'LONG'}},
+        {'id': 3, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'SHORT'}},
+        {'id': 4, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'BACKUP'}},
+        # Hardware not in flows, or none
+        {'id': 5, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': {'hardware_url': 'UNKNOWN'}},
+        {'id': 6, 'last_reading_at': '2026-10-01T00:00:00Z', 'postprocessing': None},
     ]).set_index('id')
 
-    assert jobs.devices_to_back_up(devices) == {1}
+    kinds = {'LONG': {'long'}, 'SHORT': {'process'}, 'BACKUP': {'process', 'backup'}}
+    assert jobs.devices_to_back_up(kinds, devices) == {1, 4}
 
 
 def test_sync_searches_the_api_once(app, monkeypatch):
@@ -154,7 +163,7 @@ def test_sync_searches_the_api_once(app, monkeypatch):
     import smartcitizen_connector.device
 
     devices = pd.DataFrame([{'id': 1, 'last_reading_at': '2026-10-01T00:00:00Z',
-                             'postprocessing': {'hardware_url': 'SCAS1', 'latest_postprocessing': None}}]).set_index('id')
+                             'postprocessing': {'hardware_url': 'LONG', 'latest_postprocessing': None}}]).set_index('id')
     searches = []
 
     def search_by_query(**kwargs):
@@ -163,6 +172,7 @@ def test_sync_searches_the_api_once(app, monkeypatch):
 
     monkeypatch.setattr(smartcitizen_connector, 'search_by_query', search_by_query)
     monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', lambda postprocessing: (None, None, True))
+    monkeypatch.setattr(jobs, 'hardware_kinds', lambda: {'LONG': {'process', 'long'}})
 
     report = jobs.sync_jobs()
 

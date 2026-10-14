@@ -10,26 +10,19 @@ from datetime import datetime, timedelta, timezone
 
 import scdata as sc
 
-from scflows import db, locks
+from scflows import locks
 from scflows.custom_logger import logger
-from scflows.identity import hardware_name
-from scflows.models import Blueprint, Hardware
+from scflows.models import Blueprint
 from scflows.parameters import apply_parameters
 from scflows.storage import month_start, root, write_processed
-from scflows.tasks.dprocess import health_checks
+from scflows.tasks.context import describe, device_context, device_hardware, iso, library_warnings
+from scflows.tasks.dprocess import health_checks, period
 from scflows.tools import refresh_metadata
 
 DEFAULT_WINDOW_DAYS = 90
 
 
-def device_hardware(device):
-    ''' The hardware of the device in flows, or None '''
-    postprocessing = device.handler.json.postprocessing
-    name = hardware_name(postprocessing.hardware_url) if postprocessing is not None else None
-    return db.session.execute(db.select(Hardware).filter_by(name=name)).scalar_one_or_none() if name else None
-
-
-async def back_up(device_id, logger_handler, task_log):
+async def back_up(device_id, logger_handler, task_log, context=None):
     ''' Brings the backup up to date, unless a backup of the device is already running '''
     from scflows.tasks.dbackup import dbackup
 
@@ -45,7 +38,8 @@ async def back_up(device_id, logger_handler, task_log):
         return True
     try:
         # Without waiting for the backup period to end: the window ends now
-        backup_log, backup_state = await dbackup(device_id, up_to_date=True)
+        backup_log, backup_state = await dbackup(device_id, up_to_date=True,
+                                                 context=context if context is not None else {})
     finally:
         locks.release(key, token)
     task_log += [f'backup {line}' for line in backup_log]
@@ -53,8 +47,22 @@ async def back_up(device_id, logger_handler, task_log):
     return backup_state[0] == 'SUCCESS' or backup_state[1] in ('NO_NEW_DATA', 'EMPTY_DATA')
 
 
-async def dlong(device_id, dry_run=False):
+async def dlong(device_id, dry_run=False, context=None):
+    ''' context (a dict) gets what the run used: device, hardware, blueprint, window, storage '''
     task_log = []
+    context = {} if context is None else context
+    # Why a read or a write failed is in the warnings of scdata and of the Smart Citizen API client
+    with library_warnings(task_log):
+        try:
+            return await long_device(device_id, dry_run, task_log, context)
+        except Exception as error:
+            # The run keeps the log up to the error
+            logger.exception(f'Long processing of device {device_id} raised')
+            task_log.append(f'error: {type(error).__name__}: {error}')
+            return task_log, ['FAILED', f'{type(error).__name__}: {error}'], None
+
+
+async def long_device(device_id, dry_run, task_log, context):
 
     def logger_handler(msg, level='info'):
         getattr(logger, level)(msg)
@@ -67,12 +75,16 @@ async def dlong(device_id, dry_run=False):
     logger_handler(f'Long processing instance for device {device_id}')
     refresh_metadata()
 
-    if not await back_up(device_id, logger_handler, task_log):
+    context['backup'] = {}
+    if not await back_up(device_id, logger_handler, task_log, context['backup']):
         task_log.append(logger_handler('The backup failed: not processing', 'error'))
         return done('ABORTED', 'BACKUP_FAILED')
 
     device = sc.Device(params=sc.APIParams(id=device_id))
     hardware = device_hardware(device)
+    context.update(device_context(device, hardware))
+    for line in describe(context):
+        task_log.append(logger_handler(line))
     blueprint = hardware.blueprint_of(Blueprint.LONG) if hardware else None
     if blueprint is None:
         task_log.append(logger_handler(f'Device {device_id} has no long blueprint in its hardware', 'error'))
@@ -80,6 +92,9 @@ async def dlong(device_id, dry_run=False):
     device.use_blueprint(blueprint.name, blueprint.body)
     # Parameters of its sensor types, then of its hardware
     parameter_sets = apply_parameters(device, hardware)
+    context.update(blueprint=blueprint.name, parameter_sets=parameter_sets,
+                   storage=f'{root()}/devices/{device_id}/data/',
+                   results=f'{root()}/devices/{device_id}/processed/{blueprint.name}/')
     task_log.append(logger_handler(f'Using blueprint {blueprint.name}, parameters of: '
                                    f'{", ".join(parameter_sets) or "the blueprint only"}'
                                    f'{" and hardware " + hardware.name if hardware.parameters else ""}'))
@@ -88,7 +103,8 @@ async def dlong(device_id, dry_run=False):
     end = datetime.now(timezone.utc)
     start = month_start(end - timedelta(days=window_days)).to_pydatetime()
     sensors = device.required_sensors
-    task_log.append(logger_handler(f'Window: {start:%Y-%m-%d} to {end:%Y-%m-%d}. Sensors: {sensors}'))
+    context.update(start=iso(start), end=iso(end), sensors=list(sensors or []))
+    task_log.append(logger_handler(f"Window: {start:%Y-%m-%d} to {end:%Y-%m-%d}, from {context['storage']}. Sensors: {sensors}"))
     if not sensors:
         task_log.append(logger_handler('The blueprint needs no sensors of this device', 'error'))
         return done('ABORTED', 'NO_SENSORS_TO_LOAD')
@@ -96,7 +112,8 @@ async def dlong(device_id, dry_run=False):
     if not device.load_from_storage(min_date=start, max_date=end, channels=sensors, root=root()) or device.data.empty:
         task_log.append(logger_handler('No data in the backups for the window', 'warning'))
         return done('ABORTED', 'EMPTY_DATA')
-    task_log.append(logger_handler(f'Loaded {len(device.data)} rows from the backups'))
+    context['rows'] = len(device.data)
+    task_log.append(logger_handler(f'Loaded from the backups: {period(device.data)}'))
 
     # A channel graph with a cycle raises: the checks run anyway
     error = None
@@ -113,6 +130,8 @@ async def dlong(device_id, dry_run=False):
         return done('ABORTED', 'PROCESSING_FAILED', health)
 
     channels = [channel.name for channel in device.channels if channel.name in device.data.columns]
+    context['channels'] = channels
+    task_log.append(logger_handler(f'Processed {len(channels)} channels ({", ".join(channels)})'))
     if dry_run:
         task_log.append(logger_handler(f'Dry run: {len(channels)} channels not stored'))
         return done('SUCCESS', 'PROCESSED (DRY RUN)', health)
@@ -127,5 +146,6 @@ async def dlong(device_id, dry_run=False):
     except Exception as error:
         task_log.append(logger_handler(f'Storing the result failed: {type(error).__name__}: {error}', 'error'))
         return done('FAILED', 'STORAGE_FAILED', health)
-    task_log.append(logger_handler(f'Stored {len(channels)} channels, months {", ".join(months)}'))
+    context['months'] = months
+    task_log.append(logger_handler(f"Stored {len(channels)} channels in {context['results']}, months {', '.join(months)}"))
     return done('SUCCESS', 'PROCESSED AND STORED', health)

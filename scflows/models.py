@@ -238,8 +238,9 @@ class Job(TimestampMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.Integer, nullable=False)
-    # From the Smart Citizen API, updated by the sync
+    # From the Smart Citizen API, updated by the sync: name and hardware (its postprocessing hardware_url)
     device_name = db.Column(db.String(255))
+    hardware = db.Column(db.String(64))
     task = db.Column(db.String(16), nullable=False)
     source = db.Column(db.String(16), nullable=False, default=AUTO)
     # enabled: the device qualifies (set by the sync). paused: stopped by an admin
@@ -258,7 +259,8 @@ class Job(TimestampMixin, db.Model):
 
     def to_json(self):
         return {
-            'id': self.id, 'device_id': self.device_id, 'device_name': self.device_name, 'task': self.task,
+            'id': self.id, 'device_id': self.device_id, 'device_name': self.device_name, 'hardware': self.hardware,
+            'task': self.task,
             'source': self.source,
             'enabled': self.enabled, 'paused': self.paused, 'interval_hours': self.interval_hours,
             'next_run_at': self.next_run_at.isoformat() if self.next_run_at else None,
@@ -286,6 +288,8 @@ class JobRun(db.Model):
     # Result code of the task, e.g. PROCESSED AND UPLOADED, EMPTY_DATA
     message = db.Column(db.Text)
     log = db.Column(JSONType)
+    # What the run used: device name, hardware, blueprint, calibrations, period, storage (see scflows.tasks.context)
+    context = db.Column(JSONType)
     # Smart Citizen user who requested it, empty for scheduled runs
     username = db.Column(db.String(255))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
@@ -302,6 +306,7 @@ class JobRun(db.Model):
         }
         if log:
             result['log'] = self.log
+            result['context'] = self.context
         return result
 
 

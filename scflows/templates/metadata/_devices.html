@@ -1,0 +1,26 @@
+{# Devices with jobs of some hardware (devices.devices): linked to their page #}
+{% from "_macros.html" import badge, device_link, hardware_link, job_status with context %}
+{% macro devices_section(devices, show_hardware=False) %}
+<section class="section">
+    <div class="section-header"><h2>Devices <span class="count">{{ devices | length }}</span></h2></div>
+    <div class="card" data-table>
+        {% if devices | length > 10 %}<div class="table-tools"><input class="input" type="search" placeholder="Filter devices" aria-label="Filter devices" data-search><span class="count" data-count></span></div>{% endif %}
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Device</th>{% if show_hardware %}<th>Hardware</th>{% endif %}{% if current_user.is_admin %}<th>Jobs</th>{% endif %}</tr></thead>
+                <tbody>
+                {% for item in devices %}
+                    <tr>
+                        <td>{{ device_link(item.device_id, item.name) }}</td>
+                        {% if show_hardware %}<td>{{ hardware_link(item.hardware) }}</td>{% endif %}
+                        {% if current_user.is_admin %}<td>{% for job in item.jobs %}<span class="nowrap">{{ job.task }} {{ job_status(job) }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</td>{% endif %}
+                    </tr>
+                {% else %}
+                    <tr><td colspan="3" class="empty">No devices with jobs{% if not current_user.is_admin %} that you own{% endif %}. The sync sets the hardware of each device.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endmacro %}

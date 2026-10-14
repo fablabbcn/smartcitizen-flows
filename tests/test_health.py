@@ -58,7 +58,7 @@ def test_run_records_health(app, monkeypatch):
     monkeypatch.setattr(jobs.locks, 'release', lambda key, token: None)
 
     def task_function(name):
-        async def run(device_id, dry_run):
+        async def run(device_id, dry_run, context):
             return ['info: done'], ['SUCCESS', 'PROCESSED AND UPLOADED'], device_health(('TEMP', 0.5))
         return run
 

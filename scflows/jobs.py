@@ -141,6 +141,19 @@ def devices_to_back_up(kinds=None, devices=None):
     return result
 
 
+def device_hardware(devices):
+    ''' {device id: hardware name} of the devices of the Smart Citizen API (from their postprocessing) '''
+    from .identity import hardware_name
+    if devices is None or 'postprocessing' not in devices.columns:
+        return {}
+    result = {}
+    for device_id, postprocessing in devices['postprocessing'].items():
+        name = hardware_name(postprocessing.get('hardware_url')) if isinstance(postprocessing, dict) else None
+        if name:
+            result[int(device_id)] = name[:64]
+    return result
+
+
 def device_names(devices):
     ''' {device id: name} of the devices of the Smart Citizen API '''
     if devices is None or 'name' not in devices.columns:
@@ -168,7 +181,7 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
     # A partial sync without the long devices leaves the long jobs as they are
     if long_every is not None:
         wanted[Job.LONG] = set(long_every)
-    names = device_names(devices)
+    names, hardware = device_names(devices), device_hardware(devices)
     report = {}
     for task, qualified in wanted.items():
         logger.info(f'{task}: {len(qualified)} devices qualify')
@@ -179,7 +192,7 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
             if job is None:
                 interval = long_every[device_id] if task == Job.LONG else INTERVALS[task]
                 # Spread the first runs over the interval
-                db.session.add(Job(device_id=device_id, device_name=names.get(device_id), task=task,
+                db.session.add(Job(device_id=device_id, device_name=names.get(device_id), hardware=hardware.get(device_id), task=task,
                                    interval_hours=interval, enabled=True,
                                    next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1))))
                 counts['created'] += 1
@@ -196,6 +209,9 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
             # Devices can be renamed
             if names.get(device_id) and job.device_name != names[device_id]:
                 job.device_name = names[device_id]
+            # Or change hardware: only devices in the search (a partial sync keeps what it has)
+            if devices is not None and device_id in devices.index and job.hardware != hardware.get(device_id):
+                job.hardware = hardware.get(device_id)
             if device_id not in qualified and job.enabled and job.source == Job.AUTO:
                 job.enabled = False
                 counts['disabled'] += 1
@@ -300,12 +316,12 @@ def dispatch_due_jobs():
 def task_function(task):
     if task == Job.PROCESS:
         from .tasks.dprocess import dprocess
-        return lambda device_id, dry_run: dprocess(device_id, dry_run=dry_run)
+        return lambda device_id, dry_run, context: dprocess(device_id, dry_run=dry_run, context=context)
     if task == Job.LONG:
         from .tasks.dlong import dlong
-        return lambda device_id, dry_run: dlong(device_id, dry_run=dry_run)
+        return lambda device_id, dry_run, context: dlong(device_id, dry_run=dry_run, context=context)
     from .tasks.dbackup import dbackup
-    return lambda device_id, dry_run: dbackup(device_id)
+    return lambda device_id, dry_run, context: dbackup(device_id, context=context)
 
 
 def execute_run(run_id):
@@ -332,9 +348,12 @@ def execute_run(run_id):
     try:
         run.state, run.started_at = JobRun.RUNNING, now()
         db.session.commit()
+        # The task fills the context with what it used (device, hardware, blueprint, storage)
+        context = {}
         # dprocess also returns the health checks of the data it processed
-        log, state, *extra = asyncio.run(task_function(run.task)(run.device_id, run.dry_run))
+        log, state, *extra = asyncio.run(task_function(run.task)(run.device_id, run.dry_run, context))
         run.log = log
+        run.context = context or None
         run.state = STATES.get(state[0], JobRun.ABORTED)
         run.message = state[1]
         if extra and extra[0]:

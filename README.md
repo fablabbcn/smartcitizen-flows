@@ -12,7 +12,7 @@ Each device has a job per task: `process` (calculate channels from the blueprint
 - `celery` workers run them. A device task never runs twice at the same time (lock in Redis)
 - Each run is recorded with its result and log
 
-Admins see the jobs and runs in `/jobs/`, or in the API (`/api/v1/jobs`, `/api/v1/runs/<id>`). From the command line:
+Admins see the jobs and runs in `/jobs/`, or in the API (`/api/v1/jobs`, `/api/v1/runs/<id>`). The sync stores the name and hardware of each device. Each device has a page in `/jobs/devices/<id>` with its hardware, the calibrations of each version (flagging sensor ids without one), where its backups and long results are stored, its jobs and its runs. Each run keeps what it used (`context` in the API: device, hardware, blueprint, period, channels, storage) and its log includes the warnings and errors of scdata and of the Smart Citizen API client, which say why a load or a post failed. Hardware and calibration pages list the devices that use them, linked back. From the command line:
 
 ```
 flask --app scflows jobs sync                                     # sync with the Smart Citizen API now

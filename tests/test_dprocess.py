@@ -160,3 +160,28 @@ def test_no_health_without_checks_or_data(run, options):
     _, device = run(**options)
 
     assert device.returned_health is None
+
+
+def test_context_says_what_the_run_used(monkeypatch, refreshed):
+    monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
+    FakeDevice.options = {}
+    context = {}
+
+    log, state, _ = asyncio.run(dprocess(1, dry_run=True, context=context))
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    assert context['device_name'] == 'Kit 1' and context['blueprint'] == 'sc_air'
+    assert context['sensors'] == ['ADC_48_2', 'TEMP'] and context['rows'] == 1
+    assert 'info: Device Kit 1, last reading None' in log and any(line.startswith('info: Posting') for line in log)
+
+
+def test_errors_keep_the_log(monkeypatch, refreshed):
+    def broken(**kwargs):
+        raise ConnectionError('API down')
+
+    monkeypatch.setattr(dprocess_module.sc, 'Device', broken)
+
+    log, state, health = asyncio.run(dprocess(1))
+
+    assert state == ['FAILED', 'ConnectionError: API down'] and health is None
+    assert log[-1] == 'error: ConnectionError: API down'

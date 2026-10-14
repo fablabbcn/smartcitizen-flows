@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, datetime, meter, short_time with context %}
+{% from "_macros.html" import badge, blueprint_link, datetime, hardware_link, meter, short_time with context %}
 {% block title %}Health of {{ latest.device_name or device_id }}{% endblock %}
 {% macro check_cards(record) %}
 {% for check in record.checks %}
@@ -61,10 +61,12 @@
             {% if selected.id != latest.id %}Older result, from {{ datetime(selected.created_at) }}. <a href="{{ url_for('health_ui.device', device_id=device_id) }}">See the latest</a>.
             {% else %}Checked {{ datetime(selected.created_at) }}{% endif %}
             · {{ selected.rows }} rows{% if selected.start and selected.end %} from {{ datetime(selected.start) }} to {{ datetime(selected.end) }}{% endif %}
-            {% if selected.blueprint %} · blueprint {{ selected.blueprint }}{% endif %}
+            {% if selected.blueprint %} · blueprint {{ blueprint_link(selected.blueprint) }}{% endif %}
+            {% if hardware_name %} · hardware {{ hardware_link(hardware_name) if can_see_hardware else hardware_name }}{% endif %}
         </p>
     </div>
     <div class="actions">
+        {% if current_user.is_admin %}<a class="btn" href="{{ url_for('jobs_ui.device', device_id=device_id) }}">Device in flows</a>{% endif %}
         <a class="btn" href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device page</a>
         {% if current_user.is_admin and selected.run_id %}<a class="btn" href="{{ url_for('jobs_ui.run', run_id=selected.run_id) }}">Run #{{ selected.run_id }}</a>{% endif %}
         <a class="btn" href="{{ url_for('api.get_device_health', device_id=device_id) }}">JSON</a>

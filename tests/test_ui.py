@@ -392,4 +392,4 @@ def test_jobs_page_shows_device_names(client):
 
     page = client.get('/jobs/').get_data(as_text=True)
 
-    assert '>Rooftop</td>' in page and '>Balcony</td>' in page and 'Old name' not in page
+    assert '>Rooftop</a>' in page and '>Balcony</a>' in page and 'Old name' not in page

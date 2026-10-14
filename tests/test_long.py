@@ -111,7 +111,7 @@ def long_hardware(app):
 def run(monkeypatch, root, long_hardware):
     backups = []
 
-    async def back_up(device_id, logger_handler, task_log):
+    async def back_up(device_id, logger_handler, task_log, context=None):
         backups.append(device_id)
         return FakeDevice.options.get('backup', True)
 

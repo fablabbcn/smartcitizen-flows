@@ -21,6 +21,9 @@
 {%- if job.source == 'manual' %} <span class="badge plain">manual</span>{% endif %}
 {%- endmacro %}
 
+{# Without the year, the full date on hover: for tight tables #}
+{% macro short_datetime(value) %}{% if value %}<time datetime="{{ value.isoformat() }}" title="{{ value.strftime('%Y-%m-%d %H:%M') }} UTC">{{ value.strftime('%m-%d %H:%M') }}</time>{% endif %}{% endmacro %}
+
 {% macro datetime(value, seconds=False) %}{% if value %}<time datetime="{{ value.isoformat() }}">{{ value.strftime('%Y-%m-%d %H:%M:%S' if seconds else '%Y-%m-%d %H:%M') }}</time>{% endif %}{% endmacro %}
 
 {% macro duration(run) -%}
@@ -45,3 +48,36 @@
 {%- endmacro %}
 
 {% macro short_time(value) %}{{ value[:16] | replace('T', ' ') if value else '' }}{% endmacro %}
+
+{# Links between devices, hardware, calibrations, blueprints and storage #}
+{% macro device_link(device_id, name=None) -%}
+<a href="{{ url_for('jobs_ui.device', device_id=device_id) if current_user.is_admin else url_for('health_ui.device', device_id=device_id) }}">{{ name or 'Device' }}</a> <span class="muted small">#{{ device_id }}</span>
+{%- endmacro %}
+
+{% macro hardware_link(name) -%}
+{%- if name %}<a class="mono" href="{{ url_for('ui.edit_hardware', name=name) }}">{{ name }}</a>{% endif -%}
+{%- endmacro %}
+
+{% macro blueprint_link(name) -%}
+{%- if name %}<a class="mono" href="{{ url_for('api.get_blueprint', name=name) }}">{{ name }}</a>{% endif -%}
+{%- endmacro %}
+
+{% macro calibration_link(sensor_id, calibrated=True) -%}
+{%- if calibrated %}<a class="mono" href="{{ url_for('ui.edit_calibration', sensor_id=sensor_id) }}">{{ sensor_id }}</a>
+{%- elif current_user.is_admin %}<a class="mono" href="{{ url_for('ui.new_calibration', sensor_id=sensor_id) }}" title="No calibration in flows: add it">{{ sensor_id }}</a> <span class="badge warning">no calibration</span>
+{%- else %}<span class="mono">{{ sensor_id }}</span> <span class="badge warning">no calibration</span>{% endif -%}
+{%- endmacro %}
+
+{% macro storage(location) -%}
+{%- if location %}{% set link = location | storage_link %}{% if link %}<a class="mono" href="{{ link }}" target="_blank" rel="noopener">{{ location }}</a>{% else %}<span class="mono">{{ location }}</span>{% endif %}{% endif -%}
+{%- endmacro %}
+
+{# Versions of a hardware with their sensor ids, linked to their calibrations ({sensor id: calibrated}) #}
+{% macro versions_list(versions, calibrated) -%}
+<ul class="plain-list">
+{% for version in versions %}
+    <li><span class="muted small">{{ version['from'] or '…' }} to {{ version['to'] or 'now' }}</span>
+        {% for slot, sensor_id in version['ids'].items() %}<span class="nowrap">{{ slot }}={{ calibration_link(sensor_id, calibrated.get(sensor_id, True)) }}</span>{% if not loop.last %}, {% endif %}{% else %}<span class="muted">no sensor ids</span>{% endfor %}</li>
+{% endfor %}
+</ul>
+{%- endmacro %}

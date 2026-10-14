@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_macros.html" import badge, blueprint_link, datetime, duration, hardware_link, job_status, storage, versions_list with context %}
+{% block title %}{{ name or 'Device' }} #{{ device_id }}{% endblock %}
+{% block content %}
+<div class="breadcrumbs"><a href="{{ url_for('jobs_ui.index') }}">Jobs</a><span>{{ name or 'Device' }} #{{ device_id }}</span></div>
+<div class="page-header">
+    <div>
+        <h1 class="row">{{ name or 'Device' }} <span class="muted">#{{ device_id }}</span></h1>
+        <p class="subtitle">{% if hardware_name %}Hardware {{ hardware_link(hardware_name) }}{% else %}No hardware known yet: the sync or a run sets it{% endif %}</p>
+    </div>
+    <div class="actions">
+        <a class="btn" href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device page</a>
+        {% if health %}<a class="btn" href="{{ url_for('health_ui.device', device_id=device_id) }}">Health {{ badge(health.status) }}</a>{% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h2>Hardware and calibrations</h2></div>
+    <div class="card-body">
+        {% if hardware %}
+        <dl class="details">
+            <dt>Hardware</dt><dd>{{ hardware_link(hardware.name) }}{% if hardware.description %} <span class="muted small">{{ hardware.description }}</span>{% endif %}</dd>
+            <dt>Blueprints</dt><dd>{% for blueprint in hardware.blueprints %}{{ blueprint_link(blueprint.name) }} <span class="muted small">{{ blueprint.kind }}</span>{% if not loop.last %} · {% endif %}{% else %}<span class="muted">none</span>{% endfor %}</dd>
+            <dt>Versions</dt><dd>{{ versions_list(hardware.to_json()['versions'], calibrated) }}</dd>
+        </dl>
+        {% elif hardware_name %}
+        <p class="muted">Hardware <span class="mono">{{ hardware_name }}</span> is not in flows.</p>
+        {% else %}
+        <p class="muted">No hardware known yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<section class="section">
+    <div class="card">
+        <div class="card-header"><h2>Storage</h2></div>
+        <div class="card-body">
+            <dl class="details">
+                <dt>Backups</dt><dd>{{ storage(backups) or 'S3 is not configured' }}</dd>
+                <dt>Long results</dt><dd>{{ storage(long_results) or '–' }}</dd>
+            </dl>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-header"><h2>Jobs</h2></div>
+    <div class="card">
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Task</th><th>Status</th><th class="num">Every</th><th>Next run</th><th>Last run</th></tr></thead>
+                <tbody>
+                {% for job in jobs %}
+                    {% set last = latest.get(job.id) %}
+                    <tr>
+                        <td>{{ job.task }}</td>
+                        <td>{{ job_status(job) }}</td>
+                        <td class="num">{{ job.interval_hours }} h</td>
+                        <td class="nowrap">{{ datetime(job.next_run_at) }}</td>
+                        <td>{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5" class="empty">No jobs for this device</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="section-header"><h2>Latest runs</h2></div>
+    <div class="card">
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th class="num">Run</th><th>Task</th><th>State</th><th>Result</th><th>By</th><th>Queued</th><th class="num">Duration</th></tr></thead>
+                <tbody>
+                {% for item in runs %}
+                    <tr>
+                        <td class="num"><a href="{{ url_for('jobs_ui.run', run_id=item.id) }}">#{{ item.id }}</a></td>
+                        <td>{{ item.task }}{% if item.dry_run %} <span class="badge plain">dry run</span>{% endif %}</td>
+                        <td>{{ badge(item.state) }}</td>
+                        <td class="clip" title="{{ item.message or '' }}">{{ item.message or '' }}</td>
+                        <td>{{ item.username or 'schedule' }}</td>
+                        <td class="nowrap">{{ datetime(item.created_at) }}</td>
+                        <td class="num nowrap">{{ duration(item) }}</td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="7" class="empty">No runs yet</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

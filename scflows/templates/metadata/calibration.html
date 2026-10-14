@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf with context %}
+{% from "_macros.html" import csrf, hardware_link with context %}
+{% from "metadata/_devices.html" import devices_section with context %}
 {% block title %}{{ 'New calibration' if new else sensor_id }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
 {% block content %}
@@ -64,6 +65,28 @@
     </div>
     {% endif %}
 </form>
+
+{% if not new %}
+<section class="section">
+    <div class="section-header"><h2>Used by</h2></div>
+    <div class="card">
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>Hardware</th><th>Slot</th><th>Version</th></tr></thead>
+                <tbody>
+                {% for hardware, version, slot in used_by %}
+                    <tr><td>{{ hardware_link(hardware.name) }}</td><td class="mono">{{ slot }}</td>
+                        <td class="muted small">{{ version.from_date or '…' }} to {{ version.to_date or 'now' }}</td></tr>
+                {% else %}
+                    <tr><td colspan="3" class="empty">No hardware{% if not current_user.is_admin %} of yours{% endif %} mounts this sensor id</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{{ devices_section(devices, show_hardware=True) }}
+{% endif %}
 
 {% if not new and not readonly %}
 <div class="card danger-zone">

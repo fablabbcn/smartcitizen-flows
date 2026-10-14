@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf with context %}
+{% from "_macros.html" import calibration_link, csrf with context %}
+{% from "metadata/_devices.html" import devices_section with context %}
 {% block title %}{{ 'New hardware' if new else name }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
 {% block content %}
@@ -108,6 +109,15 @@
     </div>
     {% endif %}
 </form>
+
+{% if not new %}
+{% if uncalibrated %}
+<section class="section">
+    <div class="alert warning">Sensor ids without calibration in flows: {% for sensor_id in uncalibrated %}{{ calibration_link(sensor_id, False) }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+</section>
+{% endif %}
+{{ devices_section(devices) }}
+{% endif %}
 
 {% if not new and not readonly %}
 <div class="card danger-zone">

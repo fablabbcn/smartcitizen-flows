@@ -9,7 +9,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, u
 from flask_login import current_user
 from pydantic import ValidationError
 
-from . import db, editing
+from . import db, devices, editing
 from .access import can_see, visible_calibrations, visible_hardware
 from .api import KEY_PATTERN
 from .auth import admin_required, requires_ui_role
@@ -122,8 +122,11 @@ def render_hardware(name, data, check=None, new=False):
     # Hardware as read from flows has its list; a new one starts with the processing blueprint
     if 'blueprints' not in data:
         data = dict(data, blueprints=[data['blueprint']] if data.get('blueprint') else [])
+    hardware = None if new else devices.hardware_by_name([name]).get(name)
     return render_template('metadata/hardware.html', name=name, data=data, check=check, new=new,
-                           blueprints=blueprints, readonly=not current_user.is_admin)
+                           blueprints=blueprints, readonly=not current_user.is_admin,
+                           devices=[] if new else devices.devices(current_user.identity, [name]),
+                           uncalibrated=devices.uncalibrated([hardware])[name] if hardware else [])
 
 
 @ui.route('/hardware/new', methods=['GET', 'POST'])
@@ -184,7 +187,16 @@ def render_calibration(sensor_id, kind, data, errors=None, new=False):
     return render_template('metadata/calibration.html', sensor_id=sensor_id, kind=kind, data=data,
                            fields=CALIBRATION_FIELDS[kind], optional=OPTIONAL_CALIBRATION_FIELDS,
                            kinds=list(CALIBRATION_FIELDS), errors=errors or [], new=new,
-                           readonly=not current_user.is_admin)
+                           readonly=not current_user.is_admin, **calibration_usage(sensor_id, new))
+
+
+def calibration_usage(sensor_id, new):
+    ''' The hardware that mounts a sensor id, and their devices '''
+    if new or not sensor_id:
+        return {'used_by': [], 'devices': []}
+    used_by = devices.hardware_using(sensor_id, current_user.identity)
+    names = {hardware.name for hardware, _, _ in used_by}
+    return {'used_by': used_by, 'devices': devices.devices(current_user.identity, names) if names else []}
 
 
 @ui.route('/calibrations/new', methods=['GET', 'POST'])

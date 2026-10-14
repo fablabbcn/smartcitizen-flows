@@ -55,8 +55,6 @@ Flower) or with `docker compose exec` (Postgres, Redis). See
 
 ## Sizing
 
-Measured on the local stack (October 2026), not estimated:
-
 | | Memory |
 |---|---|
 | Whole stack, idle | **~450 MB** |
@@ -67,17 +65,17 @@ Measured on the local stack (October 2026), not estimated:
 | ├─ `redis` | 4 MB |
 | └─ `proxy` (Caddy) and `flower` | ~60 MB together |
 
-A processing dry run of device 18154 kept `celery` at 389 MB and took 2.4 s.
+A processing dry run of a device normally makes `celery` go at 389 MB and takes <5s.
 Runs process at most 1000 rows per device, so a single run stays small, but the
-worker autoscales to **4 processes** (`--autoscale=4,2`). That is why 4 GB is the
-recommendation, not the idle figure. After the deploy, processing catches up from
-each device's `latest_postprocessing` (the backlog since late 2025 takes about two
-months to clear), so expect the workers to be busy for a while.
+worker autoscales to **4 processes** (`--autoscale=4,2`), which is why 4 GB is the
+recommendation. After the deploy, processing catches up from
+each device's `latest_postprocessing`, so expect the workers to be busy for a while.
 
 The database is small: **~9 MB** with all the metadata (1 blueprint, 158 hardware,
-594 calibrations), their revision history and a few hundred jobs. It grows with
+594 calibrations), their revision history and a few hundred jobs. It should grow with
 the run history (one row per run, with its log).
-Device health adds about 5 KB per processing run (one device, sc_air): with about 70
+
+Device health adds about 5 KB per processing run (one device, `sc_air`): with about 70
 processing jobs every 3 hours and 30 days of history, around **85 MB**.
 
 **Docker images are the largest consumer of disk.** The flows image is about
@@ -86,11 +84,9 @@ processing jobs every 3 hours and 30 days of history, around **85 MB**.
 previous image behind untagged. `docker image prune` and `docker builder prune`
 reclaim it (see [Updating](#updating)).
 
----
+## Services
 
-## What runs where
-
-| Service | Image | What it does |
+| Service | Image | Purpose |
 |---|---|---|
 | `proxy` | `caddy:2-alpine` | TLS (Let's Encrypt), HTTP to HTTPS redirect, `/flower` behind basic auth, everything else to `web`. The only service with published ports. |
 | `web` | `scflows:latest` | Flask app: web interface, metadata API (`/api/v1/`). Applies database migrations before serving. |
@@ -108,11 +104,9 @@ Processing reads its metadata from flows itself: smartcitizen-connector and scda
 get hardware, blueprints, calibrations and sensor names from `BASE_POSTPROCESSING_URL`,
 which points at this deployment's own API.
 
----
-
 ## 1. Server preparation
 
-Skip this on the existing server. On a new one, log in as `root` and create an
+Skip this on an existing server. On a new one, log in as `root` and create an
 unprivileged account. Everything after this step runs as that user.
 
 ```bash
@@ -149,9 +143,7 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
----
-
-## 2. Firewall, before Docker
+## 2. Setup firewall (before Docker)
 
 Install and configure `ufw` **before** installing Docker, and allow SSH
 **before** enabling it.
@@ -180,8 +172,6 @@ The old deployment only opened 443, so check this on the existing server.
 
 Outgoing traffic needs no rules: the Smart Citizen API, GitHub (metadata import, firmware for `names sync`),
 PyPI (builds) and S3 are all outbound connections.
-
----
 
 ## 3. Install Docker
 
@@ -220,7 +210,7 @@ On a server that is already running, recreate the containers afterwards:
 
 ---
 
-## 4. Why ufw alone is not enough
+## 4. `ufw` limitations
 
 When Docker publishes a container port, it inserts a `DNAT` rule into iptables
 that is evaluated **before** ufw's `INPUT` chain:
@@ -266,7 +256,7 @@ cp env.example .env
 chmod 600 .env
 ```
 
-`.env` is not committed and not copied into the image: `compose.yml` passes it
+`.env` is not copied into the image: `compose.yml` passes it
 to the containers at runtime, so it must stay in the checkout on the server.
 
 Generate the secrets first:
@@ -276,9 +266,9 @@ python3 -c "import secrets; print(secrets.token_hex(32))"   # FLASK_SECRET_KEY
 python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 ```
 
-### Values that must change from `env.example`
+### Adapting `env.example`
 
-| Variable | Set it to | Why |
+| Variable | Set it to | Reason |
 |---|---|---|
 | `FLASK_SECRET_KEY` | A generated value | Signs the web interface sessions and its form tokens. The example value (or the one in an old README) lets anyone forge an admin session. Changing it later signs everyone out. |
 | `POSTGRES_PASSWORD` | A generated value | |
@@ -290,7 +280,7 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | `FLASK_DEBUG` | `0` | Flask 3 applies `1` under gunicorn too: debug mode in production. |
 | `S3_DATA_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | The backup bucket and its credentials | Backups write raw device data there. boto3 reads `AWS_DEFAULT_REGION`: an old `AWS_REGION` alone is not enough. |
 
-### Values to keep as they are
+The following values need to be kept as they are:
 
 | Variable | Value | Notes |
 |---|---|---|
@@ -305,12 +295,6 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | Variable | Default | Notes |
 |---|---|---|
 | `API_URL` | `https://api.smartcitizen.me/v0/` | Smart Citizen API used to verify tokens and sign in, and by the connector. Only set it to use another API, e.g. staging. |
-
-Old variables that are no longer read and can be deleted: `CELERY_RESULTS_BACKEND`
-(run results are in the database), `FLOWER_BASIC_AUTH`, `FLOWER_PORT` and
-`FLASK_ENV`.
-
----
 
 ## 7. DNS and TLS
 
@@ -398,7 +382,7 @@ flows is the source of truth for this metadata, not the smartcitizen-data reposi
 
 ## 11. Verify
 
-From your laptop, not the server:
+From your laptop/computer:
 
 ```bash
 # TLS is live, HTTP redirects to HTTPS
@@ -468,8 +452,6 @@ for p in 5000 5432 5555 6379; do
 done
 ```
 
----
-
 ## 12. Create the jobs
 
 Jobs are rows in the database; `beat` queues the ones that are due. Create them
@@ -537,13 +519,11 @@ all of this. Do these in order, then continue with steps 9-12 above:
    fail every renewal), optionally `sudo certbot delete --cert-name flows.smartcitizen.me`,
    and remove `scflows/public/certbot` and `scflows/public/nginx`.
 
----
-
 ## Day to day
 
 ### Web interface
 
-| Who | Sees |
+| Who | Permissions |
 |---|---|
 | Smart Citizen admins | Overview, **Health** of every device, **Jobs** (run now, dry run, pause and resume per device, add a job, every run with its log) and **Metadata** (create, edit, check and delete hardware and calibrations, with history). |
 | Smart Citizen researchers | Overview, **Health** of their devices, and Metadata **read only**, limited to the hardware used by their devices and the calibrations of its sensors. Their devices are read when they sign in: a new device shows after signing in again. |
@@ -612,13 +592,11 @@ docker image prune -f
 docker builder prune -f
 ```
 
----
-
 ## Backups
 
 Durable state lives in named volumes:
 
-| Volume | Contents | Losing it means |
+| Volume | Contents | Consequences |
 |---|---|---|
 | `postgres_data` | Blueprints, hardware, calibrations, sensor names, their revision history, jobs, runs and device health | **The metadata.** After the deploy it is edited in flows, not GitHub, so it cannot be re-imported without losing those changes. |
 | `caddy_data` | TLS certificates and ACME account | Re-issuing; mind the rate limit. |

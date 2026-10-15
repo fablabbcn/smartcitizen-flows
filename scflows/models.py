@@ -152,6 +152,8 @@ class Calibration(TimestampMixin, db.Model):
     sensor_id = db.Column(db.String(64), unique=True, nullable=False)
     kind = db.Column(db.String(32), nullable=False, index=True)
     data = db.Column(JSONType, nullable=False)
+    # Alphasense order it came with. Not served with the data: processing reads every value as a number
+    order_number = db.Column(db.String(64))
 
     @classmethod
     def kind_of(cls, data):
@@ -159,6 +161,10 @@ class Calibration(TimestampMixin, db.Model):
 
     def to_json(self):
         return self.data
+
+    def history_json(self):
+        ''' As the history keeps it: the data and the order number '''
+        return {**self.data, 'order_number': self.order_number} if self.order_number else self.data
 
 
 class SensorName(TimestampMixin, db.Model):

@@ -5,6 +5,7 @@ from datetime import date
 from pydantic import ValidationError
 
 from . import db
+from .calibrations import AFE_BOARD_ID, warnings as calibration_warnings
 from .models import Blueprint, Calibration
 from .schemas import HardwareIn
 
@@ -75,8 +76,9 @@ def check_hardware(body):
     processing = [found[name] for name in names if name in found and found[name].kind != Blueprint.BACKUP]
 
     sensor_ids = {sensor_id for version in hardware.versions for sensor_id in version.ids.values()}
-    calibrated = set(db.session.execute(
-        db.select(Calibration.sensor_id).where(Calibration.sensor_id.in_(sensor_ids))).scalars())
+    calibration_data = dict(db.session.execute(
+        db.select(Calibration.sensor_id, Calibration.data).where(Calibration.sensor_id.in_(sensor_ids))).all())
+    calibrated = set(calibration_data)
 
     for index, version in enumerate(hardware.versions):
         for slot, sensor_id in version.ids.items():
@@ -90,8 +92,13 @@ def check_hardware(body):
             if slot.startswith('AS') and sensor_id[:3] not in connector_config._as_sensor_codes:
                 check.errors.append(f'{where}: unknown Alphasense sensor code {sensor_id[:3]}')
                 continue
+            if slot.startswith('PT') and not AFE_BOARD_ID.match(sensor_id):
+                check.warnings.append(f'{where}: {sensor_id} does not look like an AFE board id (e.g. 10-002911)')
             if sensor_id not in calibrated:
                 check.warnings.append(f'{where}: no calibration for {sensor_id}')
+            else:
+                check.warnings += [f'{where}: calibration of {sensor_id}: {warning}'
+                                   for warning in calibration_warnings(calibration_data[sensor_id])]
             for blueprint in processing:
                 blueprint_channels = {channel['name'] for channel in blueprint.body.get('channels', [])}
                 missing = [channel for channel in slot_channels(slot, sensor_id) if channel not in blueprint_channels]

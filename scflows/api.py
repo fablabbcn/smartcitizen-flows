@@ -258,12 +258,21 @@ def post_hardware_check(name):
 @api.put('/calibrations/<sensor_id>')
 @requires_role(ADMIN)
 def put_calibration(sensor_id):
+    ''' The calibration values, plus an optional "order_number" (kept apart: it is not served with the data) '''
+    body = json_body()
+    order_number = body.pop('order_number', editing.KEEP)
+    if order_number is not editing.KEEP and order_number is not None and not isinstance(order_number, str):
+        unprocessable(['order_number: a string or null'])
     try:
-        item, created = editing.save_calibration(key_of(sensor_id), json_body(), identity=current_identity())
+        item, created = editing.save_calibration(key_of(sensor_id), body, identity=current_identity(),
+                                                 order_number=order_number)
     except ValidationError as error:
         unprocessable(validation_errors(error))
+    except ValueError as error:
+        unprocessable([str(error)])
     db.session.commit()
-    return saved(item.to_json(), created)
+    from .calibrations import warnings
+    return saved(item.to_json(), created, warnings(item.data))
 
 
 @api.put('/names/<name>')

@@ -22,6 +22,8 @@
             {{ badge(revision.action) }}
             <strong>{{ revision.username or 'system' }}</strong>
             {{ datetime(revision.created_at) }}
+            {% set content = revision.after if revision.after is not none else revision.before %}
+            {% if content is mapping and content.order_number %}<span class="muted small">order <span class="mono">{{ content.order_number }}</span></span>{% endif %}
         </div>
         {% if changed and revision.before is not none and revision.after is not none %}
         <p class="changed">Changed: {% for field in changed %}<code>{{ field }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>

@@ -87,7 +87,7 @@ Reading metadata is public (processing reads it without a token). Admins of the 
 |---|---|---|
 | `PUT /api/v1/blueprints/<name>` | admin | Create or replace a blueprint (validated with `scdata`) |
 | `PUT /api/v1/hardware/<name>` | admin | Create or replace a hardware description, same structure as the hardware files. List its blueprints with `blueprints` (names of blueprints in flows), or give one with `blueprint` or `blueprint_url` |
-| `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board) |
+| `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board). Optional `order_number` (string, `null` removes it): kept apart from the values, which processing reads as numbers. The response lists warnings for values that do not add up |
 | `PUT /api/v1/names/<name>` | admin | Create or replace a sensor name. New names go to the end of the list |
 | `DELETE /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>` | admin | Delete |
 | `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
@@ -95,7 +95,9 @@ Reading metadata is public (processing reads it without a token). Admins of the 
 
 In the web interface, admins edit the metadata and run the jobs. Researchers sign in to see, read only, the hardware used by their devices (from the `postprocessing` of their devices when they sign in) and the calibrations of its sensors.
 
-Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint. Blueprints used by hardware cannot be deleted.
+Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint, PT slots whose id does not look like an AFE board (`NN-NNNNNN`, e.g. 10-002911 or 17-000123), and mounted sensors whose calibration does not add up. Blueprints used by hardware cannot be deleted.
+
+Alphasense calibrations are checked (warnings, they are still saved): sensitivities in mV/ppb must be within 1% of nA/ppb × the PCB gain, and total zeros within 2 mV of electronic + sensor zero. The form lists the values in the order of the Alphasense sheet, and keeps an optional order number (in the calibration list and the history, not served with the values). New calibrations for an AFE board id open the AFE board form.
 
 ```
 curl -X PUT https://flows.smartcitizen.me/api/v1/calibrations/212830246 \

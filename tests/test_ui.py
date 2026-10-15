@@ -157,7 +157,7 @@ def test_new_calibration(client):
     # Processing needs every value
     page = client.post('/metadata/calibrations/new', data=form(sensor_id='10-000001', kind='afe_board',
                                                                 t20='20', v20='', action='save')).get_data(as_text=True)
-    assert 'v20: empty or not a number, and processing needs it' in page
+    assert 'v20: a numeric value is required for processing' in page
 
     response = client.post('/metadata/calibrations/new', data=form(sensor_id='10-000001', kind='afe_board',
                                                                     t20='20', v20='0.3', action='save'))

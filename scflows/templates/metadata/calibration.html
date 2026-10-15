@@ -8,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span>{% if not new %} {{ sensor_type(sensor_id) }}{% endif %}</h1>
-        <p class="subtitle">{{ 'Values from the Alphasense sensor sheet, in its order.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}{% if order_number and not new %} Order <span class="mono">{{ order_number }}</span>.{% endif %}</p>
+        <p class="subtitle">{{ 'Values from the Alphasense calibration sheet, in the same order.' if kind == 'alphasense_sensor' else 'Values from the AFE board calibration sheet.' }}{% if order_number and not new %} Order <span class="mono">{{ order_number }}</span>.{% endif %}</p>
     </div>
     {% if not new %}
     <div class="actions">
@@ -45,7 +45,7 @@
                     </select>
                     <button class="btn" name="action" value="change_kind" formnovalidate>Change</button>
                 </div>
-                <p class="hint">AFE board ids look like 10-002911 (also 12-, 17-…); Alphasense sensor ids are numbers.</p>
+                <p class="hint">AFE board ids have the form 10-002911 (also 12-, 17-…). Alphasense sensor ids are numeric.</p>
             </div>
             <div class="field">
                 <label for="order_number">Order number <span class="optional">(optional)</span></label>
@@ -61,7 +61,7 @@
             <div class="field">
                 <label for="order_number">Order number <span class="optional">(optional)</span></label>
                 <input class="input mono" id="order_number" name="order_number" value="{{ order_number or '' }}" maxlength="64">
-                <p class="hint">The Alphasense order the sensor came with. Kept in the history, not used by processing.</p>
+                <p class="hint">Alphasense order number of the sensor. Recorded in the history; not used by processing.</p>
             </div>
         </div>
     </div>
@@ -84,14 +84,14 @@
             </div>
             {% endfor %}
             {% if kind == 'alphasense_sensor' %}
-            <p class="alert info" data-auto-legend hidden>Highlighted values were worked out from the others (hover them to see how): check them before saving. Saving works them out too.</p>
+            <p class="alert info" data-auto-legend hidden>Highlighted values are derived from the other values (hover for the formula). Review them before saving; they are also derived on save.</p>
             {# The PCB gain turns sensitivities in nA/ppb into mV/ppb: shown as the relation it is #}
             <h3 class="group-title">Gain and sensitivity</h3>
             <div class="form-grid cols-3" data-gain-check="{{ expected_gain[0] if expected_gain else '' }}" data-gain-model="{{ expected_gain[1] if expected_gain else '' }}">
                 <div class="field">
                     <label for="pcb_gain_mv_na">PCB gain (mV/nA)</label>
                     <input class="input mono" id="pcb_gain_mv_na" name="pcb_gain_mv_na" value="{{ data.get('pcb_gain_mv_na', '') }}" inputmode="decimal">
-                    <span class="hint" data-gain-hint>{% if expected_gain %}{{ expected_gain[1] }} sensors have {{ expected_gain[0] }}{% else %}<span class="mono">pcb_gain_mv_na</span>{% endif %}</span>
+                    <span class="hint" data-gain-hint>{% if expected_gain %}Expected for {{ expected_gain[1] }}: {{ expected_gain[0] }}{% else %}<span class="mono">pcb_gain_mv_na</span>{% endif %}</span>
                 </div>
             </div>
             <div class="relation-rows">
@@ -129,7 +129,7 @@
                     <tr><td>{{ hardware_link(hardware.name) }}</td><td class="mono">{{ slot }}</td>
                         <td class="muted small">{{ version.from_date or '…' }} to {{ version.to_date or 'now' }}</td></tr>
                 {% else %}
-                    <tr><td colspan="3" class="empty">No hardware{% if not current_user.is_admin %} of yours{% endif %} mounts this sensor id</td></tr>
+                    <tr><td colspan="3" class="empty">{% if current_user.is_admin %}No hardware uses this sensor id{% else %}None of your hardware uses this sensor id{% endif %}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

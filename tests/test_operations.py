@@ -183,7 +183,7 @@ def test_pause_and_resume_a_selection(client, several):
     assert paused() == {('process', 2), ('backup', 2)}
 
     client.post('/jobs/selection', data={'csrf': 'token', 'action': 'pause', 'job_id': selection})
-    assert 'Paused 1 jobs (2 already were)' in client.get('/jobs/').get_data(as_text=True)
+    assert 'Paused 1 jobs (2 already paused)' in client.get('/jobs/').get_data(as_text=True)
 
 
 def test_selection_needs_jobs_and_an_action(client, several):
@@ -193,7 +193,7 @@ def test_selection_needs_jobs_and_an_action(client, several):
     client.post('/jobs/selection', data={'csrf': 'token', 'action': 'delete', 'job_id': [several[('process', 1)]]})
 
     assert paused() == set()
-    assert 'Tick the jobs to pause or resume' in client.get('/jobs/').get_data(as_text=True)
+    assert 'Select at least one job to pause or resume' in client.get('/jobs/').get_data(as_text=True)
 
 
 def test_jobs_table_has_selection_boxes(client, several):

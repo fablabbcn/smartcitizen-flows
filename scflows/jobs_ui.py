@@ -90,10 +90,10 @@ def device(device_id):
 def sync_now():
     ''' Queues a sync with the Smart Citizen API (it takes a few minutes) '''
     if sync_running():
-        flash('A sync is already running: reload in a few minutes', 'warning')
+        flash('A sync is already running. Reload the page in a few minutes.', 'warning')
     else:
         run = queue_sync(current_user.username)
-        flash(f'Sync queued (run {run.id}): new and changed jobs appear in a few minutes', 'info')
+        flash(f'Sync queued (run {run.id}). New and changed jobs will appear in a few minutes.', 'info')
     return back()
 
 
@@ -174,12 +174,12 @@ def pause_selection():
     ids = [int(value) for value in request.form.getlist('job_id') if value.isdigit()]
     task = request.form.get('task') if request.form.get('task') in Job.TASKS else None
     if action not in ('pause', 'resume') or not ids:
-        flash('Tick the jobs to pause or resume', 'error')
+        flash('Select at least one job to pause or resume', 'error')
     else:
         selected = db.session.execute(db.select(Job).where(Job.id.in_(ids))).scalars().all()
         changed = set_paused_many(selected, action == 'pause')
         done = 'Paused' if action == 'pause' else 'Resumed'
-        flash(f'{done} {len(changed)} jobs' + (f' ({len(selected) - len(changed)} already were)' if len(changed) < len(selected) else ''))
+        flash(f'{done} {len(changed)} jobs' + (f' ({len(selected) - len(changed)} already {done.lower()})' if len(changed) < len(selected) else ''))
     return redirect(url_for('jobs_ui.index', task=task))
 
 

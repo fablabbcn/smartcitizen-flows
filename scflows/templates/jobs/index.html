@@ -5,7 +5,7 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
-        <p class="subtitle">As the blueprints of its hardware say, each device is processed every {{ intervals.process }} h, backed up every {{ intervals.backup }} h, or processed over months of backups (long, with baselines) every {{ (intervals.long / 24) | int }} days unless its long blueprint says otherwise. The jobs are synced with the Smart Citizen API every hour.</p>
+        <p class="subtitle">Devices are processed every {{ intervals.process }} h and backed up every {{ intervals.backup }} h, according to the blueprints of their hardware. Long processing (baselines over months of backups) runs every {{ (intervals.long / 24) | int }} days unless the long blueprint sets another interval. Jobs are synced with the Smart Citizen API every hour.</p>
         <p class="hint">
             {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
             {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}: {{ last_sync.report | sync_summary }}{% endif %}
@@ -56,7 +56,7 @@
         <form id="selection" class="table-tools selection" method="POST" action="{{ url_for('jobs_ui.pause_selection') }}">
             {{ csrf() }}
             {% if task %}<input type="hidden" name="task" value="{{ task }}">{% endif %}
-            <span class="muted small" data-selected>Tick jobs to pause or resume them together</span>
+            <span class="muted small" data-selected>Select jobs to pause or resume them together</span>
             <span class="row">
                 <button class="btn sm warning" type="submit" name="action" value="pause">Pause selected</button>
                 <button class="btn sm success" type="submit" name="action" value="resume">Resume selected</button>
@@ -76,8 +76,8 @@
                         <td class="select"><input type="checkbox" name="job_id" value="{{ job.id }}" form="selection" aria-label="Select {{ job.task }} of device {{ job.device_id }}"></td>
                         <td class="clip narrow" title="{{ names.get(job.device_id, '') }} #{{ job.device_id }}"><a href="{{ url_for('jobs_ui.device', device_id=job.device_id) }}">{{ names.get(job.device_id) or 'Device' }}</a> <span class="muted small">#{{ job.device_id }}</span></td>
                         <td class="nowrap">{% if job.hardware %}{{ hardware_link(job.hardware) if job.hardware in hardware else job.hardware }}
-                            {%- if job.hardware not in hardware %} <span class="badge warning" title="This hardware is not in flows">missing</span>
-                            {%- elif uncalibrated.get(job.hardware) %} <span class="badge warning" title="{{ uncalibrated[job.hardware] | length }} sensor ids without calibration: {{ uncalibrated[job.hardware] | join(', ') }}">{{ uncalibrated[job.hardware] | length }} uncal.</span>{% endif %}
+                            {%- if job.hardware not in hardware %} <span class="badge warning" title="This hardware is not in flows">not in flows</span>
+                            {%- elif uncalibrated.get(job.hardware) %} <span class="badge warning" title="{{ uncalibrated[job.hardware] | length }} sensor ids without calibration: {{ uncalibrated[job.hardware] | join(', ') }}">{{ uncalibrated[job.hardware] | length }} uncalibrated</span>{% endif %}
                         {%- endif %}</td>
                         <td class="nowrap">{{ job.task }} <span class="muted small">{{ job.interval_hours }} h</span></td>
                         <td class="nowrap">{{ job_status(job) }}</td>
@@ -86,7 +86,7 @@
                         <td class="actions">{{ job_actions(job) }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="8" class="empty">No jobs yet. They are created by the hourly sync, or with "Add job".</td></tr>
+                    <tr><td colspan="8" class="empty">No jobs yet. Jobs are created by the hourly sync or with "Add job".</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

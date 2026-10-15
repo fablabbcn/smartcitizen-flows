@@ -8,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1>{% if new %}New hardware{% else %}Hardware <span class="mono">{{ name }}</span>{% endif %}</h1>
-        <p class="subtitle">The blueprints give the channels to process and how; each version lists the sensors mounted in a period.</p>
+        <p class="subtitle">Blueprints define the channels to process; each version lists the sensors mounted during a period.</p>
     </div>
     {% if not new %}
     <div class="actions">
@@ -40,7 +40,7 @@
                     <label class="check"><input type="checkbox" name="blueprints" value="{{ blueprint.name }}" {% if blueprint.name in data.blueprints %}checked{% endif %}> <span class="mono">{{ blueprint.name }}</span> <span class="badge plain">{{ blueprint.kind }}</span></label>
                     {% endfor %}
                 </div>
-                <span class="hint">One or two: <strong>process</strong> (every few hours, posted to the Smart Citizen API), <strong>long</strong> (baselines over months of backups, always backed up) or <strong>backup</strong> (backups only, researchers' devices). Not long and backup together.</span>
+                <span class="hint">Select one or two: <strong>process</strong> (every few hours, posted to the Smart Citizen API), <strong>long</strong> (baselines over months of backups, always backed up) or <strong>backup</strong> (backups only, for researchers' devices). Long and backup cannot be combined: long processing includes backups.</span>
             </div>
             <div class="field">
                 <label for="description">Description</label>
@@ -53,7 +53,7 @@
             <div class="field full">
                 <label for="parameters">Long processing parameters <span class="optional">(optional, JSON)</span></label>
                 <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false" placeholder='{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}'>{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
-                <span class="hint">Over those of its sensor types (Parameters tab), for the devices of this hardware. <code>function</code> changes the algorithm of a channel.</span>
+                <span class="hint">Overrides the parameters of its sensor types (Parameters tab) for the devices of this hardware. <code>function</code> selects the algorithm of a channel.</span>
             </div>
             <div class="field full">
                 <label for="forwarding">Forwarding <span class="optional">(optional)</span></label>
@@ -140,7 +140,7 @@
                         </td>{% endif %}
                     </tr>
                 {% else %}
-                    <tr><td colspan="{{ 4 if readonly else 5 }}" class="empty">No files attached{% if not readonly %}: add certificates or calibration reports below{% endif %}</td></tr>
+                    <tr><td colspan="{{ 4 if readonly else 5 }}" class="empty">No files attached.{% if not readonly %} Certificates and calibration reports can be added below.{% endif %}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

@@ -151,12 +151,12 @@ def missing(data):
     ''' Values that processing cannot use: scdata reads every value of a calibration as a number '''
     hints = {}
     for label, na_field, mv_field in SENSITIVITY_ROWS:
-        hints[na_field] = hints[mv_field] = f'give {label} in nA/ppb or mV/ppb, with the PCB gain'
+        hints[na_field] = hints[mv_field] = f'provide {label} in nA/ppb or mV/ppb, with the PCB gain'
     for electrode, *fields in ZERO_TRIPLES:
         for field in fields:
-            hints[field] = f'give two of the {electrode} electronic, sensor and total zeros'
-    return [f'{field}: empty or not a number, and processing needs it ({hints[field]})' if field in hints
-            else f'{field}: empty or not a number, and processing needs it'
+            hints[field] = f'provide two of the {electrode} electronic, sensor and total zeros'
+    return [f'{field}: a numeric value is required for processing ({hints[field]})' if field in hints
+            else f'{field}: a numeric value is required for processing'
             for field, value in data.items() if number(value) is None]
 
 
@@ -181,15 +181,15 @@ def warnings(data, sensor_id=None):
     gain = number(data.get('pcb_gain_mv_na'))
     usual = expected_gain(sensor_id) if sensor_id else None
     if usual and gain is not None and abs(gain - usual[0]) > GAIN_TOLERANCE:
-        result.append(f'PCB gain: {short(gain)} mV/nA, but {usual[1]} sensors have {short(usual[0])} mV/nA')
+        result.append(f'PCB gain: {short(gain)} mV/nA; expected {short(usual[0])} mV/nA for {usual[1]}')
     for label, na_field, mv_field in SENSITIVITY_ROWS:
         na, mv = number(data.get(na_field)), number(data.get(mv_field))
         if None in (gain, na, mv):
             continue
         expected = na * gain
         if abs(mv - expected) > SENSITIVITY_TOLERANCE * max(abs(expected), abs(mv)):
-            result.append(f'{label}: {short(mv)} mV/ppb, but {short(na)} nA/ppb × {short(gain)} mV/nA gives '
-                          f'{short(expected)} mV/ppb (more than {SENSITIVITY_TOLERANCE:.0%} apart)')
+            result.append(f'{label}: {short(mv)} mV/ppb differs by more than {SENSITIVITY_TOLERANCE:.0%} from '
+                          f'{short(na)} nA/ppb × {short(gain)} mV/nA = {short(expected)} mV/ppb')
     for electrode in ('WE', 'AE'):
         prefix = electrode.lower()
         electronic, sensor, total = (number(data.get(f'{prefix}_{part}_zero_mv'))
@@ -197,6 +197,6 @@ def warnings(data, sensor_id=None):
         if None in (electronic, sensor, total):
             continue
         if abs(total - (electronic + sensor)) > ZERO_TOLERANCE_MV:
-            result.append(f'{electrode} total zero: {short(total)} mV, but electronic {short(electronic)} + sensor '
-                          f'{short(sensor)} gives {short(electronic + sensor)} mV (more than {short(ZERO_TOLERANCE_MV)} mV apart)')
+            result.append(f'{electrode} total zero: {short(total)} mV differs by more than {short(ZERO_TOLERANCE_MV)} mV from '
+                          f'electronic {short(electronic)} + sensor {short(sensor)} = {short(electronic + sensor)} mV')
     return result

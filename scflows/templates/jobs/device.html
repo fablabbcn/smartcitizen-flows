@@ -6,7 +6,7 @@
 <div class="page-header">
     <div>
         <h1 class="row">{{ name or 'Device' }} <span class="muted">#{{ device_id }}</span></h1>
-        <p class="subtitle">{% if hardware_name %}Hardware {{ hardware_link(hardware_name) }}{% else %}No hardware known yet: the sync or a run sets it{% endif %}</p>
+        <p class="subtitle">{% if hardware_name %}Hardware {{ hardware_link(hardware_name) }}{% else %}Hardware not known yet. It is set by the next sync or run.{% endif %}</p>
     </div>
     <div class="actions">
         <a class="btn" href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device page</a>
@@ -43,9 +43,9 @@
                 {% endfor %}
             </dl>
             {% else %}
-            <p class="muted">Not listed: this device has no postprocessing in the Smart Citizen API{% if not (sync_run.context.listing or {}).complete %}, or the listing was incomplete{% endif %}.</p>
+            <p class="muted">Not listed in the last sync: the device has no postprocessing in the Smart Citizen API{% if not (sync_run.context.listing or {}).complete %}, or the listing was incomplete{% endif %}.</p>
             {% endif %}
-            <p class="hint"><a href="{{ url_for('jobs_ui.run', run_id=sync_run.id) }}">Sync #{{ sync_run.id }}</a>, {{ datetime(sync_run.finished_at) }}. Paused and manual jobs stay as they are.</p>
+            <p class="hint"><a href="{{ url_for('jobs_ui.run', run_id=sync_run.id) }}">Sync #{{ sync_run.id }}</a>, {{ datetime(sync_run.finished_at) }}. The sync does not change paused or manual jobs.</p>
             {% else %}
             <p class="muted">No sync recorded yet.</p>
             {% endif %}

@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import random
+import re
 from datetime import datetime, timedelta, timezone
 
 import click
@@ -47,6 +48,14 @@ def aware(value):
 
 # Which devices qualify, from the Smart Citizen API and the blueprints of their hardware in flows
 
+# Why a device does not qualify for a task (reasons that name the hardware are built in skip_reason)
+NO_HARDWARE = 'no hardware in its postprocessing'
+NO_READINGS = 'no readings'
+UP_TO_DATE = 'processed up to its last reading'
+INVALID = 'postprocessing not valid (see the warnings of the Smart Citizen API client)'
+QUALIFIES = 'qualifies'
+
+
 def hardware_kinds():
     ''' {hardware name: {blueprint kinds}} of the hardware in flows '''
     from .models import Hardware
@@ -62,6 +71,27 @@ def kinds_of(device, kinds):
     return kinds.get(hardware_name(postprocessing['hardware_url']))
 
 
+def skip_reason(device, kinds, wanted):
+    '''
+    Why a device of the Smart Citizen API does not qualify for a task whose hardware needs one of the
+    blueprint kinds in wanted, or None if it may (process jobs check more)
+    '''
+    from .identity import hardware_name
+    postprocessing = device.postprocessing
+    if not isinstance(postprocessing, dict) or not postprocessing.get('hardware_url'):
+        return NO_HARDWARE
+    name = hardware_name(postprocessing['hardware_url'])
+    if name is None:
+        return f'hardware_url {str(postprocessing["hardware_url"])[:80]!r} is not a hardware name'
+    if name not in kinds:
+        return f'hardware {name} is not in flows'
+    if not kinds[name] & set(wanted):
+        return f'hardware {name} has no {" or ".join(sorted(wanted))} blueprint'
+    if pd.isna(device.last_reading_at):
+        return NO_READINGS
+    return None
+
+
 def postprocessing_devices():
     '''
     Devices with postprocessing in the Smart Citizen API. It is the only search the sync makes: the API
@@ -72,36 +102,39 @@ def postprocessing_devices():
                            search_items=[{'key': 'postprocessing_id', 'value': 'not_null', 'full': True}])
 
 
-def devices_to_process(kinds=None, devices=None):
+def devices_to_process(kinds=None, devices=None, reasons=None):
     '''
     Devices whose hardware has a process blueprint, with valid postprocessing and readings newer than
-    their last processing
+    their last processing. reasons: filled with {device id: why it does not qualify}
     '''
     from smartcitizen_connector.device import check_postprocessing
     from .models import Blueprint
 
     kinds = hardware_kinds() if kinds is None else kinds
     devices = postprocessing_devices() if devices is None else devices
+    reasons = {} if reasons is None else reasons
     result = set()
     for device_id in devices.index:
         device = devices.loc[device_id, :]
-        postprocessing = device.postprocessing
-        # Most postprocessing entries are empty
-        if not postprocessing or not postprocessing.get('hardware_url') or pd.isna(device.last_reading_at):
-            continue
-        if Blueprint.PROCESS not in (kinds_of(device, kinds) or set()):
-            continue
-        latest = postprocessing.get('latest_postprocessing')
-        if latest is not None and timestamp(latest) > timestamp(device.last_reading_at):
-            continue
-        _, _, valid = check_postprocessing(postprocessing)
-        if valid:
+        reason = skip_reason(device, kinds, {Blueprint.PROCESS})
+        if reason is None:
+            latest = device.postprocessing.get('latest_postprocessing')
+            if latest is not None and timestamp(latest) > timestamp(device.last_reading_at):
+                reason = UP_TO_DATE
+            elif not check_postprocessing(device.postprocessing)[2]:
+                reason = INVALID
+        if reason is None:
             result.add(int(device_id))
+        else:
+            reasons[int(device_id)] = reason
     return result
 
 
-def devices_for_long(devices=None):
-    ''' {device id: hours between runs} of devices with readings whose hardware has a long blueprint '''
+def devices_for_long(devices=None, kinds=None, reasons=None):
+    '''
+    {device id: hours between runs} of devices with readings whose hardware has a long blueprint.
+    reasons: filled with {device id: why it does not qualify}
+    '''
     from .identity import hardware_name
     from .models import Blueprint, Hardware
 
@@ -111,33 +144,38 @@ def devices_for_long(devices=None):
         if blueprint is not None:
             every[item.name] = int((blueprint.meta.get('every_days') or 7) * 24)
 
+    kinds = hardware_kinds() if kinds is None else kinds
     devices = postprocessing_devices() if devices is None else devices
+    reasons = {} if reasons is None else reasons
     result = {}
     for device_id in devices.index:
         device = devices.loc[device_id, :]
-        postprocessing = device.postprocessing
-        if not postprocessing or not postprocessing.get('hardware_url') or pd.isna(device.last_reading_at):
-            continue
-        name = hardware_name(postprocessing['hardware_url'])
+        reason = skip_reason(device, kinds, {Blueprint.LONG})
+        name = None if reason else hardware_name(device.postprocessing['hardware_url'])
         if name in every:
             result[int(device_id)] = every[name]
+        else:
+            reasons[int(device_id)] = reason or f'hardware {name} has no long blueprint'
     return result
 
 
-def devices_to_back_up(kinds=None, devices=None):
+def devices_to_back_up(kinds=None, devices=None, reasons=None):
     '''
     Devices with readings whose hardware has a backup blueprint, or a long one (long processing reads
-    the backups)
+    the backups). reasons: filled with {device id: why it does not qualify}
     '''
     from .models import Blueprint
 
     kinds = hardware_kinds() if kinds is None else kinds
     devices = postprocessing_devices() if devices is None else devices
+    reasons = {} if reasons is None else reasons
     result = set()
     for device_id in devices.index:
-        device = devices.loc[device_id, :]
-        if not pd.isna(device.last_reading_at) and (kinds_of(device, kinds) or set()) & {Blueprint.BACKUP, Blueprint.LONG}:
+        reason = skip_reason(devices.loc[device_id, :], kinds, {Blueprint.BACKUP, Blueprint.LONG})
+        if reason is None:
             result.add(int(device_id))
+        else:
+            reasons[int(device_id)] = reason
     return result
 
 
@@ -161,31 +199,91 @@ def device_names(devices):
     return {int(device_id): name[:255] for device_id, name in devices['name'].items() if isinstance(name, str) and name}
 
 
-def sync_jobs(to_process=None, to_back_up=None, for_long=None):
+def listing_complete(devices):
+    '''
+    The search returned every device the Smart Citizen API counts (smartcitizen-connector keeps its total in
+    attrs). Unknown totals count as complete
+    '''
+    total = devices.attrs.get('total')
+    return total is None or len(devices) >= total
+
+
+def device_list(ids, names, notes=None):
+    ''' "id (name, note)" of each device '''
+    notes = notes or {}
+    items = []
+    for device_id in sorted(ids):
+        extra = ', '.join(value for value in (names.get(device_id), notes.get(device_id)) if value)
+        items.append(f'{device_id} ({extra})' if extra else str(device_id))
+    return ', '.join(items)
+
+
+def reason_group(reason):
+    ''' (reason without the hardware, the hardware) to log devices skipped for the same reason together '''
+    match = re.match(r"hardware_url (.*) is not a hardware name$", reason)
+    if match:
+        return 'hardware_url is not a hardware name', match.group(1)
+    match = re.match(r'hardware (\S+) (.*)$', reason)
+    if match:
+        return f'hardware {match.group(2)}', match.group(1)
+    return reason, None
+
+
+def log_skipped(task, reasons, names):
+    ''' One line per reason, with the devices (only a count for devices without hardware: most of them) '''
+    by_reason = {}
+    for device_id, reason in reasons.items():
+        group, note = reason_group(reason)
+        by_reason.setdefault(group, {})[device_id] = note
+    for reason, notes in sorted(by_reason.items(), key=lambda item: (-len(item[1]), item[0])):
+        if reason == NO_HARDWARE:
+            logger.info(f'{task}: {len(notes)} devices skipped, {reason}')
+        else:
+            logger.info(f'{task}: {len(notes)} devices skipped, {reason}: {device_list(notes, names, notes)}')
+
+
+def sync_jobs(to_process=None, to_back_up=None, for_long=None, details=None):
     '''
     Creates or enables the jobs of the devices that qualify and disables the automatic ones that do not.
-    Paused jobs stay paused. Returns {task: {'created': n, 'enabled': n, 'disabled': n}}
+    Paused jobs stay paused. Returns {task: {'created': n, 'enabled': n, 'disabled': n}}.
+    details: filled with what a full sync saw (see sync_details)
     '''
     kinds = hardware_kinds() if to_process is None or to_back_up is None else None
     # Long jobs run every few days, as their blueprint says: {device id: hours}
     # From the Smart Citizen API only on a full sync (no lists given)
     full = to_process is None and to_back_up is None and for_long is None
     # One request for all the lists
-    devices = postprocessing_devices() if to_process is None or to_back_up is None or full else None
-    long_every = (devices_for_long(devices) if full else None) if for_long is None else (
+    search = to_process is None or to_back_up is None or full
+    devices = postprocessing_devices() if search else None
+    complete = True
+    if search:
+        if devices is None or devices.empty:
+            # An empty search would disable every job
+            raise RuntimeError('The Smart Citizen API returned no devices with postprocessing')
+        complete = listing_complete(devices)
+        logger.info(f'{len(devices)} devices with postprocessing in the Smart Citizen API'
+                    f' (it counts {devices.attrs.get("total", "?")}), {len(kinds or {})} hardware in flows')
+        if not complete:
+            logger.warning(f'The Smart Citizen API listed {len(devices)} of {devices.attrs["total"]} devices: '
+                           'jobs are created and enabled, but none is disabled until a complete sync')
+    reasons = {task: {} for task in Job.TASKS}
+    long_every = (devices_for_long(devices, kinds, reasons[Job.LONG]) if full else None) if for_long is None else (
         dict(for_long) if isinstance(for_long, dict) else {device_id: INTERVALS[Job.LONG] for device_id in for_long})
-    if devices is not None:
-        logger.info(f'{len(devices)} devices with postprocessing in the Smart Citizen API, {len(kinds or {})} hardware in flows')
-    wanted = {Job.PROCESS: devices_to_process(kinds, devices) if to_process is None else set(to_process),
-              Job.BACKUP: devices_to_back_up(kinds, devices) if to_back_up is None else set(to_back_up)}
+    wanted = {Job.PROCESS: devices_to_process(kinds, devices, reasons[Job.PROCESS]) if to_process is None else set(to_process),
+              Job.BACKUP: devices_to_back_up(kinds, devices, reasons[Job.BACKUP]) if to_back_up is None else set(to_back_up)}
     # A partial sync without the long devices leaves the long jobs as they are
     if long_every is not None:
         wanted[Job.LONG] = set(long_every)
     names, hardware = device_names(devices), device_hardware(devices)
-    report = {}
+    # Names for the log: of the jobs too (devices the search did not list)
+    job_names = {**dict(db.session.execute(db.select(Job.device_id, Job.device_name)
+                                           .where(Job.device_name.is_not(None))).all()), **names}
+    report, changes = {}, {}
     for task, qualified in wanted.items():
         logger.info(f'{task}: {len(qualified)} devices qualify')
+        log_skipped(task, reasons[task], job_names)
         counts = {'created': 0, 'enabled': 0, 'disabled': 0}
+        changed = {'created': [], 'enabled': [], 'disabled': []}
         jobs = {job.device_id: job for job in db.session.execute(db.select(Job).filter_by(task=task)).scalars()}
         for device_id in qualified:
             job = jobs.get(device_id)
@@ -195,10 +293,10 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
                 db.session.add(Job(device_id=device_id, device_name=names.get(device_id), hardware=hardware.get(device_id), task=task,
                                    interval_hours=interval, enabled=True,
                                    next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1))))
-                counts['created'] += 1
+                changed['created'].append(device_id)
             elif not job.enabled:
                 job.enabled = True
-                counts['enabled'] += 1
+                changed['enabled'].append(device_id)
             # The blueprint of a long job can change every_days
             if job is not None and task == Job.LONG and job.source == Job.AUTO \
                     and job.interval_hours != long_every[device_id]:
@@ -212,13 +310,48 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None):
             # Or change hardware: only devices in the search (a partial sync keeps what it has)
             if devices is not None and device_id in devices.index and job.hardware != hardware.get(device_id):
                 job.hardware = hardware.get(device_id)
-            if device_id not in qualified and job.enabled and job.source == Job.AUTO:
+            if device_id not in qualified and job.enabled and job.source == Job.AUTO and complete:
                 job.enabled = False
-                counts['disabled'] += 1
-        report[task] = counts
+                changed['disabled'].append(device_id)
+        for change, ids in changed.items():
+            counts[change] = len(ids)
+            if ids:
+                why = '' if change != 'disabled' else '; '.join(
+                    f'{device_id}: {reasons[task].get(device_id, "not listed by the Smart Citizen API")}' for device_id in sorted(ids))
+                logger.info(f'{task}: {change} {device_list(ids, job_names)}' + (f' (why: {why})' if why else ''))
+        report[task], changes[task] = counts, changed
     db.session.commit()
     logger.info(f'Jobs synced: {report}')
+    if details is not None and devices is not None:
+        details.update(sync_details(devices, complete, wanted, reasons, changes))
     return report
+
+
+def sync_details(devices, complete, wanted, reasons, changes):
+    '''
+    What a sync saw, kept in its run: the listing, {device id: {task: 'qualifies' or why not}} of the devices
+    listed, and the devices whose jobs were created, enabled or disabled
+    '''
+    decisions = {}
+    for device_id in devices.index:
+        device_id = int(device_id)
+        decisions[str(device_id)] = {task: QUALIFIES if device_id in wanted[task] else reasons[task].get(device_id)
+                                     for task in wanted}
+    return {'listing': {'devices': len(devices), 'total': devices.attrs.get('total'), 'complete': complete},
+            'devices': decisions, 'changes': changes}
+
+
+def device_sync(device_id):
+    '''
+    What the latest successful full sync decided for a device: ({task: 'qualifies' or why not}, sync run), or
+    (None, run) if that sync did not list it, or (None, None) without one
+    '''
+    run = db.session.execute(db.select(JobRun).where(JobRun.task == JobRun.SYNC, JobRun.state == JobRun.SUCCESS,
+                                                     JobRun.context.is_not(None))
+                             .order_by(JobRun.id.desc()).limit(1)).scalar()
+    if run is None or not run.context:
+        return None, None
+    return (run.context.get('devices') or {}).get(str(device_id)), run
 
 
 # Runs
@@ -455,9 +588,10 @@ def run_sync(source='schedule', run_id=None):
     logger.addHandler(log)
     connector_log.addHandler(warnings := RunLog(logging.WARNING))
     state, message = JobRun.FAILED, 'INTERRUPTED'
+    details = {}
     try:
         logger.info(f'Sync requested by {source}')
-        result['report'] = sync_jobs()
+        result['report'] = sync_jobs(details=details)
         state, message = JobRun.SUCCESS, sync_summary(result['report'])
         return result['report']
     except Exception as error:
@@ -475,6 +609,7 @@ def run_sync(source='schedule', run_id=None):
             run = db.session.get(JobRun, run_id)
             run.state, run.message, run.finished_at = state, message, now()
             run.log = log.lines + [line for line in warnings.lines if line not in log.lines]
+            run.context = details or None
             db.session.commit()
             # Redis down now must not hide the result of the sync (already in the run) or its error
             try:

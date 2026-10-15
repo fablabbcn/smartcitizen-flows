@@ -189,6 +189,109 @@ def test_sync_searches_the_api_once(app, monkeypatch):
     assert report['process']['created'] == 1 and report['backup']['created'] == 1
 
 
+def listing(*rows, total=None):
+    devices = pd.DataFrame(list(rows)).set_index('id')
+    if total is not None:
+        devices.attrs['total'] = total
+    return devices
+
+
+def device_row(device_id, hardware_url, name=None, last_reading_at='2026-10-01T00:00:00Z', latest=None):
+    return {'id': device_id, 'name': name or f'Device {device_id}', 'last_reading_at': last_reading_at,
+            'postprocessing': {'hardware_url': hardware_url, 'latest_postprocessing': latest}}
+
+
+@pytest.fixture
+def log():
+    ''' What the sync logs, as its run keeps it '''
+    handler = jobs.RunLog()
+    previous = jobs.logger.disabled, jobs.logger.level
+    jobs.logger.disabled = False
+    jobs.logger.setLevel('INFO')
+    jobs.logger.addHandler(handler)
+    yield handler.lines
+    jobs.logger.removeHandler(handler)
+    jobs.logger.disabled, _ = previous
+    jobs.logger.setLevel(previous[1])
+
+
+@pytest.fixture
+def api(monkeypatch):
+    ''' The search of the Smart Citizen API, a valid postprocessing and the hardware in flows '''
+    import smartcitizen_connector
+    import smartcitizen_connector.device
+
+    state = SimpleNamespace(devices=None)
+    monkeypatch.setattr(smartcitizen_connector, 'search_by_query', lambda **kwargs: state.devices)
+    monkeypatch.setattr(smartcitizen_connector.device, 'check_postprocessing', lambda postprocessing: (None, None, True))
+    monkeypatch.setattr(jobs, 'hardware_kinds', lambda: {'SHORT': {'process'}, 'LONG': {'process', 'long'}})
+    return state
+
+
+def test_incomplete_listing_disables_nothing(app, api, log):
+    api.devices = listing(device_row(1, 'SHORT'), device_row(2, 'SHORT'))
+    jobs.sync_jobs()
+
+    # The API counts 3 devices, the search returned 2: device 2 is missing, device 3 is new
+    api.devices = listing(device_row(1, 'SHORT'), device_row(3, 'SHORT'), total=3)
+    report = jobs.sync_jobs()
+
+    assert report['process'] == {'created': 1, 'enabled': 0, 'disabled': 0}
+    assert job('process', 2).enabled and job('process', 3).enabled
+    assert any('listed 2 of 3 devices' in line for line in log)
+
+    # Complete again: device 2 is disabled
+    api.devices = listing(device_row(1, 'SHORT'), device_row(3, 'SHORT'), total=2)
+    assert jobs.sync_jobs()['process']['disabled'] == 1
+
+
+def test_empty_listing_fails_without_changes(app, api):
+    api.devices = listing(device_row(1, 'SHORT'))
+    jobs.sync_jobs()
+
+    api.devices = None
+    with pytest.raises(RuntimeError):
+        jobs.sync_jobs()
+    assert job('process', 1).enabled
+
+
+def test_sync_says_why_devices_do_not_qualify(app, api, log):
+    api.devices = listing(device_row(1, 'SHORT', name='Rooftop'), device_row(2, ''), device_row(3, 'UNKNOWN'),
+                          device_row(4, 'SHORT', last_reading_at=None), device_row(5, 'LONG'),
+                          device_row(6, 'SHORT', latest='2026-10-02T00:00:00Z'), device_row(7, 'https://example.com/x'))
+    details = {}
+    jobs.sync_jobs(details=details)
+
+    assert details['listing'] == {'devices': 7, 'total': None, 'complete': True}
+    assert details['devices']['1'] == {'process': 'qualifies', 'backup': 'hardware SHORT has no backup or long blueprint',
+                                       'long': 'hardware SHORT has no long blueprint'}
+    assert details['devices']['2']['process'] == jobs.NO_HARDWARE
+    assert details['devices']['3']['backup'] == 'hardware UNKNOWN is not in flows'
+    assert details['devices']['4']['process'] == jobs.NO_READINGS
+    assert details['devices']['5']['process'] == details['devices']['5']['backup'] == 'qualifies'
+    assert details['devices']['6']['process'] == jobs.UP_TO_DATE
+    assert details['devices']['7']['process'] == "hardware_url 'https://example.com/x' is not a hardware name"
+    assert details['changes']['process']['created'] == [1, 5]
+
+    assert 'info: process: 2 devices qualify' in log
+    assert 'info: process: 1 devices skipped, hardware is not in flows: 3 (Device 3, UNKNOWN)' in log
+    # Devices without hardware are only counted
+    assert f'info: process: 1 devices skipped, {jobs.NO_HARDWARE}' in log
+    assert 'info: process: created 1 (Rooftop), 5 (Device 5)' in log
+    assert any(line.startswith('info: long: ') and 'hardware has no long blueprint: 1 (Rooftop, SHORT), ' in line for line in log)
+    assert "info: process: 1 devices skipped, hardware_url is not a hardware name: 7 (Device 7, 'https://example.com/x')" in log
+
+
+def test_sync_logs_why_jobs_are_disabled(app, api, log):
+    api.devices = listing(device_row(1, 'SHORT'), device_row(2, 'SHORT'))
+    jobs.sync_jobs()
+
+    api.devices = listing(device_row(1, 'SHORT', last_reading_at=None))
+    jobs.sync_jobs()
+
+    assert 'info: process: disabled 1 (Device 1), 2 (Device 2) (why: 1: no readings; 2: not listed by the Smart Citizen API)' in log
+
+
 # Dispatch
 
 def test_dispatch_due_jobs(app, queued):

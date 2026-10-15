@@ -33,6 +33,28 @@
 
 <section class="section">
     <div class="card">
+        <div class="card-header"><h2>Last sync</h2></div>
+        <div class="card-body">
+            {% if sync_run %}
+            {% if decisions %}
+            <dl class="details">
+                {% for task, decision in decisions.items() %}
+                <dt>{{ task | capitalize }}</dt><dd>{% if decision == 'qualifies' %}{{ badge('success', 'qualifies') }}{% else %}{{ badge('disabled', 'no job') }} <span class="muted">{{ decision or 'unknown' }}</span>{% endif %}</dd>
+                {% endfor %}
+            </dl>
+            {% else %}
+            <p class="muted">Not listed: this device has no postprocessing in the Smart Citizen API{% if not (sync_run.context.listing or {}).complete %}, or the listing was incomplete{% endif %}.</p>
+            {% endif %}
+            <p class="hint"><a href="{{ url_for('jobs_ui.run', run_id=sync_run.id) }}">Sync #{{ sync_run.id }}</a>, {{ datetime(sync_run.finished_at) }}. Paused and manual jobs stay as they are.</p>
+            {% else %}
+            <p class="muted">No sync recorded yet.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="card">
         <div class="card-header"><h2>Storage</h2></div>
         <div class="card-body">
             <dl class="details">

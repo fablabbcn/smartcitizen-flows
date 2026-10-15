@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, blueprint_link, datetime, duration, hardware_link, short_time, storage, versions_list with context %}
+{% from "_macros.html" import badge, blueprint_link, datetime, device_link, duration, hardware_link, short_time, storage, versions_list with context %}
 {% block head %}{% if run.state in ('queued', 'running') %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block title %}Run #{{ run.id }}{% endblock %}
 {% block content %}
@@ -29,7 +29,23 @@
 </div>
 
 {% macro period(start, end) %}{{ short_time(start) or '…' }} to {{ short_time(end) or '…' }}{% endmacro %}
-{% if context %}
+{% if run.task == 'sync' and context %}
+{% set listing = context.listing or {} %}
+<section class="section">
+    <div class="card">
+        <div class="card-header"><h2>What the sync saw</h2></div>
+        <div class="card-body">
+            <dl class="details">
+                <dt>Listing</dt><dd>{{ listing.devices }} devices with postprocessing in the Smart Citizen API{% if listing.total is not none %}, which counts {{ listing.total }}{% endif %}{% if not listing.complete %} {{ badge('warning', 'incomplete') }} no job was disabled{% endif %}</dd>
+                {% for task, changed in (context.changes or {}).items() %}
+                <dt>{{ task | capitalize }}</dt><dd>{% for change, ids in changed.items() %}{% if ids %}<details><summary>{{ ids | length }} {{ change }}</summary>{% for device_id in ids %}{{ device_link(device_id, names.get(device_id)) }}{% if not loop.last %}, {% endif %}{% endfor %}</details>{% endif %}{% endfor %}{% if not changed.values() | select | list %}<span class="muted">no changes</span>{% endif %}</dd>
+                {% endfor %}
+            </dl>
+            <p class="hint">Why each device qualifies or not is in the log, and on its device page.</p>
+        </div>
+    </div>
+</section>
+{% elif context %}
 <section class="section">
     <div class="card">
         <div class="card-header"><h2>What the run used</h2></div>

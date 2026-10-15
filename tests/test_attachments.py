@@ -127,3 +127,13 @@ def test_api(client, sc_me):
 
     assert client.delete(f'/api/v1/hardware/SCAS_TEST1/attachments/{attachment_id}', headers=auth('admin-token')).status_code == 204
     assert stored() == []
+
+
+def test_names_with_json_suffix_and_nosniff(client, sc_me):
+    response = client.post('/api/v1/hardware/SCAS_TEST1.json/attachments', headers=auth('admin-token'),
+                           data={'file': (BytesIO(PDF), 'cert.pdf')}, content_type='multipart/form-data')
+    assert response.status_code == 201 and response.get_json()['hardware'] == 'SCAS_TEST1'
+    [listed] = client.get('/api/v1/hardware/SCAS_TEST1/attachments', headers=auth('admin-token')).get_json()
+    download = client.get(listed['url'], headers=auth('admin-token'))
+    assert download.headers['X-Content-Type-Options'] == 'nosniff'
+    assert client.delete(f"/api/v1/hardware/SCAS_TEST1.json/attachments/{listed['id']}", headers=auth('admin-token')).status_code == 204

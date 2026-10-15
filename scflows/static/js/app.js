@@ -203,7 +203,8 @@
   if (gainInput) {
     var gainBox = document.querySelector('[data-gain-check]');
     var gainHint = document.querySelector('[data-gain-hint]');
-    var number = function (value) { var parsed = parseFloat(value); return isNaN(parsed) ? null : parsed; };
+    // As the server: only whole numbers count ("-0.73abc" is not -0.73), and blanks are empty
+    var number = function (value) { var parsed = value.trim() === '' ? NaN : Number(value); return isFinite(parsed) ? parsed : null; };
     var round = function (value) { return parseFloat(value.toPrecision(4)).toString(); };
     var updateRelations = function () {
       var gain = number(gainInput.value);

@@ -133,12 +133,14 @@
   var describe = function (id) {
     id = (id || '').trim();
     if (!id) return null;
-    var afe = /^(\d{2})-\d+$/.exec(id);
+    var afe = /^([0-9]{2})-[0-9]{6}$/.exec(id);
     if (afe) {
       return codes.afe.indexOf(afe[1]) !== -1 ? { label: 'AFE board', title: 'Alphasense AFE board, for A-series sensors with a PT1000 (code ' + afe[1] + ')', afe: true }
         : { warning: 'AFE board id with an unknown code ' + afe[1], afe: true };
     }
-    if (/^\d{2}-?$/.test(id) || id.length < 3) return null;
+    // An AFE board id being typed (fewer than six digits after the dash), or one with the wrong length
+    if (/^[0-9]{2}(-[0-9]{0,5})?$/.test(id) || id.length < 3) return null;
+    if (/^[0-9]{2}-/.test(id)) return { warning: 'AFE board ids have six digits after the dash (e.g. 10-002911)', afe: true };
     var found = codes.sensors[id.slice(0, 3)];
     return found ? { label: found[0], title: found[1], gain: found[2], afe: false } : { warning: 'Unknown Alphasense code ' + id.slice(0, 3), afe: false };
   };

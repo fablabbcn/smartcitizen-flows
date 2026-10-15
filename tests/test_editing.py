@@ -11,9 +11,9 @@ from conftest import DATA, auth, served_hardware
 with open(join(DATA, 'hardware', 'SCAS_TEST1.json')) as file:
     HARDWARE = json.load(file)
 
-ALPHASENSE = {'ae_electronic_zero_mv': '', 'ae_sensor_zero_mv': -16.64, 'pcb_gain_mv_na': 0.8,
+ALPHASENSE = {'ae_electronic_zero_mv': '', 'ae_sensor_zero_mv': -16.64, 'pcb_gain_mv_na': -0.73,
               'we_cross_sensitivity_no2_mv_ppb': '0', 'we_cross_sensitivity_no2_na_ppb': '0',
-              'we_electronic_zero_mv': '', 'we_sensitivity_mv_ppb': 0.45464, 'we_sensitivity_na_ppb': 0.5683,
+              'we_electronic_zero_mv': '', 'we_sensitivity_mv_ppb': 0.414859, 'we_sensitivity_na_ppb': -0.5683,
               'we_sensor_zero_mv': -27.2}
 
 

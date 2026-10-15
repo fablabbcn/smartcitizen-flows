@@ -327,7 +327,7 @@ def put_calibration(sensor_id):
         unprocessable([str(error)])
     db.session.commit()
     from .calibrations import warnings
-    return saved(item.to_json(), created, warnings(item.data))
+    return saved(item.to_json(), created, warnings(item.data, item.sensor_id))
 
 
 @api.put('/names/<name>')

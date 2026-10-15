@@ -82,10 +82,14 @@ def index():
     identity = current_user.identity
     names = db.session.execute(db.select(SensorName).order_by(SensorName.position)).scalars().all()
     parameter_sets = {item.name: item for item in db.session.execute(db.select(ParameterSet)).scalars()}
+    calibration_items = visible_calibrations(identity)
+    # Values that do not add up, per calibration (gain, sensitivities, zeros)
+    checks = {item.sensor_id: calibrations.warnings(item.data, item.sensor_id) for item in calibration_items
+              if item.kind == Calibration.ALPHASENSE_SENSOR}
     return render_template('metadata/index.html', hardware=visible_hardware(identity),
                            sensor_types=sensor_types(), parameter_sets=parameter_sets,
-                           calibrations=visible_calibrations(identity), names=names, used=used_by_blueprints(),
-                           shared_ids=shared_ids(names))
+                           calibrations=calibration_items, names=names, used=used_by_blueprints(),
+                           shared_ids=shared_ids(names), checks={key: value for key, value in checks.items() if value})
 
 
 def shared_ids(names):
@@ -262,7 +266,8 @@ def render_calibration(sensor_id, kind, data, errors=None, new=False, order_numb
     return render_template('metadata/calibration.html', sensor_id=sensor_id, kind=kind, data=data,
                            groups=calibrations.groups(kind), optional=OPTIONAL_CALIBRATION_FIELDS,
                            kinds=list(CALIBRATION_FIELDS), errors=errors or [], new=new,
-                           warnings=calibrations.warnings(data) if data else [], order_number=order_number,
+                           warnings=calibrations.warnings(data, sensor_id) if data else [], order_number=order_number,
+                           expected_gain=calibrations.expected_gain(sensor_id), sensitivity_rows=calibrations.SENSITIVITY_ROWS,
                            readonly=not current_user.is_admin, **calibration_usage(sensor_id, new))
 
 
@@ -318,7 +323,7 @@ def save_calibration_form(sensor_id, kind, new=False):
     if errors:
         return render_calibration(sensor_id, kind, data, errors, new=new, order_number=order_number)
     db.session.commit()
-    found = calibrations.warnings(data)
+    found = calibrations.warnings(data, sensor_id)
     flash(f'Calibration {sensor_id} saved' + (f' with {len(found)} warnings' if found else ''),
           'warning' if found else 'info')
     return redirect(url_for('ui.edit_calibration', sensor_id=sensor_id))

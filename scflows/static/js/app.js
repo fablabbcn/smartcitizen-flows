@@ -140,7 +140,7 @@
     }
     if (/^\d{2}-?$/.test(id) || id.length < 3) return null;
     var found = codes.sensors[id.slice(0, 3)];
-    return found ? { label: found[0], title: found[1], afe: false } : { warning: 'Unknown Alphasense code ' + id.slice(0, 3), afe: false };
+    return found ? { label: found[0], title: found[1], gain: found[2], afe: false } : { warning: 'Unknown Alphasense code ' + id.slice(0, 3), afe: false };
   };
   if (codes) {
     // New calibration: the type under the id, and whether it needs the other form
@@ -159,6 +159,14 @@
         }
         if (found.warning) hint.classList.add('warning-text');
         hint.textContent = text;
+        // The usual PCB gain of this type, for the gain check below
+        var gainBox = document.querySelector('[data-gain-check]');
+        var gainField = document.getElementById('pcb_gain_mv_na');
+        if (gainBox && gainField && !found.afe) {
+          gainBox.setAttribute('data-gain-check', found.gain === null || found.gain === undefined ? '' : found.gain);
+          gainBox.setAttribute('data-gain-model', found.label || '');
+          gainField.dispatchEvent(new Event('input'));
+        }
       };
       input.addEventListener('input', update);
       if (kind) kind.addEventListener('change', update);
@@ -186,6 +194,45 @@
       area.addEventListener('input', update);
       update();
     });
+  }
+
+  // Calibrations: mV/ppb = nA/ppb × PCB gain, worked out as the values are typed, and the usual gain of the sensor type
+  var gainInput = document.getElementById('pcb_gain_mv_na');
+  if (gainInput) {
+    var gainBox = document.querySelector('[data-gain-check]');
+    var gainHint = document.querySelector('[data-gain-hint]');
+    var number = function (value) { var parsed = parseFloat(value); return isNaN(parsed) ? null : parsed; };
+    var round = function (value) { return parseFloat(value.toPrecision(4)).toString(); };
+    var updateRelations = function () {
+      var gain = number(gainInput.value);
+      document.querySelectorAll('[data-gain-value]').forEach(function (item) { item.textContent = gain === null ? 'gain' : gainInput.value.trim(); });
+      document.querySelectorAll('[data-relation]').forEach(function (row) {
+        var na = number(document.getElementById(row.getAttribute('data-na')).value);
+        var mv = number(document.getElementById(row.getAttribute('data-mv')).value);
+        var out = row.querySelector('[data-expected]');
+        out.textContent = '';
+        out.classList.remove('warning-text');
+        if (gain === null || na === null) return;
+        var expected = na * gain;
+        out.textContent = round(na) + ' × ' + round(gain) + ' = ' + round(expected) + ' mV/ppb';
+        if (mv !== null && Math.abs(mv - expected) > 0.01 * Math.max(Math.abs(expected), Math.abs(mv))) {
+          out.textContent += ', not ' + round(mv) + ' (more than 1% apart)';
+          out.classList.add('warning-text');
+        }
+      });
+      var usual = gainBox ? number(gainBox.getAttribute('data-gain-check')) : null;
+      if (gainHint) {
+        var off = usual !== null && gain !== null && Math.abs(gain - usual) > 0.005;
+        gainHint.textContent = usual === null ? 'pcb_gain_mv_na'
+          : gainBox.getAttribute('data-gain-model') + ' sensors have ' + round(usual) + (off ? ', not ' + round(gain) : '');
+        gainHint.classList.toggle('warning-text', off);
+        gainHint.classList.toggle('mono', usual === null);
+      }
+    };
+    document.querySelectorAll('[data-relation] input, #pcb_gain_mv_na').forEach(function (input) {
+      input.addEventListener('input', updateRelations);
+    });
+    updateRelations();
   }
 
   // Tabs inside a page: panels are shown one at a time, the choice is kept in the url hash

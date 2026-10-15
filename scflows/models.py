@@ -199,6 +199,26 @@ class ParameterSet(TimestampMixin, db.Model):
         return result
 
 
+class Attachment(db.Model):
+    ''' A file attached to a hardware (see attachments.py). By name: files stay when the hardware is deleted '''
+    id = db.Column(db.Integer, primary_key=True)
+    hardware = db.Column(db.String(64), nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    content_type = db.Column(db.String(128), nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    # s3://<bucket>/attachments/hardware/<name>/<random>-<filename>, or under STORAGE_ROOT
+    location = db.Column(db.String(512), nullable=False)
+    description = db.Column(db.String(255), nullable=False, default='')
+    user_id = db.Column(db.Integer)
+    username = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    def to_json(self):
+        return {'id': self.id, 'hardware': self.hardware, 'filename': self.filename,
+                'content_type': self.content_type, 'size': self.size, 'description': self.description,
+                'username': self.username, 'created_at': self.created_at.isoformat() if self.created_at else None}
+
+
 class Revision(db.Model):
     ''' History of changes to blueprints, hardware, calibrations and sensor names '''
     CREATE = 'create'

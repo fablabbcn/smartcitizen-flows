@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import calibration_link, csrf with context %}
+{% from "_macros.html" import calibration_link, csrf, datetime with context %}
 {% from "metadata/_devices.html" import devices_section with context %}
 {% block title %}{{ 'New hardware' if new else name }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
@@ -117,6 +117,46 @@
 </section>
 {% endif %}
 {{ devices_section(devices) }}
+
+<section class="section" id="attachments">
+    <div class="section-header"><h2>Attachments <span class="count">{{ attachments | length }}</span></h2></div>
+    <div class="card">
+        <div class="table-wrap">
+            <table class="table">
+                <thead><tr><th>File</th><th>Description</th><th class="num">Size</th><th>Added</th>{% if not readonly %}<th class="actions"><span class="sr-only">Actions</span></th>{% endif %}</tr></thead>
+                <tbody>
+                {% for item in attachments %}
+                    <tr>
+                        <td><a href="{{ url_for('ui.get_attachment', name=name, attachment_id=item.id) }}" target="_blank" rel="noopener">{{ item.filename }}</a></td>
+                        <td>{{ item.description }}</td>
+                        <td class="num nowrap">{{ item.size | filesizeformat }}</td>
+                        <td class="nowrap">{{ datetime(item.created_at) }} <span class="muted small">{{ item.username or '' }}</span></td>
+                        {% if not readonly %}<td class="actions">
+                            <form method="POST" action="{{ url_for('ui.delete_attachment', name=name, attachment_id=item.id) }}" data-confirm="Delete {{ item.filename }}?">
+                                {{ csrf() }}
+                                <button class="btn sm danger" type="submit">Delete</button>
+                            </form>
+                        </td>{% endif %}
+                    </tr>
+                {% else %}
+                    <tr><td colspan="{{ 4 if readonly else 5 }}" class="empty">No files attached{% if not readonly %}: add certificates or calibration reports below{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if not readonly %}
+        <div class="card-body">
+            <form class="inline-form" method="POST" action="{{ url_for('ui.add_attachment', name=name) }}" enctype="multipart/form-data">
+                {{ csrf() }}
+                <input class="input" type="file" name="file" accept="{{ extensions | join(',') }}" aria-label="File" required>
+                <input class="input" name="description" placeholder="Description (optional)" maxlength="255" aria-label="Description">
+                <button class="btn primary" type="submit">Attach</button>
+            </form>
+            <p class="hint">{{ extensions | join(', ') }}, up to {{ max_attachment_mb }} MB.</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
 {% endif %}
 
 {% if not new and not readonly %}

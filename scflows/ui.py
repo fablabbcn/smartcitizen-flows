@@ -5,7 +5,9 @@ metadata of their devices and the sensor names, read only (see access.py). Forms
 '''
 import json
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from io import BytesIO
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user
 from pydantic import ValidationError
 
@@ -18,11 +20,20 @@ from .identity import EDITORS
 from .models import Blueprint as BlueprintModel, Calibration, ParameterSet, SensorName
 from .parameters import sensor_types
 from .names import used_by_blueprints
-from . import calibrations
+from . import attachments, calibrations
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
 
 ui = Blueprint('ui', __name__, url_prefix='/metadata')
+
+
+@ui.before_request
+def larger_uploads():
+    ''' Attachments can be larger than other requests (before protect reads the form) '''
+    if request.endpoint == 'ui.add_attachment':
+        request.max_content_length = attachments.MAX_BYTES + 1024 * 1024
+
+
 protect(ui)
 
 editors_required = requires_ui_role(*EDITORS)
@@ -127,6 +138,8 @@ def render_hardware(name, data, check=None, new=False):
     return render_template('metadata/hardware.html', name=name, data=data, check=check, new=new,
                            blueprints=blueprints, readonly=not current_user.is_admin,
                            devices=[] if new else devices.devices(current_user.identity, [name]),
+                           attachments=[] if new else attachments.attachments_of(name),
+                           max_attachment_mb=attachments.MAX_BYTES // (1024 * 1024), extensions=attachments.EXTENSIONS,
                            uncalibrated=devices.uncalibrated([hardware])[name] if hardware else [])
 
 
@@ -166,6 +179,54 @@ def save_hardware_form(name, new=False):
     db.session.commit()
     flash(f'Hardware {name} saved' + (f' with {len(check.warnings)} warnings' if check.warnings else ''))
     return redirect(url_for('ui.edit_hardware', name=name))
+
+
+# Attachments of hardware
+
+@ui.post('/hardware/<name>/attachments')
+@admin_required
+def add_attachment(name):
+    get_or_404('hardware', name)
+    upload = request.files.get('file')
+    try:
+        item = attachments.add(name, upload.filename if upload else '', upload.read() if upload else b'',
+                               request.form.get('description', ''), identity=current_user.identity)
+    except attachments.AttachmentError as error:
+        flash(str(error), 'error')
+    else:
+        db.session.commit()
+        flash(f'{item.filename} attached')
+    return redirect(url_for('ui.edit_hardware', name=name) + '#attachments')
+
+
+@ui.get('/hardware/<name>/attachments/<int:attachment_id>')
+@editors_required
+def get_attachment(name, attachment_id):
+    check_visible('hardware', name)
+    item = attachments.find(name, attachment_id) or abort(404)
+    return send_attachment(item)
+
+
+def send_attachment(item):
+    try:
+        content = attachments.read(item)
+    except (FileNotFoundError, OSError):
+        abort(404, 'The file is missing from the storage')
+    # PDFs and images open in the browser, the rest downloads
+    inline = item.content_type == 'application/pdf' or item.content_type.startswith('image/')
+    return send_file(BytesIO(content), mimetype=item.content_type, as_attachment=not inline,
+                     download_name=item.filename)
+
+
+@ui.post('/hardware/<name>/attachments/<int:attachment_id>/delete')
+@admin_required
+def delete_attachment(name, attachment_id):
+    item = attachments.find(name, attachment_id) or abort(404)
+    filename = item.filename
+    attachments.remove(item)
+    db.session.commit()
+    flash(f'{filename} deleted')
+    return redirect(url_for('ui.edit_hardware', name=name) + '#attachments')
 
 
 # Calibrations

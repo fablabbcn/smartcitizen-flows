@@ -1,4 +1,6 @@
 ''' Web interface for device jobs, for admins '''
+from urllib.parse import unquote, urlsplit
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
@@ -119,12 +121,27 @@ def get_job(job_id):
     return db.session.get(Job, job_id) or abort(404)
 
 
+def return_path(target):
+    '''
+    The page of the jobs interface to come back to after an action, or None: a path under /jobs/ without another host
+    and without dot segments (also percent-encoded), which would resolve outside it
+    '''
+    if not target.startswith('/jobs/'):
+        return None
+    decoded = target
+    for _ in range(3):
+        decoded = unquote(decoded)
+    parts = urlsplit(decoded)
+    if parts.scheme or parts.netloc or '//' in decoded or '\\' in decoded:
+        return None
+    if any(segment in ('.', '..') for segment in parts.path.split('/')):
+        return None
+    return target
+
+
 def back():
     ''' To the page the action came from (a page of the jobs interface), or the jobs page '''
-    target = request.form.get('next', '')
-    if target.startswith('/jobs/') and '//' not in target and '\\' not in target:
-        return redirect(target)
-    return redirect(url_for('jobs_ui.index'))
+    return redirect(return_path(request.form.get('next', '')) or url_for('jobs_ui.index'))
 
 
 def form_device_and_task():
@@ -136,7 +153,10 @@ def form_device_and_task():
 
 
 def queue(device_id, task, job=None):
-    # Dry runs process without posting (process) or storing (long)
+    # Dry runs process without posting (process) or storing (long). Backups have none: not queued as a real one
+    if task == Job.BACKUP and request.form.get('dry_run'):
+        flash('Backups have no dry run. Clear "Dry run" to run the backup.', 'error')
+        return
     dry_run = task in (Job.PROCESS, Job.LONG) and bool(request.form.get('dry_run'))
     run = queue_run(device_id, task, job=job, dry_run=dry_run, username=current_user.username)
     flash(f'Run {run.id} queued: {task} device {device_id}' + (' (dry run)' if dry_run else ''))

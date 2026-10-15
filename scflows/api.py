@@ -236,7 +236,7 @@ def put_blueprint(name):
 @requires_role(*EDITORS)
 def list_attachments(name):
     from .attachments import attachments_of
-    hardware_with_access(name)
+    name = hardware_with_access(name).name
     return jsonify([dict(item.to_json(), url=url_for('api.get_attachment', name=name, attachment_id=item.id))
                     for item in attachments_of(name)])
 
@@ -246,7 +246,7 @@ def list_attachments(name):
 def get_attachment(name, attachment_id):
     from .attachments import find
     from .ui import send_attachment
-    hardware_with_access(name)
+    name = hardware_with_access(name).name
     return send_attachment(find(name, attachment_id) or abort(404))
 
 
@@ -256,7 +256,8 @@ def post_attachment(name):
     ''' Multipart form: file, and an optional description '''
     from .attachments import MAX_BYTES, AttachmentError, add
     request.max_content_length = MAX_BYTES + 1024 * 1024
-    get_by_name(Hardware, name)
+    # The name as stored (hardware/<name>.json works too)
+    name = get_by_name(Hardware, name).name
     upload = request.files.get('file')
     if upload is None:
         unprocessable(['file: required (multipart form field "file")'])
@@ -272,7 +273,7 @@ def post_attachment(name):
 @requires_role(ADMIN)
 def delete_attachment(name, attachment_id):
     from .attachments import find, remove
-    item = find(name, attachment_id) or abort(404)
+    item = find(get_by_name(Hardware, name).name, attachment_id) or abort(404)
     remove(item)
     db.session.commit()
     return '', 204

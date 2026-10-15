@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import datetime, kind_label, table_tools with context %}
+{% from "_macros.html" import datetime, kind_label, sensor_type, table_tools with context %}
 {% block title %}Metadata{% endblock %}
 {% block content %}
 <div class="page-header">
@@ -51,15 +51,15 @@
     </div>
 
     <div id="calibrations" role="tabpanel" data-table>
-        {{ table_tools('Filter by sensor id, kind or order') }}
+        {{ table_tools('Filter by sensor id, type or order') }}
         <div class="table-wrap scroll">
             <table class="table">
-                <thead><tr><th data-sort>Sensor id</th><th data-sort>Kind</th><th data-sort>Order</th><th data-sort>Updated</th></tr></thead>
+                <thead><tr><th data-sort>Sensor id</th><th data-sort>Type</th><th data-sort>Order</th><th data-sort>Updated</th></tr></thead>
                 <tbody>
                 {% for item in calibrations %}
                     <tr>
                         <td class="mono"><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
-                        <td>{{ kind_label(item.kind) }}</td>
+                        <td class="nowrap">{% if item.kind == 'afe_board' %}{{ kind_label(item.kind) }}{% if not item.sensor_id | sensor_type %} {{ sensor_type(item.sensor_id) }}{% endif %}{% else %}{{ sensor_type(item.sensor_id) }} <span class="muted small">{{ kind_label(item.kind) }}</span>{% endif %}</td>
                         <td class="mono small">{{ item.order_number or '' }}</td>
                         <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
                     </tr>

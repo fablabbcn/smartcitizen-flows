@@ -66,6 +66,11 @@ def valid_key(key):
     return bool(KEY_PATTERN.match(key or ''))
 
 
+@ui.app_template_filter('sensor_type')
+def sensor_type_filter(sensor_id):
+    return calibrations.sensor_type(sensor_id)
+
+
 @ui.get('/')
 @editors_required
 def index():

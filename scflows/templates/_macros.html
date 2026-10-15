@@ -64,6 +64,13 @@
 
 {% macro kind_label(kind) %}{{ {'afe_board': 'AFE board', 'alphasense_sensor': 'Alphasense sensor'}.get(kind, kind | replace('_', ' ')) }}{% endmacro %}
 
+{# The sensor type from the code of its id (SO2-B4, AFE board...), or a warning for unknown codes #}
+{% macro sensor_type(sensor_id) -%}
+{%- set found = sensor_id | sensor_type -%}
+{%- if found %}<span class="badge plain" title="{{ found[1] }}">{{ found[0] }}</span>
+{%- else %}<span class="badge warning" title="The first digits of {{ sensor_id }} are not a known Alphasense code">unknown code</span>{% endif -%}
+{%- endmacro %}
+
 {% macro calibration_link(sensor_id, calibrated=True, badge=True) -%}
 {%- if calibrated %}<a class="mono" href="{{ url_for('ui.edit_calibration', sensor_id=sensor_id) }}">{{ sensor_id }}</a>
 {%- elif current_user.is_admin %}<a class="mono" href="{{ url_for('ui.new_calibration', sensor_id=sensor_id) }}" title="No calibration in flows: add it">{{ sensor_id }}</a>{% if badge %} <span class="badge warning">no calibration</span>{% endif %}

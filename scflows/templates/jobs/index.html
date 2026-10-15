@@ -5,11 +5,10 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
-        <p class="subtitle">Devices are processed every few hours, processed over months of backups every week (long, with baselines) and backed up periodically, as the blueprints of their hardware say. The list is synced every hour with the Smart Citizen API.</p>
+        <p class="subtitle">As the blueprints of its hardware say, each device is processed every {{ intervals.process }} h, backed up every {{ intervals.backup }} h, or processed over months of backups (long, with baselines) every {{ (intervals.long / 24) | int }} days unless its long blueprint says otherwise. The jobs are synced with the Smart Citizen API every hour.</p>
         <p class="hint">
             {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
-            {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}:
-                {% for task, counts in last_sync.report.items() %}{{ task }} {{ counts.created }} created, {{ counts.enabled }} enabled, {{ counts.disabled }} disabled{% if not loop.last %} · {% endif %}{% endfor %}{% endif %}
+            {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}: {{ last_sync.report | sync_summary }}{% endif %}
             {% else %}No sync recorded yet.{% endif %}
         </p>
     </div>

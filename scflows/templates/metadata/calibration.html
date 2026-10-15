@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf, hardware_link with context %}
+{% from "_macros.html" import csrf, hardware_link, kind_label with context %}
 {% from "metadata/_devices.html" import devices_section with context %}
 {% block title %}{{ 'New calibration' if new else sensor_id }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
@@ -7,7 +7,7 @@
 <div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#calibrations">Metadata</a><span>Calibrations</span><span>{{ 'New' if new else sensor_id }}</span></div>
 <div class="page-header">
     <div>
-        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind | replace('_', ' ') }}</span></h1>
+        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span></h1>
         <p class="subtitle">{{ 'Values from the Alphasense sensor sheet.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}</p>
     </div>
     {% if not new %}
@@ -35,7 +35,7 @@
                 <label for="kind">Kind</label>
                 <div class="row">
                     <select class="input" id="kind" name="kind" style="flex: 1">
-                        {% for item in kinds %}<option value="{{ item }}" {% if item == kind %}selected{% endif %}>{{ item | replace('_', ' ') }}</option>{% endfor %}
+                        {% for item in kinds %}<option value="{{ item }}" {% if item == kind %}selected{% endif %}>{{ kind_label(item) }}</option>{% endfor %}
                     </select>
                     <button class="btn" name="action" value="change_kind" formnovalidate>Change</button>
                 </div>

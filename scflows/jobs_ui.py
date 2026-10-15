@@ -5,12 +5,17 @@ from flask_login import current_user
 from . import db, devices
 from .auth import admin_required
 from .forms import protect
-from .jobs import (add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
-                   sync_running)
+from .jobs import (INTERVALS, add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
+                   sync_running, sync_summary)
 from .models import DeviceHealth, Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
 protect(jobs_ui)
+
+
+@jobs_ui.app_template_filter('sync_summary')
+def sync_summary_filter(report):
+    return sync_summary(report)
 
 
 @jobs_ui.app_template_filter('storage_link')
@@ -51,7 +56,7 @@ def index():
     hardware = devices.hardware_by_name(job.hardware for job in jobs)
     return render_template('jobs/index.html', jobs=jobs, latest=latest_runs([job.id for job in jobs]), runs=runs,
                            task=task, counts=counts, names=device_names(), last_sync=last_sync(),
-                           sync_running=sync_running(), hardware=hardware,
+                           sync_running=sync_running(), hardware=hardware, intervals=INTERVALS,
                            uncalibrated=devices.uncalibrated(hardware.values()))
 
 

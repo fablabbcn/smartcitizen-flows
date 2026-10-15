@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import datetime, table_tools with context %}
+{% from "_macros.html" import datetime, kind_label, table_tools with context %}
 {% block title %}Metadata{% endblock %}
 {% block content %}
 <div class="page-header">
@@ -59,7 +59,7 @@
                 {% for item in calibrations %}
                     <tr>
                         <td class="mono"><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
-                        <td>{{ item.kind | replace('_', ' ') }}</td>
+                        <td>{{ kind_label(item.kind) }}</td>
                         <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
                     </tr>
                 {% else %}

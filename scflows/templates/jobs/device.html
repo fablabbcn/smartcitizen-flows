@@ -38,7 +38,7 @@
             {% if sync_run %}
             {% if decisions %}
             <dl class="details">
-                {% for task, decision in decisions.items() %}
+                {% for task in ('process', 'backup', 'long') if task in decisions %}{% set decision = decisions[task] %}
                 <dt>{{ task | capitalize }}</dt><dd>{% if decision == 'qualifies' %}{{ badge('success', 'qualifies') }}{% else %}{{ badge('disabled', 'no job') }} <span class="muted">{{ decision or 'unknown' }}</span>{% endif %}</dd>
                 {% endfor %}
             </dl>

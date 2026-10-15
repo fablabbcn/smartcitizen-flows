@@ -1,4 +1,5 @@
 ''' Calibrations of Alphasense sensors and AFE boards: their fields, in the order of the Alphasense sheets, and checks '''
+import math
 import re
 
 # AFE board serials: two digits, a dash and a number (10-002911, 12-000445, 17-...). Alphasense sensors are numbers
@@ -161,10 +162,12 @@ def missing(data):
 
 
 def number(value):
+    ''' The value as a finite number, or None (empty, text, nan or infinite: processing cannot use them) '''
     try:
-        return float(value)
+        result = float(value)
     except (TypeError, ValueError):
         return None
+    return result if math.isfinite(result) else None
 
 
 def short(value):

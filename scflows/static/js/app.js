@@ -84,6 +84,48 @@
     });
   });
 
+  // Selection in tables: the header box ticks the rows shown (after filtering); the count says how many
+  document.querySelectorAll('[data-select-all]').forEach(function (all) {
+    var table = all.closest('table');
+    // Only the selection boxes (not the dry run boxes of the rows)
+    var boxes = function () { return Array.prototype.slice.call(table.querySelectorAll('tbody input[type=checkbox][name=job_id]')); };
+    var label = document.querySelector('[data-selected]');
+    var hint = label ? label.textContent : '';
+    // Only the rows shown count (and are sent)
+    var ticked = function () {
+      return boxes().filter(function (box) { return box.checked && !box.closest('tr').hidden; }).length;
+    };
+    var update = function () {
+      var count = ticked();
+      if (label) label.textContent = count ? count + ' selected' : hint;
+    };
+    all.addEventListener('change', function () {
+      boxes().forEach(function (box) {
+        if (!box.closest('tr').hidden) box.checked = all.checked;
+      });
+      update();
+    });
+    table.addEventListener('change', function (event) {
+      if (event.target !== all) update();
+    });
+    // The table filter runs first (registered earlier), then the count follows it
+    var container = table.closest('[data-table]');
+    var search = container ? container.querySelector('[data-search]') : null;
+    if (search) search.addEventListener('input', update);
+    // Only the rows shown are sent: untick the ones a later filter hid, and confirm
+    var form = boxes().length ? boxes()[0].form : null;
+    if (form) {
+      form.addEventListener('submit', function (event) {
+        boxes().forEach(function (box) { if (box.closest('tr').hidden) box.checked = false; });
+        update();
+        var count = ticked();
+        var action = event.submitter ? event.submitter.value : 'change';
+        if (count && !confirm(action.charAt(0).toUpperCase() + action.slice(1) + ' ' + count + ' jobs?')) event.preventDefault();
+      });
+    }
+    update();
+  });
+
   // Tabs inside a page: panels are shown one at a time, the choice is kept in the url hash
   document.querySelectorAll('[data-tabs]').forEach(function (tabs) {
     var buttons = tabs.querySelectorAll('[data-tab]');

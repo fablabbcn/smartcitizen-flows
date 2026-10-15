@@ -54,9 +54,19 @@
             </nav>
         </div>
         {{ table_tools('Filter by device, hardware or status') }}
+        <form id="selection" class="table-tools selection" method="POST" action="{{ url_for('jobs_ui.pause_selection') }}">
+            {{ csrf() }}
+            {% if task %}<input type="hidden" name="task" value="{{ task }}">{% endif %}
+            <span class="muted small" data-selected>Tick jobs to pause or resume them together</span>
+            <span class="row">
+                <button class="btn sm warning" type="submit" name="action" value="pause">Pause selected</button>
+                <button class="btn sm success" type="submit" name="action" value="resume">Resume selected</button>
+            </span>
+        </form>
         <div class="table-wrap scroll">
             <table class="table compact">
                 <thead><tr>
+                    <th class="select"><input type="checkbox" data-select-all aria-label="Select the jobs shown" title="Select the jobs shown (after filtering)"></th>
                     <th data-sort>Device</th><th data-sort>Hardware</th><th data-sort>Task</th><th data-sort>Status</th>
                     <th data-sort>Next run</th><th data-sort>Last run</th><th class="actions"><span class="sr-only">Actions</span></th>
                 </tr></thead>
@@ -64,6 +74,7 @@
                 {% for job in jobs %}
                     {% set last = latest.get(job.id) %}
                     <tr>
+                        <td class="select"><input type="checkbox" name="job_id" value="{{ job.id }}" form="selection" aria-label="Select {{ job.task }} of device {{ job.device_id }}"></td>
                         <td class="clip narrow" title="{{ names.get(job.device_id, '') }} #{{ job.device_id }}"><a href="{{ url_for('jobs_ui.device', device_id=job.device_id) }}">{{ names.get(job.device_id) or 'Device' }}</a> <span class="muted small">#{{ job.device_id }}</span></td>
                         <td class="nowrap">{% if job.hardware %}{{ hardware_link(job.hardware) if job.hardware in hardware else job.hardware }}
                             {%- if job.hardware not in hardware %} <span class="badge warning" title="This hardware is not in flows">missing</span>
@@ -84,7 +95,7 @@
                         </div></td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="7" class="empty">No jobs yet. They are created by the hourly sync, or with "Add job".</td></tr>
+                    <tr><td colspan="8" class="empty">No jobs yet. They are created by the hourly sync, or with "Add job".</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

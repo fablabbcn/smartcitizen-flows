@@ -395,6 +395,9 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 }
 .table-tools .input { max-width: 320px; }
 .table-tools .count { color: var(--color-text-muted); font-size: var(--text-sm); }
+.table-tools.selection { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.table th.select, .table td.select { width: 1%; padding-right: 0; }
+.table .select input { width: 16px; height: 16px; margin: 0; vertical-align: middle; accent-color: var(--color-accent); }
 
 .table-wrap { overflow: auto; }
 .table-wrap.scroll { max-height: 65vh; }

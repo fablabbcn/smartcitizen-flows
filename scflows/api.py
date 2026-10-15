@@ -504,6 +504,41 @@ def patch_job(job_id):
     return jsonify(set_paused(job, body['paused']).to_json())
 
 
+@api.patch('/jobs')
+@requires_role(ADMIN)
+def patch_jobs():
+    '''
+    Pauses or resumes several jobs: {"paused": true, "job_ids": [1, 2]}, or {"paused": true, "device_ids": [123],
+    "task": "process"} (task optional: all the jobs of the devices). Returns {"changed": n, "jobs": [...]}
+    '''
+    from .jobs import set_paused_many
+    body = json_body()
+    usage = 'Send {"paused": <bool>, "job_ids": [<int>]} or {"paused": <bool>, "device_ids": [<int>], "task": <optional>}'
+
+    def ids(key):
+        value = body.get(key)
+        if value is None:
+            return None
+        if not isinstance(value, list) or not value or not all(type(item) is int for item in value):
+            abort(400, usage)
+        return value
+
+    job_ids, device_ids = ids('job_ids'), ids('device_ids')
+    if not isinstance(body.get('paused'), bool) or (job_ids is None) == (device_ids is None) \
+            or (body.get('task') is not None and body['task'] not in Job.TASKS):
+        abort(400, usage)
+    query = db.select(Job).order_by(Job.task, Job.device_id)
+    if job_ids is not None:
+        query = query.where(Job.id.in_(job_ids))
+    else:
+        query = query.where(Job.device_id.in_(device_ids))
+        if body.get('task'):
+            query = query.filter_by(task=body['task'])
+    selected = db.session.execute(query).scalars().all()
+    changed = set_paused_many(selected, body['paused'])
+    return jsonify({'changed': len(changed), 'jobs': [job.to_json() for job in selected]})
+
+
 @api.post('/jobs/<int:job_id>/run')
 @requires_role(ADMIN)
 def post_job_run(job_id):

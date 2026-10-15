@@ -51,20 +51,21 @@
     </div>
 
     <div id="calibrations" role="tabpanel" data-table>
-        {{ table_tools('Filter by sensor id, type or order') }}
+        {{ table_tools('Filter by sensor id, type, warning or order') }}
         <div class="table-wrap scroll">
             <table class="table">
-                <thead><tr><th data-sort>Sensor id</th><th data-sort>Type</th><th data-sort>Order</th><th data-sort>Updated</th></tr></thead>
+                <thead><tr><th data-sort>Sensor id</th><th data-sort>Type</th><th data-sort>Checks</th><th data-sort>Order</th><th data-sort>Updated</th></tr></thead>
                 <tbody>
                 {% for item in calibrations %}
                     <tr>
                         <td class="mono"><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
                         <td class="nowrap">{% if item.kind == 'afe_board' %}{{ kind_label(item.kind) }}{% if not item.sensor_id | sensor_type %} {{ sensor_type(item.sensor_id) }}{% endif %}{% else %}{{ sensor_type(item.sensor_id) }} <span class="muted small">{{ kind_label(item.kind) }}</span>{% endif %}</td>
+                        <td class="nowrap">{% if checks.get(item.sensor_id) %}<span class="badge warning" title="{{ checks[item.sensor_id] | join(' · ') }}">{{ checks[item.sensor_id] | length }} warning{{ 's' if checks[item.sensor_id] | length > 1 }}</span>{% endif %}</td>
                         <td class="mono small">{{ item.order_number or '' }}</td>
                         <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="4" class="empty">{{ "No calibrations yet" if current_user.is_admin else "No calibrations for the sensors of your hardware" }}</td></tr>
+                    <tr><td colspan="5" class="empty">{{ "No calibrations yet" if current_user.is_admin else "No calibrations for the sensors of your hardware" }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

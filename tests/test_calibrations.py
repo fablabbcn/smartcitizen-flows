@@ -175,5 +175,39 @@ def test_forms_carry_the_code_table(client):
         # In the page body, not in the head
         body = page[page.index('<main'):]
         table = json.loads(re.search(r'<script type="application/json" id="sensor-codes">(.*?)</script>', body, re.S).group(1))
-        assert table['sensors']['164'] == ['SO2-B4', 'Alphasense B-series SO2 sensor (code 164)']
+        assert table['sensors']['164'] == ['SO2-B4', 'Alphasense B-series SO2 sensor (code 164)', 0.8]
         assert table['afe'] == ['10', '12', '17']
+
+
+@pytest.mark.parametrize('sensor_id, gain', [('162031254', 0.8), ('132000001', 0.8), ('164400105', 0.8), ('163040003', 0.8),
+                                              ('212830246', -0.73), ('204042163', -0.73), ('160000001', None),
+                                              ('10-002911', None), ('999000001', None)])
+def test_usual_gain_by_type(sensor_id, gain):
+    found = calibrations.expected_gain(sensor_id)
+    assert (found[0] if found else None) == gain
+
+
+def test_gain_must_be_the_usual_one_for_the_type():
+    # GOOD has a -0.73 gain: right for an NO2 sensor, wrong for a CO sensor
+    assert calibrations.warnings(GOOD, '212830246') == []
+    assert 'PCB gain: -0.73 mV/nA, but CO-B4 sensors have 0.8 mV/nA' in calibrations.warnings(GOOD, '162031254')
+    # Without the id (or for NO), the gain is not checked
+    assert calibrations.warnings(GOOD) == [] and calibrations.warnings(GOOD, '160000001') == []
+
+
+def test_form_shows_the_sensitivities_through_the_gain(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert 'data-relation data-na="we_sensitivity_na_ppb" data-mv="we_sensitivity_mv_ppb"' in page
+    assert 'data-relation data-na="we_cross_sensitivity_no2_na_ppb" data-mv="we_cross_sensitivity_no2_mv_ppb"' in page
+    assert 'NO2-A43F sensors have -0.73' in page
+
+
+def test_list_flags_calibrations_with_warnings(client):
+    sign_in(client)
+    item = calibration('212830246')
+    item.data = dict(GOOD, pcb_gain_mv_na=0.8)
+    db.session.commit()
+
+    listing = client.get('/metadata/').get_data(as_text=True)
+    assert 'PCB gain: 0.8 mV/nA, but NO2-A43F sensors have -0.73 mV/nA' in listing and 'warning' in listing

@@ -70,18 +70,41 @@
     <div class="card">
         <div class="card-header"><h2>Values</h2></div>
         <div class="card-body">
-            {% for title, fields in groups %}
-            <h3 class="group-title">{{ title }}</h3>
-            <div class="form-grid cols-3">
-                {% for field, label in fields %}
+            {% macro value_field(field, label) %}
                 <div class="field">
                     <label for="{{ field }}">{{ label }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
                     <input class="input mono" id="{{ field }}" name="{{ field }}" value="{{ data.get(field, '') }}" inputmode="decimal">
                     <span class="hint mono">{{ field }}</span>
                 </div>
-                {% endfor %}
+            {% endmacro %}
+            {% for title, fields in groups if title not in ('Gain', 'Sensitivity') %}
+            <h3 class="group-title">{{ title }}</h3>
+            <div class="form-grid cols-3">
+                {% for field, label in fields %}{{ value_field(field, label) }}{% endfor %}
             </div>
             {% endfor %}
+            {% if kind == 'alphasense_sensor' %}
+            {# The PCB gain turns sensitivities in nA/ppb into mV/ppb: shown as the relation it is #}
+            <h3 class="group-title">Gain and sensitivity</h3>
+            <div class="form-grid cols-3" data-gain-check="{{ expected_gain[0] if expected_gain else '' }}" data-gain-model="{{ expected_gain[1] if expected_gain else '' }}">
+                <div class="field">
+                    <label for="pcb_gain_mv_na">PCB gain (mV/nA)</label>
+                    <input class="input mono" id="pcb_gain_mv_na" name="pcb_gain_mv_na" value="{{ data.get('pcb_gain_mv_na', '') }}" inputmode="decimal">
+                    <span class="hint" data-gain-hint>{% if expected_gain %}{{ expected_gain[1] }} sensors have {{ expected_gain[0] }}{% else %}<span class="mono">pcb_gain_mv_na</span>{% endif %}</span>
+                </div>
+            </div>
+            <div class="relation-rows">
+                {% for label, na_field, mv_field in sensitivity_rows %}
+                <div class="relation" data-relation data-na="{{ na_field }}" data-mv="{{ mv_field }}">
+                    <span class="relation-title">{{ label }}</span>
+                    {{ value_field(na_field, 'nA/ppb') }}
+                    <span class="relation-op" aria-hidden="true">× <span class="mono" data-gain-value>{{ data.get('pcb_gain_mv_na', '') or 'gain' }}</span> =</span>
+                    {{ value_field(mv_field, 'mV/ppb') }}
+                    <span class="hint relation-expected" data-expected aria-live="polite"></span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
     </div>
 

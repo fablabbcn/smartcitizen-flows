@@ -5,7 +5,7 @@ from flask_login import current_user
 from . import db, devices
 from .auth import admin_required
 from .forms import protect
-from .jobs import add_manual_job, find_job, last_sync, queue_run, queue_sync, set_paused, sync_running
+from .jobs import add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, sync_running
 from .models import DeviceHealth, Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
@@ -71,7 +71,9 @@ def device(device_id):
                                 .order_by(DeviceHealth.id.desc()).limit(1)).scalar()
     long_results = next((run.context.get('results') for run in runs if run.task == Job.LONG and run.context
                          and run.context.get('results')), None)
+    decisions, sync_run = device_sync(device_id)
     return render_template('jobs/device.html', device_id=device_id, name=devices.device_name(device_id), jobs=jobs,
+                           decisions=decisions, sync_run=sync_run,
                            runs=runs, latest=latest_runs([job.id for job in jobs]), hardware_name=hardware_name,
                            hardware=hardware, calibrated=calibrated, health=health,
                            backups=devices.backup_location(device_id), long_results=long_results)
@@ -102,6 +104,7 @@ def run(run_id):
                   for sensor_id in version.get('ids', {}).values()}
     known = devices.hardware_by_name([context.get('hardware')]) if context.get('hardware') else {}
     return render_template('jobs/run.html', run=item, context=context, calibrated=calibrated,
+                           names=device_names() if item.task == JobRun.SYNC else {},
                            hardware_in_flows=context.get('hardware') in known,
                            name=context.get('device_name') or (devices.device_name(item.device_id) if item.device_id else None))
 

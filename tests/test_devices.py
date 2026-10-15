@@ -172,3 +172,46 @@ def test_repeated_warnings_are_counted():
 
     assert task_log == ['warning: [scdata] Requested channel is None (3 times)',
                         'warning: [scdata] WARNING_NULL_CHANNEL (3 times)', 'info: done']
+
+
+def sync_run(context, state='success'):
+    run = JobRun(task='sync', state=state, context=context, finished_at=jobs.now())
+    db.session.add(run)
+    db.session.commit()
+    return run
+
+
+def test_device_page_says_what_the_last_sync_decided(client):
+    sign_in(client, 'admin')
+    assert 'No sync recorded yet' in page(client, '/jobs/devices/2')
+
+    sync_run({'listing': {'devices': 1, 'total': 1, 'complete': True},
+              'devices': {'2': {'process': 'qualifies', 'backup': 'hardware SCAS_TEST2 has no backup or long blueprint'}},
+              'changes': {}})
+    # A failed sync does not count
+    sync_run({'listing': {}, 'devices': {}, 'changes': {}}, state='failed')
+
+    text = page(client, '/jobs/devices/2')
+    assert 'qualifies' in text and 'hardware SCAS_TEST2 has no backup or long blueprint' in text
+    assert 'Not listed' in page(client, '/jobs/devices/3')
+
+
+def test_sync_run_page_shows_the_listing_and_changes(client):
+    run = sync_run({'listing': {'devices': 2, 'total': 3, 'complete': False}, 'devices': {},
+                    'changes': {'process': {'created': [1], 'enabled': [], 'disabled': []},
+                                'backup': {'created': [], 'enabled': [], 'disabled': []}}})
+    sign_in(client, 'admin')
+
+    text = page(client, f'/jobs/runs/{run.id}')
+    assert 'What the sync saw' in text and 'which counts 3' in text and 'incomplete' in text
+    assert '1 created' in text and 'href="/jobs/devices/1">Rooftop' in text and 'no changes' in text
+    assert 'What the run used' not in text
+
+
+def test_sync_run_keeps_what_it_saw(app, monkeypatch):
+    monkeypatch.setattr(jobs, 'sync_jobs', lambda details: details.update({'listing': {'devices': 1}}) or {})
+
+    jobs.run_sync()
+
+    run = db.session.execute(db.select(JobRun).filter_by(task='sync')).scalar_one()
+    assert run.context == {'listing': {'devices': 1}}

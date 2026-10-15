@@ -13,7 +13,7 @@ from conftest import USERS, auth
 def report(monkeypatch):
     result = {'process': {'created': 2, 'enabled': 0, 'disabled': 1}}
 
-    def sync_jobs():
+    def sync_jobs(details=None):
         jobs.logger.info('120 devices with postprocessing')
         return result
     monkeypatch.setattr(jobs, 'sync_jobs', sync_jobs)
@@ -72,7 +72,7 @@ def test_redis_down_after_the_sync_keeps_its_result(app, redis, report, monkeypa
 
 
 def test_failed_sync_is_recorded(app, redis, monkeypatch):
-    def fail():
+    def fail(details=None):
         raise RuntimeError('API down')
     monkeypatch.setattr(jobs, 'sync_jobs', fail)
 

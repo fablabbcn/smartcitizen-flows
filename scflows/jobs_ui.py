@@ -120,6 +120,10 @@ def get_job(job_id):
 
 
 def back():
+    ''' To the page the action came from (a page of the jobs interface), or the jobs page '''
+    target = request.form.get('next', '')
+    if target.startswith('/jobs/') and '//' not in target and '\\' not in target:
+        return redirect(target)
     return redirect(url_for('jobs_ui.index'))
 
 

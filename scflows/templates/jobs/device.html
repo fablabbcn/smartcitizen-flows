@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, blueprint_link, datetime, duration, hardware_link, job_status, storage, versions_list with context %}
+{% from "_macros.html" import badge, blueprint_link, csrf, datetime, duration, hardware_link, job_actions, job_status, storage, versions_list with context %}
 {% block title %}{{ name or 'Device' }} #{{ device_id }}{% endblock %}
 {% block content %}
 <div class="breadcrumbs"><a href="{{ url_for('jobs_ui.index') }}">Jobs</a><span>{{ name or 'Device' }} #{{ device_id }}</span></div>
@@ -70,7 +70,7 @@
     <div class="card">
         <div class="table-wrap">
             <table class="table">
-                <thead><tr><th>Task</th><th>Status</th><th class="num">Every</th><th>Next run</th><th>Last run</th></tr></thead>
+                <thead><tr><th>Task</th><th>Status</th><th class="num">Every</th><th>Next run</th><th>Last run</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
                 <tbody>
                 {% for job in jobs %}
                     {% set last = latest.get(job.id) %}
@@ -80,12 +80,25 @@
                         <td class="num">{{ job.interval_hours }} h</td>
                         <td class="nowrap">{{ datetime(job.next_run_at) }}</td>
                         <td>{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
+                        <td class="actions">{{ job_actions(job, next=request.path) }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="5" class="empty">No jobs for this device</td></tr>
+                    <tr><td colspan="6" class="empty">No jobs for this device</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
+        </div>
+        {# Any task, also without a job (e.g. a dry run before adding one) #}
+        <div class="card-body">
+            <form class="inline-form" method="POST" action="{{ url_for('jobs_ui.run_device') }}">
+                {{ csrf() }}
+                <input type="hidden" name="device_id" value="{{ device_id }}">
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <span class="title">Run now</span>
+                <select class="input" name="task" aria-label="Task"><option value="process">process</option><option value="long">long</option><option value="backup">backup</option></select>
+                <label class="check" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run"> Dry run</label>
+                <button class="btn primary" type="submit">Run</button>
+            </form>
         </div>
     </div>
 </section>

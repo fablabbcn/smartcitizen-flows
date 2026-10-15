@@ -69,6 +69,13 @@ def sensor_type(sensor_id):
     return model, f'Alphasense {series}-series {gas} sensor (code {code})'
 
 
+def code_table():
+    ''' The codes for the interface to label ids as they are typed: {sensors: {code: [model, title]}, afe: [codes]} '''
+    from smartcitizen_connector._config import config
+    sensors = {code: list(sensor_type(code + '000000')) for code in config._as_sensor_codes}
+    return {'sensors': sensors, 'afe': list(getattr(config, '_afe_board_codes', ()))}
+
+
 def number(value):
     try:
         return float(value)

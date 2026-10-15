@@ -94,6 +94,7 @@
                     <label for="{{ prefix }}_ids">Slots</label>
                     <textarea class="input" id="{{ prefix }}_ids" name="{{ prefix }}_ids" rows="{{ [version.ids | length + 1, 3] | max }}" spellcheck="false" placeholder="AS_48_32=212830246">{% for slot, sensor_id in version.ids.items() %}{{ slot }}={{ sensor_id }}
 {% endfor %}</textarea>
+                    <ul class="slot-types" data-slot-types="{{ prefix }}_ids" aria-live="polite"></ul>
                 </div>
             </div>
         </div>
@@ -173,4 +174,5 @@
     </div>
 </div>
 {% endif %}
+<script type="application/json" id="sensor-codes">{{ sensor_codes() | tojson }}</script>
 {% endblock %}

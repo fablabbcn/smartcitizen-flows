@@ -126,6 +126,68 @@
     update();
   });
 
+  // Sensor ids: the Alphasense type from the code of the id (the table comes from smartcitizen-connector), as typed
+  var codesElement = document.getElementById('sensor-codes');
+  var codes = null;
+  try { codes = codesElement ? JSON.parse(codesElement.textContent) : null; } catch (error) {}
+  var describe = function (id) {
+    id = (id || '').trim();
+    if (!id) return null;
+    var afe = /^(\d{2})-\d+$/.exec(id);
+    if (afe) {
+      return codes.afe.indexOf(afe[1]) !== -1 ? { label: 'AFE board', title: 'Alphasense AFE board, for A-series sensors with a PT1000 (code ' + afe[1] + ')', afe: true }
+        : { warning: 'AFE board id with an unknown code ' + afe[1], afe: true };
+    }
+    if (/^\d{2}-?$/.test(id) || id.length < 3) return null;
+    var found = codes.sensors[id.slice(0, 3)];
+    return found ? { label: found[0], title: found[1], afe: false } : { warning: 'Unknown Alphasense code ' + id.slice(0, 3), afe: false };
+  };
+  if (codes) {
+    // New calibration: the type under the id, and whether it needs the other form
+    document.querySelectorAll('[data-sensor-type]').forEach(function (hint) {
+      var input = document.getElementById(hint.getAttribute('data-sensor-type'));
+      var kind = document.getElementById(hint.getAttribute('data-kind'));
+      var update = function () {
+        var found = describe(input.value);
+        hint.textContent = '';
+        hint.classList.remove('warning-text');
+        if (!found) return;
+        var text = found.label ? found.label + ' · ' + found.title : found.warning;
+        if (kind && (found.afe ? 'afe_board' : 'alphasense_sensor') !== kind.value) {
+          text += ': choose ' + (found.afe ? 'AFE board' : 'Alphasense sensor') + ' and press Change';
+          hint.classList.add('warning-text');
+        }
+        if (found.warning) hint.classList.add('warning-text');
+        hint.textContent = text;
+      };
+      input.addEventListener('input', update);
+      if (kind) kind.addEventListener('change', update);
+      update();
+    });
+    // Hardware versions: the type of each slot, line by line
+    document.querySelectorAll('[data-slot-types]').forEach(function (list) {
+      var area = document.getElementById(list.getAttribute('data-slot-types'));
+      var update = function () {
+        list.textContent = '';
+        area.value.split('\n').forEach(function (line) {
+          var parts = line.split('=');
+          if (parts.length !== 2 || !parts[1].trim()) return;
+          var slot = parts[0].trim(), id = parts[1].trim(), found = describe(id);
+          if (!found) return;
+          var item = document.createElement('li');
+          var problem = found.warning || (slot.indexOf('PT') === 0 && !found.afe ? 'a PT slot needs an AFE board id'
+            : slot.indexOf('AS') === 0 && found.afe ? 'an AS slot needs an Alphasense sensor id' : null);
+          item.textContent = slot + ' ' + id + ': ' + (found.label || '') + (problem ? (found.label ? ' · ' : '') + problem : '');
+          if (found.title) item.title = found.title;
+          if (problem) item.className = 'warning-text';
+          list.appendChild(item);
+        });
+      };
+      area.addEventListener('input', update);
+      update();
+    });
+  }
+
   // Tabs inside a page: panels are shown one at a time, the choice is kept in the url hash
   document.querySelectorAll('[data-tabs]').forEach(function (tabs) {
     var buttons = tabs.querySelectorAll('[data-tab]');

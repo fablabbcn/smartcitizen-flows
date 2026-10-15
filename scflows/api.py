@@ -232,6 +232,60 @@ def put_blueprint(name):
     return saved(item.to_json(), created)
 
 
+@api.get('/hardware/<name>/attachments')
+@requires_role(*EDITORS)
+def list_attachments(name):
+    from .attachments import attachments_of
+    hardware_with_access(name)
+    return jsonify([dict(item.to_json(), url=url_for('api.get_attachment', name=name, attachment_id=item.id))
+                    for item in attachments_of(name)])
+
+
+@api.get('/hardware/<name>/attachments/<int:attachment_id>')
+@requires_role(*EDITORS)
+def get_attachment(name, attachment_id):
+    from .attachments import find
+    from .ui import send_attachment
+    hardware_with_access(name)
+    return send_attachment(find(name, attachment_id) or abort(404))
+
+
+@api.post('/hardware/<name>/attachments')
+@requires_role(ADMIN)
+def post_attachment(name):
+    ''' Multipart form: file, and an optional description '''
+    from .attachments import MAX_BYTES, AttachmentError, add
+    request.max_content_length = MAX_BYTES + 1024 * 1024
+    get_by_name(Hardware, name)
+    upload = request.files.get('file')
+    if upload is None:
+        unprocessable(['file: required (multipart form field "file")'])
+    try:
+        item = add(name, upload.filename, upload.read(), request.form.get('description', ''), identity=current_identity())
+    except AttachmentError as error:
+        unprocessable([str(error)])
+    db.session.commit()
+    return jsonify(item.to_json()), 201
+
+
+@api.delete('/hardware/<name>/attachments/<int:attachment_id>')
+@requires_role(ADMIN)
+def delete_attachment(name, attachment_id):
+    from .attachments import find, remove
+    item = find(name, attachment_id) or abort(404)
+    remove(item)
+    db.session.commit()
+    return '', 204
+
+
+def hardware_with_access(name):
+    ''' The hardware, if it exists and the user (admin, or researcher with a device that uses it) can see it '''
+    from .access import can_see
+    if not can_see(current_identity(), 'hardware', name):
+        abort(403, 'Researchers can only see the hardware of their devices and the calibrations of its sensors')
+    return get_by_name(Hardware, name)
+
+
 @api.put('/hardware/<name>')
 @requires_role(ADMIN)
 def put_hardware(name):

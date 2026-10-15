@@ -256,3 +256,11 @@ def test_actions_only_go_back_to_jobs_pages(client, process_job, target):
     sign_in(client, 'admin')
     response = client.post(f'/jobs/{process_job.id}/pause', data={'csrf': 'token', 'next': target})
     assert response.headers['Location'].endswith('/jobs/')
+
+
+def test_jobs_page_says_when_posting_is_disabled(client, process_job, monkeypatch):
+    sign_in(client, 'admin')
+    monkeypatch.setenv('SC_BEARER', '')
+    assert 'Posting is disabled' in client.get('/jobs/').get_data(as_text=True)
+    monkeypatch.setenv('SC_BEARER', 'token')
+    assert 'Posting is disabled' not in client.get('/jobs/').get_data(as_text=True)

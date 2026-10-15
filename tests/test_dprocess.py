@@ -66,6 +66,11 @@ def refreshed(monkeypatch):
     return calls
 
 
+@pytest.fixture(autouse=True)
+def token(monkeypatch):
+    monkeypatch.setenv('SC_BEARER', 'test-token')
+
+
 @pytest.fixture
 def run(monkeypatch, refreshed):
     monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
@@ -185,3 +190,20 @@ def test_errors_keep_the_log(monkeypatch, refreshed):
 
     assert state == ['FAILED', 'ConnectionError: API down'] and health is None
     assert log[-1] == 'error: ConnectionError: API down'
+
+
+@pytest.mark.parametrize('value', [None, '', '  '])
+def test_without_a_token_only_dry_runs_process(run, monkeypatch, value):
+    if value is None:
+        monkeypatch.delenv('SC_BEARER')
+    else:
+        monkeypatch.setenv('SC_BEARER', value)
+    FakeDevice.instance = None
+
+    log, state, health = asyncio.run(dprocess(1))
+
+    # Nothing is loaded nor posted
+    assert state == ['ABORTED', 'NO_TOKEN'] and FakeDevice.instance is None and health is None
+    assert log == ['error: SC_BEARER is not set: posting is disabled. Only dry runs can process devices.']
+    # Dry runs still process
+    assert run(dry_run=True)[0] == ['SUCCESS', 'PROCESSED AND UPLOADED']

@@ -8,6 +8,7 @@ from .forms import protect
 from .jobs import (INTERVALS, add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
                    sync_running, sync_summary)
 from .models import DeviceHealth, Job, JobRun
+from .tasks.dprocess import posting_enabled
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
 protect(jobs_ui)
@@ -57,6 +58,7 @@ def index():
     return render_template('jobs/index.html', jobs=jobs, latest=latest_runs([job.id for job in jobs]), runs=runs,
                            task=task, counts=counts, names=device_names(), last_sync=last_sync(),
                            sync_running=sync_running(), hardware=hardware, intervals=INTERVALS,
+                           posting_enabled=posting_enabled(),
                            uncalibrated=devices.uncalibrated(hardware.values()))
 
 

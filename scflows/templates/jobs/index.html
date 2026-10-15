@@ -20,6 +20,10 @@
     </div>
 </div>
 
+{% if not posting_enabled %}
+<div class="alerts"><div class="alert warning">Posting is disabled: <code>SC_BEARER</code> is not set. Processing runs without "Dry run" are aborted (<code>NO_TOKEN</code>).</div></div>
+{% endif %}
+
 <div class="grid">
     <div class="card"><div class="card-body">
         <form class="inline-form" method="POST" action="{{ url_for('jobs_ui.run_device') }}">

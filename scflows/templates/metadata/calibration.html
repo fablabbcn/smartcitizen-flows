@@ -34,7 +34,8 @@
         <div class="card-body form-grid">
             <div class="field">
                 <label for="sensor_id">Sensor id</label>
-                <input class="input mono" id="sensor_id" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required>
+                <input class="input mono" id="sensor_id" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required autocomplete="off">
+                <p class="hint" data-sensor-type="sensor_id" data-kind="kind" aria-live="polite"></p>
             </div>
             <div class="field">
                 <label for="kind">Kind</label>
@@ -128,4 +129,5 @@
     </div>
 </div>
 {% endif %}
+<script type="application/json" id="sensor-codes">{{ sensor_codes() | tojson }}</script>
 {% endblock %}

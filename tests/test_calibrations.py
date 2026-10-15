@@ -168,3 +168,15 @@ def test_calibration_pages_show_the_type(client):
     assert 'title="Alphasense A-series NO2 sensor (code 212)">NO2-A43F</span>' in page
     listing = client.get('/metadata/').get_data(as_text=True)
     assert '>NO2-A43F</span>' in listing and 'AFE board' in listing
+
+
+def test_forms_carry_the_code_table(client):
+    import json, re
+    sign_in(client)
+    for path in ('/metadata/calibrations/new', '/metadata/hardware/SCAS_TEST1'):
+        page = client.get(path).get_data(as_text=True)
+        # In the page body, not in the head
+        body = page[page.index('<main'):]
+        table = json.loads(re.search(r'<script type="application/json" id="sensor-codes">(.*?)</script>', body, re.S).group(1))
+        assert table['sensors']['164'] == ['SO2-B4', 'Alphasense B-series SO2 sensor (code 164)']
+        assert table['afe'] == ['10', '12', '17']

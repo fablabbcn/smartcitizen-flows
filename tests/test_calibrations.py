@@ -37,7 +37,10 @@ def calibration(sensor_id):
 
 @pytest.mark.parametrize('sensor_id, kind', [('10-002911', 'afe_board'), ('12-000445', 'afe_board'),
                                               ('17-000123', 'afe_board'), ('212830246', 'alphasense_sensor'),
-                                              ('', 'alphasense_sensor'), ('1-2', 'alphasense_sensor')])
+                                              ('', 'alphasense_sensor'), ('1-2', 'alphasense_sensor'),
+                                              # Exactly six ASCII digits after the dash, matched whole
+                                              ('10-00291', 'alphasense_sensor'), ('10-0029111', 'alphasense_sensor'),
+                                              ('10-002911\n', 'alphasense_sensor'), ('١٠-٠٠٢٩١١', 'alphasense_sensor')])
 def test_kind_from_the_id(sensor_id, kind):
     assert calibrations.kind_for_id(sensor_id) == kind
 

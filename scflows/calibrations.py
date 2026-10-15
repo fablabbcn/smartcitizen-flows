@@ -104,6 +104,62 @@ def code_table():
     return {'sensors': sensors, 'afe': list(getattr(config, '_afe_board_codes', ()))}
 
 
+# Total zero = electronic zero + sensor zero, per electrode: (electrode, electronic, sensor, total)
+ZERO_TRIPLES = [
+    ('WE', 'we_electronic_zero_mv', 'we_sensor_zero_mv', 'we_total_zero_mv'),
+    ('AE', 'ae_electronic_zero_mv', 'ae_sensor_zero_mv', 'ae_total_zero_mv'),
+]
+
+
+def rounded(value):
+    return float(f'{value:.6g}')
+
+
+def complete(data):
+    '''
+    Fills the values of an Alphasense calibration that can be worked out from others, so that nothing has to be given
+    twice: a sensitivity in mV/ppb or nA/ppb from the other and the PCB gain, and the electronic or sensor zero from the
+    total and the other (totals are optional: processing does not use them, so they are not filled). Returns
+    (data, [(field, how)])
+    '''
+    data, filled = dict(data), []
+    gain = number(data.get('pcb_gain_mv_na'))
+    for label, na_field, mv_field in SENSITIVITY_ROWS:
+        na, mv = number(data.get(na_field)), number(data.get(mv_field))
+        if gain is not None and na is not None and mv is None:
+            data[mv_field] = rounded(na * gain)
+            filled.append((mv_field, f'{label}: nA/ppb × PCB gain'))
+        elif gain and mv is not None and na is None:
+            data[na_field] = rounded(mv / gain)
+            filled.append((na_field, f'{label}: mV/ppb ÷ PCB gain'))
+    for electrode, *fields in ZERO_TRIPLES:
+        if not set(fields) & set(data):
+            continue
+        electronic, sensor, total = (number(data.get(field)) for field in fields)
+        if total is None or [electronic, sensor].count(None) != 1:
+            continue
+        if sensor is None:
+            data[fields[1]], how = rounded(total - electronic), 'total - electronic zero'
+        else:
+            data[fields[0]], how = rounded(total - sensor), 'total - sensor zero'
+        filled.append((next(field for field, value in zip(fields, (electronic, sensor, total)) if value is None),
+                       f'{electrode} {how}'))
+    return data, filled
+
+
+def missing(data):
+    ''' Values that processing cannot use: scdata reads every value of a calibration as a number '''
+    hints = {}
+    for label, na_field, mv_field in SENSITIVITY_ROWS:
+        hints[na_field] = hints[mv_field] = f'give {label} in nA/ppb or mV/ppb, with the PCB gain'
+    for electrode, *fields in ZERO_TRIPLES:
+        for field in fields:
+            hints[field] = f'give two of the {electrode} electronic, sensor and total zeros'
+    return [f'{field}: empty or not a number, and processing needs it ({hints[field]})' if field in hints
+            else f'{field}: empty or not a number, and processing needs it'
+            for field, value in data.items() if number(value) is None]
+
+
 def number(value):
     try:
         return float(value)

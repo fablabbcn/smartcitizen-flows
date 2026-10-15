@@ -229,9 +229,59 @@
         gainHint.classList.toggle('mono', usual === null);
       }
     };
-    document.querySelectorAll('[data-relation] input, #pcb_gain_mv_na').forEach(function (input) {
-      input.addEventListener('input', updateRelations);
+    // Values worked out from others as they are typed (as the server does on save), highlighted to be checked:
+    // a sensitivity from the other unit and the gain, an electronic or sensor zero from the total and the other
+    var byId = function (id) { return document.getElementById(id); };
+    var precise = function (value) { return parseFloat(value.toPrecision(6)).toString(); };
+    var legend = document.querySelector('[data-auto-legend]');
+    var auto = {};
+    var mark = function (id, value, how) {
+      var input = byId(id);
+      input.value = value;
+      input.classList.add('auto-filled');
+      input.title = 'Worked out: ' + how;
+      auto[id] = true;
+    };
+    var unmark = function (id, clear) {
+      var input = byId(id);
+      if (clear) input.value = '';
+      input.classList.remove('auto-filled');
+      input.removeAttribute('title');
+      delete auto[id];
+    };
+    var given = function (id) { var input = byId(id); return input && !auto[id] && number(input.value) !== null; };
+    var empty = function (id) { var input = byId(id); return input && (auto[id] || input.value.trim() === ''); };
+    var zeros = [['we_electronic_zero_mv', 'we_sensor_zero_mv', 'we_total_zero_mv'],
+                 ['ae_electronic_zero_mv', 'ae_sensor_zero_mv', 'ae_total_zero_mv']];
+    var fill = function () {
+      var gain = number(gainInput.value);
+      document.querySelectorAll('[data-relation]').forEach(function (row) {
+        var na = row.getAttribute('data-na'), mv = row.getAttribute('data-mv');
+        if (empty(mv) && given(na) && gain !== null) mark(mv, precise(number(byId(na).value) * gain), 'nA/ppb × PCB gain');
+        else if (empty(na) && given(mv) && gain) mark(na, precise(number(byId(mv).value) / gain), 'mV/ppb ÷ PCB gain');
+        else [na, mv].forEach(function (id) { if (auto[id]) unmark(id, true); });
+      });
+      zeros.forEach(function (fields) {
+        if (!byId(fields[0])) return;
+        var electronic = fields[0], sensor = fields[1], total = fields[2];
+        if (given(total) && given(electronic) && empty(sensor)) {
+          mark(sensor, precise(number(byId(total).value) - number(byId(electronic).value)), 'total - electronic zero');
+        } else if (given(total) && given(sensor) && empty(electronic)) {
+          mark(electronic, precise(number(byId(total).value) - number(byId(sensor).value)), 'total - sensor zero');
+        } else {
+          [electronic, sensor].forEach(function (id) { if (auto[id]) unmark(id, true); });
+        }
+      });
+      if (legend) legend.hidden = !Object.keys(auto).length;
+    };
+    var form = gainInput.form;
+    form.addEventListener('input', function (event) {
+      // A value typed over a worked out one is the user's
+      if (auto[event.target.id]) unmark(event.target.id, false);
+      fill();
+      updateRelations();
     });
+    fill();
     updateRelations();
   }
 

@@ -84,6 +84,7 @@
             </div>
             {% endfor %}
             {% if kind == 'alphasense_sensor' %}
+            <p class="alert info" data-auto-legend hidden>Highlighted values were worked out from the others (hover them to see how): check them before saving. Saving works them out too.</p>
             {# The PCB gain turns sensitivities in nA/ppb into mV/ppb: shown as the relation it is #}
             <h3 class="group-title">Gain and sensitivity</h3>
             <div class="form-grid cols-3" data-gain-check="{{ expected_gain[0] if expected_gain else '' }}" data-gain-model="{{ expected_gain[1] if expected_gain else '' }}">

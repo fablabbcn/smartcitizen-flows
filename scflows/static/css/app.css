@@ -296,6 +296,8 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 .warning-text { color: var(--color-warning); }
 /* nA/ppb × gain = mV/ppb, one row per sensitivity */
 .relation-rows { display: grid; gap: var(--space-2); }
+/* Worked out from other values on the form, to be checked */
+.input.auto-filled { background: var(--color-info-soft); border-color: var(--color-info); }
 .relation { display: grid; grid-template-columns: 11rem minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 0 var(--space-3); }
 .relation-title { padding-top: 2rem; font-size: var(--text-sm); font-weight: 600; }
 .relation-op { padding-top: 2.1rem; color: var(--color-text-muted); white-space: nowrap; }

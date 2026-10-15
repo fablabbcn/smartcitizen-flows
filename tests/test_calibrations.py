@@ -211,3 +211,78 @@ def test_list_flags_calibrations_with_warnings(client):
 
     listing = client.get('/metadata/').get_data(as_text=True)
     assert 'PCB gain: 0.8 mV/nA, but NO2-A43F sensors have -0.73 mV/nA' in listing and 'warning' in listing
+
+
+# Values worked out from others, so that processing never gets an empty one
+
+RUN_23 = {'pcb_gain_mv_na': 0.8, 'ae_sensor_zero_mv': 0, 'we_sensor_zero_mv': 0, 'ae_electronic_zero_mv': 369,
+          'we_electronic_zero_mv': 394, 'we_sensitivity_mv_ppb': 0.327256, 'we_sensitivity_na_ppb': '',
+          'we_cross_sensitivity_no2_mv_ppb': 0, 'we_cross_sensitivity_no2_na_ppb': ''}
+
+
+def test_sensitivities_are_worked_out_from_the_other_unit():
+    data, filled = calibrations.complete(RUN_23)
+    assert data['we_sensitivity_na_ppb'] == 0.40907 and data['we_cross_sensitivity_no2_na_ppb'] == 0
+    assert [field for field, _ in filled] == ['we_sensitivity_na_ppb', 'we_cross_sensitivity_no2_na_ppb']
+    assert calibrations.missing(data) == []
+    # And the other way
+    data, _ = calibrations.complete(dict(RUN_23, we_sensitivity_mv_ppb='', we_sensitivity_na_ppb=0.40907))
+    assert data['we_sensitivity_mv_ppb'] == 0.327256
+
+
+def test_zeros_are_worked_out_from_the_total():
+    data, filled = calibrations.complete(dict(GOOD, we_sensor_zero_mv=''))
+    assert data['we_sensor_zero_mv'] == 35.84 and filled == [('we_sensor_zero_mv', 'WE total - electronic zero')]
+    data, _ = calibrations.complete(dict(GOOD, ae_electronic_zero_mv=''))
+    assert data['ae_electronic_zero_mv'] == 338
+    # Totals are optional: not filled
+    data, filled = calibrations.complete({key: value for key, value in GOOD.items() if 'total' not in key})
+    assert 'we_total_zero_mv' not in data and filled == []
+
+
+def test_values_that_cannot_be_worked_out_are_reported():
+    data, _ = calibrations.complete(dict(RUN_23, we_electronic_zero_mv='', pcb_gain_mv_na=''))
+    errors = calibrations.missing(data)
+    assert any(error.startswith('we_electronic_zero_mv: empty') and 'two of the WE' in error for error in errors)
+    assert any(error.startswith('we_sensitivity_na_ppb: empty') and 'nA/ppb or mV/ppb' in error for error in errors)
+
+
+def test_form_fills_derived_values_on_save(client):
+    sign_in(client)
+    data = {'csrf': 'token', 'action': 'save', **{key: value for key, value in RUN_23.items()}}
+
+    response = client.post('/metadata/calibrations/212830246', data=data)
+
+    assert response.status_code == 302
+    assert calibration('212830246').data['we_sensitivity_na_ppb'] == 0.40907
+    assert 'Worked out: we_sensitivity_na_ppb (WE sensitivity: mV/ppb ÷ PCB gain)' in client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+
+
+def test_form_rejects_values_processing_cannot_use(client):
+    sign_in(client)
+    data = {'csrf': 'token', 'action': 'save', **dict(RUN_23, we_electronic_zero_mv='')}
+
+    page = client.post('/metadata/calibrations/212830246', data=data).get_data(as_text=True)
+
+    assert 'we_electronic_zero_mv: empty or not a number' in page
+    assert calibration('212830246').data != data
+
+
+def test_api_fills_and_rejects(client, sc_me):
+    response = client.put('/api/v1/calibrations/164400105', json=RUN_23, headers=auth('admin-token'))
+    assert response.status_code == 201 and response.get_json()['data']['we_sensitivity_na_ppb'] == 0.40907
+    assert {'field': 'we_sensitivity_na_ppb', 'from': 'WE sensitivity: mV/ppb ÷ PCB gain'} in response.get_json()['filled']
+
+    response = client.put('/api/v1/calibrations/164400105', json=dict(RUN_23, we_electronic_zero_mv=''), headers=auth('admin-token'))
+    assert response.status_code == 422 and 'we_electronic_zero_mv' in response.get_json()['errors'][0]
+
+
+def test_incomplete_calibrations_are_flagged(client):
+    sign_in(client)
+    item = calibration('212830246')
+    item.data = dict(RUN_23)
+    db.session.commit()
+
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert 'we_sensitivity_na_ppb: empty or not a number, and processing needs it' in page
+    assert 'we_sensitivity_na_ppb: empty or not a number' in client.get('/metadata/').get_data(as_text=True)

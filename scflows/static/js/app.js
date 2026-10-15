@@ -87,7 +87,8 @@
   // Selection in tables: the header box ticks the rows shown (after filtering); the count says how many
   document.querySelectorAll('[data-select-all]').forEach(function (all) {
     var table = all.closest('table');
-    var boxes = function () { return Array.prototype.slice.call(table.querySelectorAll('tbody input[type=checkbox]')); };
+    // Only the selection boxes (not the dry run boxes of the rows)
+    var boxes = function () { return Array.prototype.slice.call(table.querySelectorAll('tbody input[type=checkbox][name=job_id]')); };
     var label = document.querySelector('[data-selected]');
     var hint = label ? label.textContent : '';
     // Only the rows shown count (and are sent)

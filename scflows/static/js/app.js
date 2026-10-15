@@ -201,7 +201,8 @@
   if (gainInput) {
     var gainBox = document.querySelector('[data-gain-check]');
     var gainHint = document.querySelector('[data-gain-hint]');
-    var number = function (value) { var parsed = parseFloat(value); return isNaN(parsed) ? null : parsed; };
+    // As the server: only whole numbers count ("12abc" is not 12), and blanks are empty
+    var number = function (value) { var parsed = value.trim() === '' ? NaN : Number(value); return isFinite(parsed) ? parsed : null; };
     var round = function (value) { return parseFloat(value.toPrecision(4)).toString(); };
     var updateRelations = function () {
       var gain = number(gainInput.value);
@@ -250,7 +251,7 @@
       delete auto[id];
     };
     var given = function (id) { var input = byId(id); return input && !auto[id] && number(input.value) !== null; };
-    var empty = function (id) { var input = byId(id); return input && (auto[id] || input.value.trim() === ''); };
+    var empty = function (id) { var input = byId(id); return input && (auto[id] || number(input.value) === null); };
     var zeros = [['we_electronic_zero_mv', 'we_sensor_zero_mv', 'we_total_zero_mv'],
                  ['ae_electronic_zero_mv', 'ae_sensor_zero_mv', 'ae_total_zero_mv']];
     var fill = function () {

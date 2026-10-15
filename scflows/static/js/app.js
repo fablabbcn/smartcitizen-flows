@@ -288,6 +288,20 @@
     updateRelations();
   }
 
+  // Run forms: backups have no dry run, so the option is off when the task is backup
+  document.querySelectorAll('form select[name=task]').forEach(function (select) {
+    var dryRun = select.form.querySelector('input[name=dry_run]');
+    if (!dryRun) return;
+    var update = function () {
+      var backup = select.value === 'backup';
+      dryRun.disabled = backup;
+      if (backup) dryRun.checked = false;
+      dryRun.closest('label').title = backup ? 'Backups have no dry run' : 'Process without posting (process) or storing (long) the results';
+    };
+    select.addEventListener('change', update);
+    update();
+  });
+
   // Tabs inside a page: panels are shown one at a time, the choice is kept in the url hash
   document.querySelectorAll('[data-tabs]').forEach(function (tabs) {
     var buttons = tabs.querySelectorAll('[data-tab]');

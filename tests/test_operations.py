@@ -136,7 +136,7 @@ def test_interface_pause_resume(client, process_job):
 def test_interface_run_and_add_for_a_device(client, process_job, queued):
     sign_in(client, 'admin')
 
-    client.post('/jobs/run', data={'csrf': 'token', 'device_id': '42', 'task': 'backup', 'dry_run': 'on'})
+    client.post('/jobs/run', data={'csrf': 'token', 'device_id': '42', 'task': 'backup'})
     item = run(queued[0])
     assert (item.device_id, item.task, item.dry_run) == (42, 'backup', False)
 
@@ -251,7 +251,9 @@ def test_device_page_runs_and_pauses_jobs(client, process_job, queued):
     assert response.headers['Location'].endswith('/jobs/devices/1') and run(queued[-1]).task == 'long'
 
 
-@pytest.mark.parametrize('target', ['https://example.com/', '//example.com/jobs/', '/metadata/', '/jobs/\\\\example.com'])
+@pytest.mark.parametrize('target', ['https://example.com/', '//example.com/jobs/', '/metadata/', '/jobs/\\\\example.com',
+                                    '/jobs/../', '/jobs/devices/../../metadata/', '/jobs/%2e%2e/', '/jobs/%252e%252e/',
+                                    '/jobs/./../', '/jobs/%2F%2Fexample.com'])
 def test_actions_only_go_back_to_jobs_pages(client, process_job, target):
     sign_in(client, 'admin')
     response = client.post(f'/jobs/{process_job.id}/pause', data={'csrf': 'token', 'next': target})
@@ -264,3 +266,12 @@ def test_jobs_page_says_when_posting_is_disabled(client, process_job, monkeypatc
     assert 'Posting is disabled' in client.get('/jobs/').get_data(as_text=True)
     monkeypatch.setenv('SC_BEARER', 'token')
     assert 'Posting is disabled' not in client.get('/jobs/').get_data(as_text=True)
+
+
+def test_backups_have_no_dry_run(client, process_job, queued):
+    sign_in(client, 'admin')
+    page = client.post('/jobs/run', data={'csrf': 'token', 'device_id': '1', 'task': 'backup', 'dry_run': 'on',
+                                          'next': '/jobs/devices/1'}, follow_redirects=True).get_data(as_text=True)
+    assert queued == [] and 'Backups have no dry run' in page
+    client.post('/jobs/run', data={'csrf': 'token', 'device_id': '1', 'task': 'backup'})
+    assert len(queued) == 1 and not run(queued[0]).dry_run

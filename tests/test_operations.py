@@ -154,3 +154,76 @@ def test_interface_requires_admin_and_csrf(client, process_job, queued):
     sign_in(client, 'admin')
     assert client.post(f'/jobs/{process_job.id}/run', data={'csrf': 'other'}).status_code == 400
     assert queued == []
+
+
+# Several jobs at once
+
+@pytest.fixture
+def several(app):
+    jobs.sync_jobs(to_process={1, 2, 3}, to_back_up={1, 2})
+    return {(job.task, job.device_id): job.id for job in db.session.execute(db.select(Job)).scalars()}
+
+
+def paused():
+    db.session.expire_all()
+    return {(job.task, job.device_id) for job in db.session.execute(db.select(Job).filter_by(paused=True)).scalars()}
+
+
+def test_pause_and_resume_a_selection(client, several):
+    sign_in(client, 'admin')
+    selection = [several[('process', 1)], several[('process', 2)], several[('backup', 2)]]
+
+    response = client.post('/jobs/selection', data={'csrf': 'token', 'action': 'pause', 'job_id': selection, 'task': 'process'})
+
+    assert response.status_code == 302 and response.headers['Location'].endswith('/jobs/?task=process')
+    assert paused() == {('process', 1), ('process', 2), ('backup', 2)}
+    assert 'Paused 3 jobs' in client.get('/jobs/').get_data(as_text=True)
+
+    client.post('/jobs/selection', data={'csrf': 'token', 'action': 'resume', 'job_id': selection[:1]})
+    assert paused() == {('process', 2), ('backup', 2)}
+
+    client.post('/jobs/selection', data={'csrf': 'token', 'action': 'pause', 'job_id': selection})
+    assert 'Paused 1 jobs (2 already were)' in client.get('/jobs/').get_data(as_text=True)
+
+
+def test_selection_needs_jobs_and_an_action(client, several):
+    sign_in(client, 'admin')
+
+    client.post('/jobs/selection', data={'csrf': 'token', 'action': 'pause'})
+    client.post('/jobs/selection', data={'csrf': 'token', 'action': 'delete', 'job_id': [several[('process', 1)]]})
+
+    assert paused() == set()
+    assert 'Tick the jobs to pause or resume' in client.get('/jobs/').get_data(as_text=True)
+
+
+def test_jobs_table_has_selection_boxes(client, several):
+    sign_in(client, 'admin')
+    text = client.get('/jobs/').get_data(as_text=True)
+
+    assert 'data-select-all' in text and f'name="job_id" value="{several[("process", 1)]}" form="selection"' in text
+    assert 'Pause selected' in text and 'Resume selected' in text
+
+
+def test_api_pauses_several_jobs(client, sc_me, several):
+    response = client.patch('/api/v1/jobs', json={'paused': True, 'device_ids': [1, 2], 'task': 'process'},
+                            headers=auth('admin-token'))
+    assert response.status_code == 200 and response.get_json()['changed'] == 2
+    assert paused() == {('process', 1), ('process', 2)}
+
+    # All the jobs of a device
+    assert client.patch('/api/v1/jobs', json={'paused': True, 'device_ids': [2]},
+                        headers=auth('admin-token')).get_json()['changed'] == 1
+    response = client.patch('/api/v1/jobs', json={'paused': False, 'job_ids': [several[('process', 1)]]},
+                            headers=auth('admin-token'))
+    assert [job['device_id'] for job in response.get_json()['jobs']] == [1]
+    assert paused() == {('process', 2), ('backup', 2)}
+
+
+def test_api_selection_is_validated(client, sc_me, several):
+    for body in ({'paused': True}, {'paused': 'yes', 'job_ids': [1]}, {'paused': True, 'job_ids': []},
+                 {'paused': True, 'job_ids': [1], 'device_ids': [1]}, {'paused': True, 'device_ids': ['1']},
+                 {'paused': True, 'device_ids': [1], 'task': 'other'}):
+        assert client.patch('/api/v1/jobs', json=body, headers=auth('admin-token')).status_code == 400, body
+    assert client.patch('/api/v1/jobs', json={'paused': True, 'job_ids': [1]},
+                        headers=auth('researcher-token')).status_code == 403
+    assert paused() == set()

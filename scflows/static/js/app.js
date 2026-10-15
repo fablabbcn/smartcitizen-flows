@@ -84,6 +84,39 @@
     });
   });
 
+  // Selection in tables: the header box ticks the rows shown (after filtering); the count says how many
+  document.querySelectorAll('[data-select-all]').forEach(function (all) {
+    var table = all.closest('table');
+    var boxes = function () { return Array.prototype.slice.call(table.querySelectorAll('tbody input[type=checkbox]')); };
+    var label = document.querySelector('[data-selected]');
+    var hint = label ? label.textContent : '';
+    var update = function () {
+      var ticked = boxes().filter(function (box) { return box.checked; }).length;
+      if (label) label.textContent = ticked ? ticked + ' selected' : hint;
+    };
+    all.addEventListener('change', function () {
+      boxes().forEach(function (box) {
+        if (!box.closest('tr').hidden) box.checked = all.checked;
+      });
+      update();
+    });
+    table.addEventListener('change', function (event) {
+      if (event.target !== all) update();
+    });
+    // Only the rows shown are sent: untick the ones a later filter hid, and confirm
+    var form = boxes().length ? boxes()[0].form : null;
+    if (form) {
+      form.addEventListener('submit', function (event) {
+        boxes().forEach(function (box) { if (box.closest('tr').hidden) box.checked = false; });
+        update();
+        var ticked = boxes().filter(function (box) { return box.checked; }).length;
+        var action = event.submitter ? event.submitter.value : 'change';
+        if (ticked && !confirm(action.charAt(0).toUpperCase() + action.slice(1) + ' ' + ticked + ' jobs?')) event.preventDefault();
+      });
+    }
+    update();
+  });
+
   // Tabs inside a page: panels are shown one at a time, the choice is kept in the url hash
   document.querySelectorAll('[data-tabs]').forEach(function (tabs) {
     var buttons = tabs.querySelectorAll('[data-tab]');

@@ -410,6 +410,18 @@ def set_paused(job, paused):
     return job
 
 
+def set_paused_many(selected, paused):
+    ''' Pauses or resumes several jobs at once. Returns the jobs that changed '''
+    changed = [job for job in selected if job.paused != paused]
+    for job in changed:
+        job.paused = paused
+    db.session.commit()
+    if changed:
+        logger.info(f'{"Paused" if paused else "Resumed"} {len(changed)} jobs: '
+                    + ', '.join(f'{job.task} {job.device_id}' for job in changed))
+    return changed
+
+
 def fail_stale_runs():
     ''' Runs still running after LOCK_SECONDS: their worker stopped (the lock has expired). Returns how many '''
     stale = db.session.execute(db.select(JobRun).where(

@@ -5,7 +5,8 @@ from flask_login import current_user
 from . import db, devices
 from .auth import admin_required
 from .forms import protect
-from .jobs import add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, sync_running
+from .jobs import (add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
+                   sync_running)
 from .models import DeviceHealth, Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
@@ -154,6 +155,23 @@ def resume_job(job_id):
     job = set_paused(get_job(job_id), False)
     flash(f'Resumed {job.task} for device {job.device_id}')
     return back()
+
+
+@jobs_ui.post('/selection')
+@admin_required
+def pause_selection():
+    ''' Pauses or resumes the jobs ticked in the table '''
+    action = request.form.get('action')
+    ids = [int(value) for value in request.form.getlist('job_id') if value.isdigit()]
+    task = request.form.get('task') if request.form.get('task') in Job.TASKS else None
+    if action not in ('pause', 'resume') or not ids:
+        flash('Tick the jobs to pause or resume', 'error')
+    else:
+        selected = db.session.execute(db.select(Job).where(Job.id.in_(ids))).scalars().all()
+        changed = set_paused_many(selected, action == 'pause')
+        done = 'Paused' if action == 'pause' else 'Resumed'
+        flash(f'{done} {len(changed)} jobs' + (f' ({len(selected) - len(changed)} already were)' if len(changed) < len(selected) else ''))
+    return redirect(url_for('jobs_ui.index', task=task))
 
 
 @jobs_ui.post('/run')

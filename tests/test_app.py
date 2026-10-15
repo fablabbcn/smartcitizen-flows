@@ -135,3 +135,12 @@ def test_placeholders_are_rejected(monkeypatch):
     monkeypatch.setenv('SQLALCHEMY_DATABASE_URI', 'postgresql+psycopg://flows:change-me@postgres:5432/flows')
     with pytest.raises(RuntimeError, match='change-me'):
         create_app()
+
+
+def test_app_does_not_import_scdata():
+    # scdata loads its metadata from BASE_POSTPROCESSING_URL on import: flows itself, which must be serving first
+    import subprocess, sys
+    code = 'import scflows; scflows.create_app({"TESTING": True}); import sys; print("scdata" in sys.modules)'
+    result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
+                            env={**__import__('os').environ, 'SQLALCHEMY_DATABASE_URI': 'sqlite://'})
+    assert result.stdout.strip().splitlines()[-1] == 'False', result.stderr[-2000:]

@@ -14,3 +14,9 @@ class Config(object):
     _max_http_retries = 3
 
 config = Config()
+
+
+def posting_enabled():
+    ''' A Smart Citizen API token to post with (the API rejects an empty one) '''
+    import os
+    return bool(os.environ.get('SC_BEARER', '').strip())

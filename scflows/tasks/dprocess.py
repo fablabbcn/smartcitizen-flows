@@ -1,17 +1,11 @@
 import scdata as sc
 
-import os
 import sys
 import asyncio
-from scflows.config import config
+from scflows.config import config, posting_enabled
 from scflows.custom_logger import logger
 from scflows.tasks.context import describe, device_context, iso, library_warnings
 from scflows.tools import refresh_metadata
-
-
-def posting_enabled():
-    ''' A Smart Citizen API token to post with (the API rejects an empty one) '''
-    return bool(os.environ.get('SC_BEARER', '').strip())
 
 
 def period(data):

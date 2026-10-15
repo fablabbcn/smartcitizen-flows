@@ -7,8 +7,8 @@ from .auth import admin_required
 from .forms import protect
 from .jobs import (INTERVALS, add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
                    sync_running, sync_summary)
+from .config import posting_enabled
 from .models import DeviceHealth, Job, JobRun
-from .tasks.dprocess import posting_enabled
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
 protect(jobs_ui)

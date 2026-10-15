@@ -222,7 +222,7 @@ def test_api_pauses_several_jobs(client, sc_me, several):
 def test_api_selection_is_validated(client, sc_me, several):
     for body in ({'paused': True}, {'paused': 'yes', 'job_ids': [1]}, {'paused': True, 'job_ids': []},
                  {'paused': True, 'job_ids': [1], 'device_ids': [1]}, {'paused': True, 'device_ids': ['1']},
-                 {'paused': True, 'device_ids': [1], 'task': 'other'}):
+                 {'paused': True, 'device_ids': [1], 'task': 'other'}, {'paused': True, 'job_ids': [True]}):
         assert client.patch('/api/v1/jobs', json=body, headers=auth('admin-token')).status_code == 400, body
     assert client.patch('/api/v1/jobs', json={'paused': True, 'job_ids': [1]},
                         headers=auth('researcher-token')).status_code == 403

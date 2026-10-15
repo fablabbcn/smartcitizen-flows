@@ -90,9 +90,13 @@
     var boxes = function () { return Array.prototype.slice.call(table.querySelectorAll('tbody input[type=checkbox]')); };
     var label = document.querySelector('[data-selected]');
     var hint = label ? label.textContent : '';
+    // Only the rows shown count (and are sent)
+    var ticked = function () {
+      return boxes().filter(function (box) { return box.checked && !box.closest('tr').hidden; }).length;
+    };
     var update = function () {
-      var ticked = boxes().filter(function (box) { return box.checked; }).length;
-      if (label) label.textContent = ticked ? ticked + ' selected' : hint;
+      var count = ticked();
+      if (label) label.textContent = count ? count + ' selected' : hint;
     };
     all.addEventListener('change', function () {
       boxes().forEach(function (box) {
@@ -103,15 +107,19 @@
     table.addEventListener('change', function (event) {
       if (event.target !== all) update();
     });
+    // The table filter runs first (registered earlier), then the count follows it
+    var container = table.closest('[data-table]');
+    var search = container ? container.querySelector('[data-search]') : null;
+    if (search) search.addEventListener('input', update);
     // Only the rows shown are sent: untick the ones a later filter hid, and confirm
     var form = boxes().length ? boxes()[0].form : null;
     if (form) {
       form.addEventListener('submit', function (event) {
         boxes().forEach(function (box) { if (box.closest('tr').hidden) box.checked = false; });
         update();
-        var ticked = boxes().filter(function (box) { return box.checked; }).length;
+        var count = ticked();
         var action = event.submitter ? event.submitter.value : 'change';
-        if (ticked && !confirm(action.charAt(0).toUpperCase() + action.slice(1) + ' ' + ticked + ' jobs?')) event.preventDefault();
+        if (count && !confirm(action.charAt(0).toUpperCase() + action.slice(1) + ' ' + count + ' jobs?')) event.preventDefault();
       });
     }
     update();

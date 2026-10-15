@@ -519,7 +519,7 @@ def patch_jobs():
         value = body.get(key)
         if value is None:
             return None
-        if not isinstance(value, list) or not value or not all(isinstance(item, int) for item in value):
+        if not isinstance(value, list) or not value or not all(type(item) is int for item in value):
             abort(400, usage)
         return value
 

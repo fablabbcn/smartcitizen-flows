@@ -214,3 +214,10 @@ def test_list_flags_calibrations_with_warnings(client):
 
     listing = client.get('/metadata/').get_data(as_text=True)
     assert 'PCB gain: 0.8 mV/nA, but NO2-A43F sensors have -0.73 mV/nA' in listing and 'warning' in listing
+
+
+def test_sensitivity_fields_are_labelled_with_their_row(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert '<label for="we_sensitivity_na_ppb"><span class="sr-only">WE sensitivity </span>nA/ppb' in page
+    assert '<label for="we_cross_sensitivity_no2_mv_ppb"><span class="sr-only">NO2 cross sensitivity </span>mV/ppb' in page

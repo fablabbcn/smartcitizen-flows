@@ -260,12 +260,14 @@ def test_form_fills_derived_values_on_save(client):
 
 def test_form_rejects_values_processing_cannot_use(client):
     sign_in(client)
+    before = dict(calibration('212830246').data)
     data = {'csrf': 'token', 'action': 'save', **dict(RUN_23, we_electronic_zero_mv='')}
 
     page = client.post('/metadata/calibrations/212830246', data=data).get_data(as_text=True)
 
     assert 'we_electronic_zero_mv: a numeric value is required for processing' in page
-    assert calibration('212830246').data != data
+    # Nothing saved
+    assert calibration('212830246').data == before
 
 
 def test_api_fills_and_rejects(client, sc_me):
@@ -286,3 +288,13 @@ def test_incomplete_calibrations_are_flagged(client):
     page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
     assert 'we_sensitivity_na_ppb: a numeric value is required for processing' in page
     assert 'we_sensitivity_na_ppb: a numeric value is required for processing' in client.get('/metadata/').get_data(as_text=True)
+
+
+@pytest.mark.parametrize('value', ['nan', 'inf', '-inf', float('nan'), float('inf')])
+def test_non_finite_values_are_rejected(value):
+    # The PCB gain cannot be derived from other values
+    data, _ = calibrations.complete(dict(GOOD, pcb_gain_mv_na=value))
+    assert any(error.startswith('pcb_gain_mv_na:') for error in calibrations.missing(data))
+    # A derivable value is treated as empty, and derived
+    data, _ = calibrations.complete(dict(GOOD, we_electronic_zero_mv=value))
+    assert data['we_electronic_zero_mv'] == 342

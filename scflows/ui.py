@@ -228,8 +228,11 @@ def send_attachment(item):
         abort(404, 'The file is missing from the storage')
     # PDFs and images open in the browser, the rest downloads
     inline = item.content_type == 'application/pdf' or item.content_type.startswith('image/')
-    return send_file(BytesIO(content), mimetype=item.content_type, as_attachment=not inline,
-                     download_name=item.filename)
+    response = send_file(BytesIO(content), mimetype=item.content_type, as_attachment=not inline,
+                         download_name=item.filename)
+    # Files are whatever was uploaded: the browser must not guess another type from their content
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @ui.post('/hardware/<name>/attachments/<int:attachment_id>/delete')

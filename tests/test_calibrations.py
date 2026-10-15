@@ -148,3 +148,23 @@ def test_hardware_check_flags_afe_ids_and_calibrations(client):
 
     assert 'versions.0.ids.PT_49_23: 10002911 does not look like an AFE board id (e.g. 10-002911)' in warnings
     assert any(warning.startswith('versions.0.ids.AS_48_32: calibration of 212830246: WE total zero') for warning in warnings)
+
+
+@pytest.mark.parametrize('sensor_id, label', [('164400105', 'SO2-B4'), ('134000001', 'SO2-A4'), ('212830246', 'NO2-A43F'),
+                                               ('204042163', 'OX-B431'), ('163040003', 'H2S-B4'), ('133000001', 'H2S-A4'),
+                                               ('10-002911', 'AFE board'), ('17-000123', 'AFE board')])
+def test_sensor_type_from_the_code(sensor_id, label):
+    assert calibrations.sensor_type(sensor_id)[0] == label
+
+
+def test_unknown_codes_have_no_type():
+    assert calibrations.sensor_type('73002320') is None and calibrations.sensor_type('99-000001') is None
+    assert calibrations.sensor_type('164400105')[1] == 'Alphasense B-series SO2 sensor (code 164)'
+
+
+def test_calibration_pages_show_the_type(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert 'title="Alphasense A-series NO2 sensor (code 212)">NO2-A43F</span>' in page
+    listing = client.get('/metadata/').get_data(as_text=True)
+    assert '>NO2-A43F</span>' in listing and 'AFE board' in listing

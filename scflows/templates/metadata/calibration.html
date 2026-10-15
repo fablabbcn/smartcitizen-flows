@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf, hardware_link, kind_label with context %}
+{% from "_macros.html" import csrf, hardware_link, kind_label, sensor_type with context %}
 {% from "metadata/_devices.html" import devices_section with context %}
 {% block title %}{{ 'New calibration' if new else sensor_id }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
@@ -7,7 +7,7 @@
 <div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#calibrations">Metadata</a><span>Calibrations</span><span>{{ 'New' if new else sensor_id }}</span></div>
 <div class="page-header">
     <div>
-        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span></h1>
+        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span>{% if not new %} {{ sensor_type(sensor_id) }}{% endif %}</h1>
         <p class="subtitle">{{ 'Values from the Alphasense sensor sheet, in its order.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}{% if order_number and not new %} Order <span class="mono">{{ order_number }}</span>.{% endif %}</p>
     </div>
     {% if not new %}

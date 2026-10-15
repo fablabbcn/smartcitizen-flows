@@ -47,6 +47,28 @@ def kind_for_id(sensor_id):
     return Calibration.AFE_BOARD if AFE_BOARD_ID.fullmatch(sensor_id or '') else Calibration.ALPHASENSE_SENSOR
 
 
+def sensor_type(sensor_id):
+    '''
+    (label, title) of a sensor id from its code (smartcitizen-connector), e.g. ('SO2-B4', 'Alphasense B-series SO2
+    sensor (code 164)'), ('AFE board', ...), or None if the code is unknown
+    '''
+    from smartcitizen_connector._config import config
+    sensor_id = sensor_id or ''
+    if AFE_BOARD_ID.match(sensor_id):
+        code = sensor_id.split('-')[0]
+        if code in getattr(config, '_afe_board_codes', ()):
+            return 'AFE board', f'Alphasense AFE board, for A-series sensors with a PT1000 (code {code})'
+        return None
+    code = sensor_id[:3]
+    sensor = config._as_sensor_codes.get(code)
+    if sensor is None:
+        return None
+    model = getattr(config, '_as_sensor_models', {}).get(sensor, sensor)
+    # ASB4_SO2: B-series SO2
+    series, gas = sensor[2], sensor.split('_', 1)[1]
+    return model, f'Alphasense {series}-series {gas} sensor (code {code})'
+
+
 def number(value):
     try:
         return float(value)

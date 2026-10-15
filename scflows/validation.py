@@ -92,7 +92,7 @@ def check_hardware(body):
             if slot.startswith('AS') and sensor_id[:3] not in connector_config._as_sensor_codes:
                 check.errors.append(f'{where}: unknown Alphasense sensor code {sensor_id[:3]}')
                 continue
-            if slot.startswith('PT') and not AFE_BOARD_ID.match(sensor_id):
+            if slot.startswith('PT') and not AFE_BOARD_ID.fullmatch(sensor_id):
                 check.warnings.append(f'{where}: {sensor_id} does not look like an AFE board id (e.g. 10-002911)')
             if sensor_id not in calibrated:
                 check.warnings.append(f'{where}: no calibration for {sensor_id}')

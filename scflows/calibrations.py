@@ -1,8 +1,8 @@
 ''' Calibrations of Alphasense sensors and AFE boards: their fields, in the order of the Alphasense sheets, and checks '''
 import re
 
-# AFE board serials: two digits, a dash and a number (10-002911, 12-000445, 17-...). Alphasense sensors are numbers
-AFE_BOARD_ID = re.compile(r'^\d{2}-\d+$')
+# AFE board serials: two digits, a dash and six digits (10-002911, 12-000445, 17-...), matched whole. Alphasense sensors are numbers
+AFE_BOARD_ID = re.compile(r'[0-9]{2}-[0-9]{6}')
 
 # (field, label) in the order of the Alphasense calibration sheet, in groups
 ALPHASENSE_GROUPS = [
@@ -56,7 +56,7 @@ def groups(kind):
 def kind_for_id(sensor_id):
     ''' Kind of calibration a sensor id needs, from its form '''
     from .models import Calibration
-    return Calibration.AFE_BOARD if AFE_BOARD_ID.match(sensor_id or '') else Calibration.ALPHASENSE_SENSOR
+    return Calibration.AFE_BOARD if AFE_BOARD_ID.fullmatch(sensor_id or '') else Calibration.ALPHASENSE_SENSOR
 
 
 def sensor_type(sensor_id):

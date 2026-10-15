@@ -70,9 +70,10 @@
     <div class="card">
         <div class="card-header"><h2>Values</h2></div>
         <div class="card-body">
-            {% macro value_field(field, label) %}
+            {# context: read by screen readers before the label (e.g. "WE sensitivity" before "nA/ppb") #}
+            {% macro value_field(field, label, context=None) %}
                 <div class="field">
-                    <label for="{{ field }}">{{ label }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
+                    <label for="{{ field }}">{% if context %}<span class="sr-only">{{ context }} </span>{% endif %}{{ label }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
                     <input class="input mono" id="{{ field }}" name="{{ field }}" value="{{ data.get(field, '') }}" inputmode="decimal">
                     <span class="hint mono">{{ field }}</span>
                 </div>
@@ -98,9 +99,9 @@
                 {% for label, na_field, mv_field in sensitivity_rows %}
                 <div class="relation" data-relation data-na="{{ na_field }}" data-mv="{{ mv_field }}">
                     <span class="relation-title">{{ label }}</span>
-                    {{ value_field(na_field, 'nA/ppb') }}
+                    {{ value_field(na_field, 'nA/ppb', label) }}
                     <span class="relation-op" aria-hidden="true">× <span class="mono" data-gain-value>{{ data.get('pcb_gain_mv_na', '') or 'gain' }}</span> =</span>
-                    {{ value_field(mv_field, 'mV/ppb') }}
+                    {{ value_field(mv_field, 'mV/ppb', label) }}
                     <span class="hint relation-expected" data-expected aria-live="polite"></span>
                 </div>
                 {% endfor %}

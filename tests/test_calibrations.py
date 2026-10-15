@@ -301,3 +301,10 @@ def test_non_finite_values_are_rejected(value):
     # A derivable value is treated as empty, and derived
     data, _ = calibrations.complete(dict(GOOD, we_electronic_zero_mv=value))
     assert data['we_electronic_zero_mv'] == 342
+
+
+def test_sensitivity_fields_are_labelled_with_their_row(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert '<label for="we_sensitivity_na_ppb"><span class="sr-only">WE sensitivity </span>nA/ppb' in page
+    assert '<label for="we_cross_sensitivity_no2_mv_ppb"><span class="sr-only">NO2 cross sensitivity </span>mV/ppb' in page

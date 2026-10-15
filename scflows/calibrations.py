@@ -67,7 +67,7 @@ def sensor_type(sensor_id):
     '''
     from smartcitizen_connector._config import config
     sensor_id = sensor_id or ''
-    if AFE_BOARD_ID.match(sensor_id):
+    if AFE_BOARD_ID.fullmatch(sensor_id):
         code = sensor_id.split('-')[0]
         if code in getattr(config, '_afe_board_codes', ()):
             return 'AFE board', f'Alphasense AFE board, for A-series sensors with a PT1000 (code {code})'

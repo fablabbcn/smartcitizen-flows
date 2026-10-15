@@ -39,11 +39,11 @@ def index():
 @editors_required
 def device(device_id):
     if not health.can_see_device(current_user.identity, device_id):
-        abort(403, 'Researchers can only see the health of their devices.')
+        abort(403, 'Researchers can only see the health of their devices')
     items = health.history(device_id)
     long_items = health.history(device_id, limit=20, task=Job.LONG)
     if not items and not long_items:
-        abort(404, 'No health checks for this device yet: they run when the device is processed.')
+        abort(404, 'No health checks for this device yet: they run when the device is processed')
     if not items:
         items = long_items
     selected = items[0]

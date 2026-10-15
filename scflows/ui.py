@@ -36,14 +36,14 @@ OPTIONAL_CALIBRATION_FIELDS = {name for schema in (AlphasenseCalibration, AfeCal
 
 def check_visible(kind, key):
     if not can_see(current_user.identity, kind, key):
-        abort(403, 'Researchers can only see the hardware of their devices and the calibrations of its sensors.')
+        abort(403, 'Researchers can only see the hardware of their devices and the calibrations of its sensors')
 
 
 def get_or_404(kind, key):
     ''' The item, if it exists and the user can see it. Only admins can change it (POST) '''
     check_visible(kind, key)
     if request.method == 'POST' and not current_user.is_admin:
-        abort(403, 'Only admins can change metadata.')
+        abort(403, 'Only admins can change metadata')
     item = editing.find(kind, key)
     if item is None:
         abort(404)
@@ -311,7 +311,7 @@ def edit_parameters(name):
         return render_parameters(name, json.dumps(item.channels, indent=2) if item else '{}',
                                  item.description if item else '')
     if not current_user.is_admin:
-        abort(403, 'Only admins can change metadata.')
+        abort(403, 'Only admins can change metadata')
     text, description = request.form.get('channels', ''), request.form.get('description', '').strip()
     try:
         editing.save_parameter_set(name, {'channels': json.loads(text or '{}'), 'description': description or None},

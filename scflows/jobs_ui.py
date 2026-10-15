@@ -6,11 +6,16 @@ from . import db, devices
 from .auth import admin_required
 from .forms import protect
 from .jobs import (add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
-                   sync_running)
+                   sync_running, sync_summary)
 from .models import DeviceHealth, Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
 protect(jobs_ui)
+
+
+@jobs_ui.app_template_filter('sync_summary')
+def sync_summary_filter(report):
+    return sync_summary(report)
 
 
 @jobs_ui.app_template_filter('storage_link')

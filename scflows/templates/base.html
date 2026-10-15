@@ -43,7 +43,7 @@
                 <span class="clock" data-clock></span>
                 <button class="theme-switch" type="button" data-theme-switch title="Theme: follow the system, light or dark">Auto</button>
                 {% if current_user.is_authenticated %}
-                <span><span class="user">{{ current_user.username }}</span> · {{ current_user.role }}</span>
+                <span><span class="user" title="{{ current_user.username }}">{{ current_user.username }}</span><span class="role"> · {{ current_user.role }}</span></span>
                 <a href="{{ url_for('auth.logout') }}">Log out</a>
                 {% else %}
                 <a href="{{ url_for('auth.login') }}">Sign in</a>

@@ -23,8 +23,8 @@
         <div class="card-header">
             <nav class="segmented" aria-label="Status">
                 <a href="{{ url_for('health_ui.index') }}" {% if not status %}aria-current="page"{% endif %}>All<span class="count">{{ total + unchecked | length }}</span></a>
-                {% for name in ['problem', 'warning', 'ok', 'error'] %}
-                <a href="{{ url_for('health_ui.index', status=name) }}" {% if status == name %}aria-current="page"{% endif %}>{{ name | capitalize }}<span class="count">{{ counts[name] }}</span></a>
+                {% for name, label in [('problem', 'Problem'), ('warning', 'Warning'), ('ok', 'OK'), ('error', 'Check error')] %}
+                <a href="{{ url_for('health_ui.index', status=name) }}" {% if status == name %}aria-current="page"{% endif %}>{{ label }}<span class="count">{{ counts[name] }}</span></a>
                 {% endfor %}
             </nav>
             <span class="hint">Problem: {{ (problem_ratio * 100) | int }}% or more flagged. History of {{ keep_days }} days.</span>

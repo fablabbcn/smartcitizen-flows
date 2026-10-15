@@ -113,7 +113,7 @@
 {% if not new %}
 {% if uncalibrated %}
 <section class="section">
-    <div class="alert warning">Sensor ids without calibration in flows: {% for sensor_id in uncalibrated %}{{ calibration_link(sensor_id, False) }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+    <div class="alert warning">Sensor ids without calibration in flows: {% for sensor_id in uncalibrated %}{{ calibration_link(sensor_id, False, badge=False) }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
 </section>
 {% endif %}
 {{ devices_section(devices) }}

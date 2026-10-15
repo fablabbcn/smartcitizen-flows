@@ -6,7 +6,7 @@
 <div class="breadcrumbs"><a href="{{ url_for('jobs_ui.index') }}">Jobs</a>{% if run.device_id %}<span><a href="{{ url_for('jobs_ui.device', device_id=run.device_id) }}">{{ name or 'Device' }} #{{ run.device_id }}</a></span>{% endif %}<span>Run #{{ run.id }}</span></div>
 <div class="page-header">
     <div>
-        <h1 class="row">{% if run.device_id %}{{ run.task | capitalize }} {{ name or 'device' }} <span class="muted">#{{ run.device_id }}</span>{% else %}{{ run.task | capitalize }} of the jobs{% endif %} {{ badge(run.state) }}{% if run.dry_run %} <span class="badge plain">dry run</span>{% endif %}</h1>
+        <h1 class="row">{% if run.device_id %}{{ run.task | capitalize }} {{ name or 'device' }} <span class="muted">#{{ run.device_id }}</span>{% else %}Sync with the Smart Citizen API{% endif %} {{ badge(run.state) }}{% if run.dry_run %} <span class="badge plain">dry run</span>{% endif %}</h1>
         <p class="subtitle">{{ run.message or ('Waiting for a worker' if run.state == 'queued' else 'Running' if run.state == 'running' else '') }}{% if run.state in ('queued', 'running') %} · refreshes every 5 seconds{% endif %}</p>
     </div>
     <div class="actions">

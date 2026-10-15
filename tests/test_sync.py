@@ -46,7 +46,7 @@ def test_sync_is_a_run_with_its_log(app, redis, report):
 
     [run] = sync_runs()
     assert (run.state, run.device_id, run.username) == ('success', None, 'oscar')
-    assert run.message == 'process 2 created, 0 enabled, 1 disabled'
+    assert run.message == 'process 2 created, 1 disabled'
     assert 'info: Sync requested by oscar' in run.log and 'info: 120 devices with postprocessing' in run.log
     assert run.started_at and run.finished_at and jobs.last_sync()['run_id'] == run.id
 
@@ -117,10 +117,10 @@ def test_sync_now_button(app, client, redis, report, queued, monkeypatch):
     # The worker commits in its own session
     db.session.expire_all()
     page = client.get('/jobs/').get_data(as_text=True)
-    assert '(admin)' in page and 'process 2 created, 0 enabled, 1 disabled' in page
+    assert '(admin)' in page and 'process 2 created, 1 disabled' in page
     assert f'/jobs/runs/{run.id}' in page
     page = client.get(f'/jobs/runs/{run.id}').get_data(as_text=True)
-    assert 'Sync of the jobs' in page and 'Sync requested by admin' in page and 'Device page' not in page
+    assert 'Sync with the Smart Citizen API' in page and 'Sync requested by admin' in page and 'Device page' not in page
 
     redis.set(jobs.SYNC_LOCK, 'other')
     page = client.post('/jobs/sync', data={'csrf': 'token'}, follow_redirects=True).get_data(as_text=True)
@@ -176,3 +176,9 @@ def test_sync_that_cannot_be_queued_fails(app, client, redis, monkeypatch):
 
     assert run.state == 'failed' and run.message.startswith('NOT_QUEUED: ConnectionError')
     assert not jobs.sync_running()
+
+
+def test_summary_leaves_out_zeros():
+    assert jobs.sync_summary({'process': {'created': 0, 'enabled': 2, 'disabled': 0},
+                              'backup': {'created': 0, 'enabled': 0, 'disabled': 0}}) == 'process 2 enabled'
+    assert jobs.sync_summary({'process': {'created': 0, 'enabled': 0, 'disabled': 0}}) == 'no changes'

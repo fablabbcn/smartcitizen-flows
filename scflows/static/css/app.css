@@ -534,14 +534,25 @@ details > summary:hover { text-decoration: underline; }
 
 @media (max-width: 760px) {
   :root { --gutter: var(--space-4); }
-  .topbar-inner { height: auto; flex-wrap: wrap; gap: 0 var(--space-3); padding-top: var(--space-2); }
-  .tabs { order: 3; width: 100%; overflow-x: auto; }
+  /* Two rows: brand and account, then the tabs (the first one lined up with the brand) */
+  .topbar-inner { height: auto; flex-wrap: wrap; gap: 0 var(--space-3); }
+  .brand, .topbar-end { min-height: 48px; }
+  .topbar-end { gap: var(--space-3); min-width: 0; }
+  .topbar-end .user { display: inline-block; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  .topbar nav { order: 3; width: calc(100% + var(--space-3)); margin-left: calc(-1 * var(--space-3)); overflow-x: auto; }
   .tabs a { padding: var(--space-3); }
   .topbar-end .clock { display: none; }
   .page { padding-top: var(--space-5); }
   .details { grid-template-columns: 1fr; gap: 0; }
   .details dd { margin-bottom: var(--space-2); }
   .log-line { grid-template-columns: 2.5rem 4.5rem 1fr; }
+}
+
+@media (max-width: 480px) {
+  .topbar-end .role { display: none; }
+}
+@media (max-width: 360px) {
+  .brand span { display: none; }
 }
 
 /* Groups form sections without a visible box (disabled for read only forms) */

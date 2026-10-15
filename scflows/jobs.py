@@ -540,8 +540,13 @@ class RunLog(logging.Handler):
 
 
 def sync_summary(report):
-    return ' · '.join(f'{task} {counts["created"]} created, {counts["enabled"]} enabled, {counts["disabled"]} disabled'
-                      for task, counts in report.items())
+    ''' "process 2 created, 1 disabled · backup 1 enabled", or "no changes" '''
+    parts = []
+    for task, counts in report.items():
+        changes = ', '.join(f'{counts[change]} {change}' for change in ('created', 'enabled', 'disabled') if counts.get(change))
+        if changes:
+            parts.append(f'{task} {changes}')
+    return ' · '.join(parts) or 'no changes'
 
 
 def queue_sync(username):

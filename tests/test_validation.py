@@ -55,6 +55,32 @@ def test_unknown_slot_and_sensor_code(hardware):
     ]
 
 
+def test_afe_board_in_an_as_slot(hardware):
+    hardware['versions'][0]['ids'] = {'AS_48_32': '212830246', 'AS_49_32': '10-002911'}
+
+    check = check_hardware(hardware)
+
+    assert check.valid
+    # Its PT1000, as in a PT slot, with the channels in the AS slot order
+    assert 'versions.0.ids.AS_49_32: channels not in blueprint test_air: ASPT1000, PT1000_POS' in check.warnings
+
+
+def test_two_afe_boards_in_a_version(hardware):
+    hardware['versions'][0]['ids']['AS_49_10'] = '17-000123'
+
+    check = check_hardware(hardware)
+
+    assert check.valid
+    assert 'versions.0.ids: AFE boards in PT_49_23, AS_49_10, only one fills the PT1000 temperature (ASPT1000)' \
+        in check.warnings
+
+
+def test_slot_channels_of_an_afe_board_in_an_as_slot():
+    from scflows.validation import slot_channels
+
+    assert slot_channels('AS_49_32', '17-000123') == ['ASPT1000', 'PT1000_POS']
+
+
 def test_short_sensor_id(hardware):
     hardware['versions'][0]['ids'] = {'AS_48_32': ''}
 

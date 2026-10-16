@@ -66,7 +66,7 @@
         <div class="section-header">
             <div>
                 <h2>Versions</h2>
-                {% if not readonly %}<p class="hint">One slot per line: <code>AS_48_32=212830246</code> for an Alphasense sensor, <code>PT_49_23=10-002911</code> for an AFE board. Leave "To" empty for the current version.</p>{% endif %}
+                {% if not readonly %}<p class="hint">One slot per line: <code>AS_48_32=212830246</code> for an Alphasense sensor, <code>PT_49_23=10-002911</code> or <code>AS_49_32=17-000123</code> for an AFE board (its PT1000 gives the sensor temperature). Leave "To" empty for the current version.</p>{% endif %}
             </div>
         </div>
         <input type="hidden" name="version_count" value="{{ data.versions | length }}">

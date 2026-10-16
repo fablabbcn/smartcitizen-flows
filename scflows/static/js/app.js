@@ -185,8 +185,8 @@
           var slot = parts[0].trim(), id = parts[1].trim(), found = describe(id);
           if (!found) return;
           var item = document.createElement('li');
-          var problem = found.warning || (slot.indexOf('PT') === 0 && !found.afe ? 'a PT slot needs an AFE board id'
-            : slot.indexOf('AS') === 0 && found.afe ? 'an AS slot needs an Alphasense sensor id' : null);
+          // AS slots hold an Alphasense sensor or an AFE board (its PT1000), PT slots an AFE board
+          var problem = found.warning || (slot.indexOf('PT') === 0 && !found.afe ? 'a PT slot needs an AFE board id' : null);
           item.textContent = slot + ' ' + id + ': ' + (found.label || '') + (problem ? (found.label ? ' · ' : '') + problem : '');
           if (found.title) item.title = found.title;
           if (problem) item.className = 'warning-text';

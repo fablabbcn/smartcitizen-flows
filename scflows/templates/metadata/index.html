@@ -51,19 +51,20 @@
     </div>
 
     <div id="calibrations" role="tabpanel" data-table>
-        {{ table_tools('Filter by sensor id or kind') }}
+        {{ table_tools('Filter by sensor id, kind or order') }}
         <div class="table-wrap scroll">
             <table class="table">
-                <thead><tr><th data-sort>Sensor id</th><th data-sort>Kind</th><th data-sort>Updated</th></tr></thead>
+                <thead><tr><th data-sort>Sensor id</th><th data-sort>Kind</th><th data-sort>Order</th><th data-sort>Updated</th></tr></thead>
                 <tbody>
                 {% for item in calibrations %}
                     <tr>
                         <td class="mono"><a href="{{ url_for('ui.edit_calibration', sensor_id=item.sensor_id) }}">{{ item.sensor_id }}</a></td>
                         <td>{{ kind_label(item.kind) }}</td>
+                        <td class="mono small">{{ item.order_number or '' }}</td>
                         <td class="nowrap">{{ item.updated_at.strftime('%Y-%m-%d') }}</td>
                     </tr>
                 {% else %}
-                    <tr><td colspan="3" class="empty">{{ "No calibrations yet" if current_user.is_admin else "No calibrations for the sensors of your hardware" }}</td></tr>
+                    <tr><td colspan="4" class="empty">{{ "No calibrations yet" if current_user.is_admin else "No calibrations for the sensors of your hardware" }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

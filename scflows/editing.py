@@ -98,18 +98,30 @@ def save_hardware(name, hardware, identity=None, action=None):
     return item, before is None
 
 
-def save_calibration(sensor_id, data, identity=None, action=None):
-    ''' Creates or replaces a calibration. Raises pydantic.ValidationError if invalid '''
+KEEP = object()
+
+
+def save_calibration(sensor_id, data, identity=None, action=None, order_number=KEEP):
+    '''
+    Creates or replaces a calibration. order_number: a string, None to remove it, or KEEP (imports and data only).
+    Raises pydantic.ValidationError if invalid, ValueError if the order number is too long
+    '''
     kind = validate_calibration(data)
+    if isinstance(order_number, str):
+        order_number = order_number.strip() or None
+    if isinstance(order_number, str) and len(order_number) > 64:
+        raise ValueError('order_number: 64 characters at most')
     item = find('calibration', sensor_id)
-    before = item.to_json() if item else None
+    before = item.history_json() if item else None
     if item is None:
         item = Calibration(sensor_id=sensor_id)
         db.session.add(item)
     item.kind = kind
     item.data = data
-    record('calibration', sensor_id, action or (Revision.UPDATE if before else Revision.CREATE), before, data,
-           identity)
+    if order_number is not KEEP:
+        item.order_number = order_number
+    record('calibration', sensor_id, action or (Revision.UPDATE if before else Revision.CREATE), before,
+           item.history_json(), identity)
     return item, before is None
 
 
@@ -178,7 +190,7 @@ def delete(kind, key, identity=None):
                                           .order_by(Hardware.name)).scalars())
         if used_by:
             raise BlueprintInUse(used_by)
-    record(kind, key, Revision.DELETE, item.to_json(), None, identity)
+    record(kind, key, Revision.DELETE, item.history_json() if kind == 'calibration' else item.to_json(), None, identity)
     db.session.delete(item)
     return True
 

@@ -18,6 +18,7 @@ from .identity import EDITORS
 from .models import Blueprint as BlueprintModel, Calibration, ParameterSet, SensorName
 from .parameters import sensor_types
 from .names import used_by_blueprints
+from . import calibrations
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
 
@@ -183,10 +184,11 @@ def calibration_from_form(form, kind):
     return data
 
 
-def render_calibration(sensor_id, kind, data, errors=None, new=False):
+def render_calibration(sensor_id, kind, data, errors=None, new=False, order_number=None):
     return render_template('metadata/calibration.html', sensor_id=sensor_id, kind=kind, data=data,
-                           fields=CALIBRATION_FIELDS[kind], optional=OPTIONAL_CALIBRATION_FIELDS,
+                           groups=calibrations.groups(kind), optional=OPTIONAL_CALIBRATION_FIELDS,
                            kinds=list(CALIBRATION_FIELDS), errors=errors or [], new=new,
+                           warnings=calibrations.warnings(data) if data else [], order_number=order_number,
                            readonly=not current_user.is_admin, **calibration_usage(sensor_id, new))
 
 
@@ -202,11 +204,13 @@ def calibration_usage(sensor_id, new):
 @ui.route('/calibrations/new', methods=['GET', 'POST'])
 @admin_required
 def new_calibration():
-    kind = request.values.get('kind', Calibration.ALPHASENSE_SENSOR)
+    # AFE board ids (10-002911, 17-...) open the AFE board form
+    kind = request.values.get('kind') or calibrations.kind_for_id(request.values.get('sensor_id', '').strip())
     if kind not in CALIBRATION_FIELDS:
         abort(400)
     if request.method == 'GET' or request.form.get('action') == 'change_kind':
-        return render_calibration(request.values.get('sensor_id', ''), kind, {}, new=True)
+        return render_calibration(request.values.get('sensor_id', '').strip(), kind, {}, new=True,
+                                  order_number=request.values.get('order_number'))
     return save_calibration_form(request.form.get('sensor_id', '').strip(), kind, new=True)
 
 
@@ -215,12 +219,13 @@ def new_calibration():
 def edit_calibration(sensor_id):
     item = get_or_404('calibration', sensor_id)
     if request.method == 'GET':
-        return render_calibration(sensor_id, item.kind, item.data)
+        return render_calibration(sensor_id, item.kind, item.data, order_number=item.order_number)
     return save_calibration_form(sensor_id, item.kind)
 
 
 def save_calibration_form(sensor_id, kind, new=False):
     data = calibration_from_form(request.form, kind)
+    order_number = request.form.get('order_number', '')
     errors = []
     if new and not valid_key(sensor_id):
         errors.append('sensor id: letters, numbers, "_" and "-" only (64 characters at most)')
@@ -228,15 +233,20 @@ def save_calibration_form(sensor_id, kind, new=False):
         errors.append(f'sensor id: {sensor_id} already exists')
     if not errors:
         try:
-            editing.save_calibration(sensor_id, data, identity=current_user.identity)
+            editing.save_calibration(sensor_id, data, identity=current_user.identity, order_number=order_number)
         except ValidationError as error:
             db.session.rollback()
             errors = [f"{'.'.join(str(part) for part in item['loc']) or 'body'}: {item['msg']}"
                       for item in error.errors()]
+        except ValueError as error:
+            db.session.rollback()
+            errors = [str(error)]
     if errors:
-        return render_calibration(sensor_id, kind, data, errors, new=new)
+        return render_calibration(sensor_id, kind, data, errors, new=new, order_number=order_number)
     db.session.commit()
-    flash(f'Calibration {sensor_id} saved')
+    found = calibrations.warnings(data)
+    flash(f'Calibration {sensor_id} saved' + (f' with {len(found)} warnings' if found else ''),
+          'warning' if found else 'info')
     return redirect(url_for('ui.edit_calibration', sensor_id=sensor_id))
 
 

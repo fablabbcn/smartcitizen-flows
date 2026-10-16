@@ -8,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span></h1>
-        <p class="subtitle">{{ 'Values from the Alphasense sensor sheet.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}</p>
+        <p class="subtitle">{{ 'Values from the Alphasense sensor sheet, in its order.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}{% if order_number and not new %} Order <span class="mono">{{ order_number }}</span>.{% endif %}</p>
     </div>
     {% if not new %}
     <div class="actions">
@@ -18,6 +18,11 @@
     {% endif %}
 </div>
 {% include "metadata/_messages.html" %}
+{% if warnings %}
+<div class="alerts" role="status">
+    {% for warning in warnings %}<div class="alert warning">{{ warning }}</div>{% endfor %}
+</div>
+{% endif %}
 {% if readonly %}<div class="alerts"><div class="alert info">Read only: only admins can change metadata.</div></div>{% endif %}
 
 <form method="POST">
@@ -39,20 +44,41 @@
                     </select>
                     <button class="btn" name="action" value="change_kind" formnovalidate>Change</button>
                 </div>
+                <p class="hint">AFE board ids look like 10-002911 (also 12-, 17-…); Alphasense sensor ids are numbers.</p>
+            </div>
+            <div class="field">
+                <label for="order_number">Order number <span class="optional">(optional)</span></label>
+                <input class="input mono" id="order_number" name="order_number" value="{{ order_number or '' }}" maxlength="64">
             </div>
         </div>
     </div>
     {% else %}
     <input type="hidden" name="kind" value="{{ kind }}">
+    <div class="card">
+        <div class="card-header"><h2>Details</h2></div>
+        <div class="card-body form-grid">
+            <div class="field">
+                <label for="order_number">Order number <span class="optional">(optional)</span></label>
+                <input class="input mono" id="order_number" name="order_number" value="{{ order_number or '' }}" maxlength="64">
+                <p class="hint">The Alphasense order the sensor came with. Kept in the history, not used by processing.</p>
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     <div class="card">
         <div class="card-header"><h2>Values</h2></div>
-        <div class="card-body form-grid">
-            {% for field in fields %}
-            <div class="field">
-                <label for="{{ field }}" class="mono">{{ field }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
-                <input class="input mono" id="{{ field }}" name="{{ field }}" value="{{ data.get(field, '') }}">
+        <div class="card-body">
+            {% for title, fields in groups %}
+            <h3 class="group-title">{{ title }}</h3>
+            <div class="form-grid cols-3">
+                {% for field, label in fields %}
+                <div class="field">
+                    <label for="{{ field }}">{{ label }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
+                    <input class="input mono" id="{{ field }}" name="{{ field }}" value="{{ data.get(field, '') }}" inputmode="decimal">
+                    <span class="hint mono">{{ field }}</span>
+                </div>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>

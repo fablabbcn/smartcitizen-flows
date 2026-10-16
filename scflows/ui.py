@@ -326,7 +326,7 @@ def save_calibration_form(sensor_id, kind, new=False):
     db.session.commit()
     found = calibrations.warnings(data, sensor_id)
     flash(f'Calibration {sensor_id} saved' + (f' with {len(found)} warnings' if found else '')
-          + (f'. Worked out: ' + ', '.join(f'{field} ({how})' for field, how in filled) if filled else ''),
+          + (f'. Derived: ' + ', '.join(f'{field} ({how})' for field, how in filled) if filled else ''),
           'warning' if found else 'info')
     return redirect(url_for('ui.edit_calibration', sensor_id=sensor_id))
 

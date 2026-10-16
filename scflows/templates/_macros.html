@@ -86,7 +86,7 @@
 
 {% macro calibration_link(sensor_id, calibrated=True, badge=True) -%}
 {%- if calibrated %}<a class="mono" href="{{ url_for('ui.edit_calibration', sensor_id=sensor_id) }}">{{ sensor_id }}</a>
-{%- elif current_user.is_admin %}<a class="mono" href="{{ url_for('ui.new_calibration', sensor_id=sensor_id) }}" title="No calibration in flows: add it">{{ sensor_id }}</a>{% if badge %} <span class="badge warning">no calibration</span>{% endif %}
+{%- elif current_user.is_admin %}<a class="mono" href="{{ url_for('ui.new_calibration', sensor_id=sensor_id) }}" title="No calibration in flows. Add one">{{ sensor_id }}</a>{% if badge %} <span class="badge warning">no calibration</span>{% endif %}
 {%- else %}<span class="mono">{{ sensor_id }}</span>{% if badge %} <span class="badge warning">no calibration</span>{% endif %}{% endif -%}
 {%- endmacro %}
 

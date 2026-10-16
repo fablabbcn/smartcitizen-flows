@@ -2,7 +2,7 @@ import scdata as sc
 
 import sys
 import asyncio
-from scflows.config import config
+from scflows.config import config, posting_enabled
 from scflows.custom_logger import logger
 from scflows.tasks.context import describe, device_context, iso, library_warnings
 from scflows.tools import refresh_metadata
@@ -46,6 +46,11 @@ async def process_device(device, dry_run, task_log, context):
         return f'{level}: {msg}'
 
     logger_handler(f'Processing instance for device {device}')
+
+    # Results are posted with the token of a Smart Citizen admin: without one (e.g. a local stack), only dry runs
+    if not dry_run and not posting_enabled():
+        task_log.append(logger_handler('SC_BEARER is not set: posting is disabled. Only dry runs can process devices.', 'error'))
+        return task_log, ['ABORTED', 'NO_TOKEN'], None
 
     # Create device from SC API
     # Changes made in flows (calibrations, blueprints) apply without restarting the worker

@@ -16,7 +16,7 @@
                         {% if current_user.is_admin %}<td>{% for job in item.jobs %}<span class="nowrap">{{ job.task }} {{ job_status(job) }}</span>{% if not loop.last %} · {% endif %}{% endfor %}</td>{% endif %}
                     </tr>
                 {% else %}
-                    <tr><td colspan="3" class="empty">No devices with jobs{% if not current_user.is_admin %} that you own{% endif %}. The sync sets the hardware of each device.</td></tr>
+                    <tr><td colspan="3" class="empty">{% if current_user.is_admin %}No devices with jobs{% else %}None of your devices with jobs{% endif %}. The hardware of each device is set by the sync.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

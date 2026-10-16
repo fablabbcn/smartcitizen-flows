@@ -5,7 +5,7 @@
 <div class="page-header">
     <div>
         <h1>Device health</h1>
-        <p class="subtitle">The checks of each blueprint (gaps, implausible and flat values, outliers) on the data of every processing run.{% if not current_user.is_admin %} Your devices.{% endif %}</p>
+        <p class="subtitle">Results of the blueprint checks (gaps, implausible and flat values, outliers) for each processing run.{% if not current_user.is_admin %} Showing your devices only.{% endif %}</p>
     </div>
 </div>
 
@@ -61,11 +61,11 @@
                     <tr>
                         <td><a href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device</a> <span class="muted small">#{{ device_id }}</span></td>
                         <td data-value="-1"><span class="badge plain">not checked</span></td>
-                        <td colspan="4" class="muted small">No checks yet: they run when the device is processed (it needs hardware in flows).</td>
+                        <td colspan="4" class="muted small">Not checked yet. Checks run when the device is processed, which requires its hardware in flows.</td>
                     </tr>
                 {% endfor %}
                 {% if not items and not unchecked %}
-                    <tr><td colspan="6" class="empty">{{ 'No devices with this status' if status else 'No health checks yet: they run with every processing run.' }}</td></tr>
+                    <tr><td colspan="6" class="empty">{{ 'No devices with this status' if status else 'No health checks yet. Checks run with every processing run.' }}</td></tr>
                 {% endif %}
                 </tbody>
             </table>

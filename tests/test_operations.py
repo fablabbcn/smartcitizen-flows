@@ -183,7 +183,7 @@ def test_pause_and_resume_a_selection(client, several):
     assert paused() == {('process', 2), ('backup', 2)}
 
     client.post('/jobs/selection', data={'csrf': 'token', 'action': 'pause', 'job_id': selection})
-    assert 'Paused 1 jobs (2 already were)' in client.get('/jobs/').get_data(as_text=True)
+    assert 'Paused 1 jobs (2 already paused)' in client.get('/jobs/').get_data(as_text=True)
 
 
 def test_selection_needs_jobs_and_an_action(client, several):
@@ -193,7 +193,7 @@ def test_selection_needs_jobs_and_an_action(client, several):
     client.post('/jobs/selection', data={'csrf': 'token', 'action': 'delete', 'job_id': [several[('process', 1)]]})
 
     assert paused() == set()
-    assert 'Tick the jobs to pause or resume' in client.get('/jobs/').get_data(as_text=True)
+    assert 'Select at least one job to pause or resume' in client.get('/jobs/').get_data(as_text=True)
 
 
 def test_jobs_table_has_selection_boxes(client, several):
@@ -258,6 +258,14 @@ def test_actions_only_go_back_to_jobs_pages(client, process_job, target):
     sign_in(client, 'admin')
     response = client.post(f'/jobs/{process_job.id}/pause', data={'csrf': 'token', 'next': target})
     assert response.headers['Location'].endswith('/jobs/')
+
+
+def test_jobs_page_says_when_posting_is_disabled(client, process_job, monkeypatch):
+    sign_in(client, 'admin')
+    monkeypatch.setenv('SC_BEARER', '')
+    assert 'Posting is disabled' in client.get('/jobs/').get_data(as_text=True)
+    monkeypatch.setenv('SC_BEARER', 'token')
+    assert 'Posting is disabled' not in client.get('/jobs/').get_data(as_text=True)
 
 
 def test_backups_have_no_dry_run(client, process_job, queued):

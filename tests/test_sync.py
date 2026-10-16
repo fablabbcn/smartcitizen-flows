@@ -187,4 +187,4 @@ def test_summary_leaves_out_zeros():
 def test_jobs_page_states_the_schedules(app, client, redis):
     sign_in(client, 'admin')
     page = client.get('/jobs/').get_data(as_text=True)
-    assert 'processed every 3 h, backed up every 6 h' in page and 'every 7 days unless its long blueprint says otherwise' in page
+    assert 'processed every 3 h and backed up every 6 h' in page and 'runs every 7 days unless the long blueprint sets another interval' in page

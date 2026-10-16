@@ -54,14 +54,14 @@ def test_consistent_values_have_no_warnings():
 
 def test_sensitivity_must_match_the_gain():
     [warning] = calibrations.warnings(dict(GOOD, we_sensitivity_mv_ppb=0.42))
-    assert warning == ('WE sensitivity: 0.42 mV/ppb, but -0.42 nA/ppb × -0.73 mV/nA gives 0.3066 mV/ppb '
-                       '(more than 1% apart)')
+    assert warning == ('WE sensitivity: 0.42 mV/ppb differs by more than 1% from -0.42 nA/ppb × -0.73 mV/nA '
+                       '= 0.3066 mV/ppb')
     assert calibrations.warnings(dict(GOOD, we_cross_sensitivity_no2_mv_ppb=0.1))[0].startswith('NO2 cross sensitivity')
 
 
 def test_total_zero_must_add_up():
     [warning] = calibrations.warnings(dict(GOOD, we_total_zero_mv=390))
-    assert warning == 'WE total zero: 390 mV, but electronic 342.2 + sensor 36 gives 378.2 mV (more than 2 mV apart)'
+    assert warning == 'WE total zero: 390 mV differs by more than 2 mV from electronic 342.2 + sensor 36 = 378.2 mV'
     # Within 2 mV (sheets round the totals)
     assert calibrations.warnings(dict(GOOD, ae_total_zero_mv=345.5)) == []
 
@@ -193,7 +193,7 @@ def test_usual_gain_by_type(sensor_id, gain):
 def test_gain_must_be_the_usual_one_for_the_type():
     # GOOD has a -0.73 gain: right for an NO2 sensor, wrong for a CO sensor
     assert calibrations.warnings(GOOD, '212830246') == []
-    assert 'PCB gain: -0.73 mV/nA, but CO-B4 sensors have 0.8 mV/nA' in calibrations.warnings(GOOD, '162031254')
+    assert 'PCB gain: -0.73 mV/nA; expected 0.8 mV/nA for CO-B4' in calibrations.warnings(GOOD, '162031254')
     # Without the id (or for NO), the gain is not checked
     assert calibrations.warnings(GOOD) == [] and calibrations.warnings(GOOD, '160000001') == []
 
@@ -203,7 +203,7 @@ def test_form_shows_the_sensitivities_through_the_gain(client):
     page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
     assert 'data-relation data-na="we_sensitivity_na_ppb" data-mv="we_sensitivity_mv_ppb"' in page
     assert 'data-relation data-na="we_cross_sensitivity_no2_na_ppb" data-mv="we_cross_sensitivity_no2_mv_ppb"' in page
-    assert 'NO2-A43F sensors have -0.73' in page
+    assert 'Expected for NO2-A43F: -0.73' in page
 
 
 def test_list_flags_calibrations_with_warnings(client):
@@ -213,7 +213,7 @@ def test_list_flags_calibrations_with_warnings(client):
     db.session.commit()
 
     listing = client.get('/metadata/').get_data(as_text=True)
-    assert 'PCB gain: 0.8 mV/nA, but NO2-A43F sensors have -0.73 mV/nA' in listing and 'warning' in listing
+    assert 'PCB gain: 0.8 mV/nA; expected -0.73 mV/nA for NO2-A43F' in listing and 'warning' in listing
 
 
 # Values worked out from others, so that processing never gets an empty one
@@ -246,8 +246,8 @@ def test_zeros_are_worked_out_from_the_total():
 def test_values_that_cannot_be_worked_out_are_reported():
     data, _ = calibrations.complete(dict(RUN_23, we_electronic_zero_mv='', pcb_gain_mv_na=''))
     errors = calibrations.missing(data)
-    assert any(error.startswith('we_electronic_zero_mv: empty') and 'two of the WE' in error for error in errors)
-    assert any(error.startswith('we_sensitivity_na_ppb: empty') and 'nA/ppb or mV/ppb' in error for error in errors)
+    assert any(error.startswith('we_electronic_zero_mv: a numeric value is required') and 'two of the WE' in error for error in errors)
+    assert any(error.startswith('we_sensitivity_na_ppb: a numeric value is required') and 'nA/ppb or mV/ppb' in error for error in errors)
 
 
 def test_form_fills_derived_values_on_save(client):
@@ -258,7 +258,7 @@ def test_form_fills_derived_values_on_save(client):
 
     assert response.status_code == 302
     assert calibration('212830246').data['we_sensitivity_na_ppb'] == 0.40907
-    assert 'Worked out: we_sensitivity_na_ppb (WE sensitivity: mV/ppb ÷ PCB gain)' in client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert 'Derived: we_sensitivity_na_ppb (WE sensitivity: mV/ppb ÷ PCB gain)' in client.get('/metadata/calibrations/212830246').get_data(as_text=True)
 
 
 def test_form_rejects_values_processing_cannot_use(client):
@@ -268,7 +268,7 @@ def test_form_rejects_values_processing_cannot_use(client):
 
     page = client.post('/metadata/calibrations/212830246', data=data).get_data(as_text=True)
 
-    assert 'we_electronic_zero_mv: empty or not a number' in page
+    assert 'we_electronic_zero_mv: a numeric value is required for processing' in page
     # Nothing saved
     assert calibration('212830246').data == before
 
@@ -289,8 +289,8 @@ def test_incomplete_calibrations_are_flagged(client):
     db.session.commit()
 
     page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
-    assert 'we_sensitivity_na_ppb: empty or not a number, and processing needs it' in page
-    assert 'we_sensitivity_na_ppb: empty or not a number' in client.get('/metadata/').get_data(as_text=True)
+    assert 'we_sensitivity_na_ppb: a numeric value is required for processing' in page
+    assert 'we_sensitivity_na_ppb: a numeric value is required for processing' in client.get('/metadata/').get_data(as_text=True)
 
 
 @pytest.mark.parametrize('value', ['nan', 'inf', '-inf', float('nan'), float('inf')])

@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1>Parameters of <span class="mono">{{ name }}</span></h1>
-        <p class="subtitle">Long processing of every device with a {{ name }} sensor uses these values over those of its long blueprint. {% if exists %}{% else %}None yet: the blueprint values apply.{% endif %}</p>
+        <p class="subtitle">Long processing of every device with a {{ name }} sensor uses these values over those of its long blueprint. {% if exists %}{% else %}None set: the blueprint values apply.{% endif %}</p>
     </div>
     {% if exists %}
     <div class="actions">
@@ -46,7 +46,7 @@
     <div class="card-body">
         <div>
             <h3>Delete parameters</h3>
-            <p class="hint">Devices with {{ name }} sensors go back to the values of the blueprint on their next long run.</p>
+            <p class="hint">Devices with {{ name }} sensors revert to the blueprint values on their next long run.</p>
         </div>
         <form method="POST" action="{{ url_for('ui.delete', kind='parameters', key=name) }}" data-confirm="Delete the parameters of {{ name }}?">
             {{ csrf() }}

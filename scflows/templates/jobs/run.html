@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1 class="row">{% if run.device_id %}{{ run.task | capitalize }} {{ name or 'device' }} <span class="muted">#{{ run.device_id }}</span>{% else %}Sync with the Smart Citizen API{% endif %} {{ badge(run.state) }}{% if run.dry_run %} <span class="badge plain">dry run</span>{% endif %}</h1>
-        <p class="subtitle">{{ run.message or ('Waiting for a worker' if run.state == 'queued' else 'Running' if run.state == 'running' else '') }}{% if run.state in ('queued', 'running') %} · refreshes every 5 seconds{% endif %}</p>
+        <p class="subtitle">{{ run.message or ('Queued, waiting for a worker' if run.state == 'queued' else 'Running' if run.state == 'running' else '') }}{% if run.state in ('queued', 'running') %} · refreshes every 5 seconds{% endif %}</p>
     </div>
     <div class="actions">
         {% if run.device_id %}<a class="btn" href="{{ url_for('jobs_ui.device', device_id=run.device_id) }}">Device in flows</a>
@@ -33,28 +33,28 @@
 {% set listing = context.listing or {} %}
 <section class="section">
     <div class="card">
-        <div class="card-header"><h2>What the sync saw</h2></div>
+        <div class="card-header"><h2>Sync summary</h2></div>
         <div class="card-body">
             <dl class="details">
-                <dt>Listing</dt><dd>{{ listing.devices }} devices with postprocessing in the Smart Citizen API{% if listing.total is not none %}, which counts {{ listing.total }}{% endif %}{% if not listing.complete %} {{ badge('warning', 'incomplete') }} no job was disabled{% endif %}</dd>
+                <dt>Listing</dt><dd>{{ listing.devices }}{% if listing.total is not none %} of {{ listing.total }}{% endif %} devices with postprocessing in the Smart Citizen API{% if not listing.complete %} {{ badge('warning', 'incomplete') }} No jobs were disabled.{% endif %}</dd>
                 {% for task, changed in (context.changes or {}).items() %}
                 <dt>{{ task | capitalize }}</dt><dd>{% for change, ids in changed.items() %}{% if ids %}<details><summary>{{ ids | length }} {{ change }}</summary>{% for device_id in ids %}{{ device_link(device_id, names.get(device_id)) }}{% if not loop.last %}, {% endif %}{% endfor %}</details>{% endif %}{% endfor %}{% if not changed.values() | select | list %}<span class="muted">no changes</span>{% endif %}</dd>
                 {% endfor %}
             </dl>
-            <p class="hint">Why each device qualifies or not is in the log, and on its device page.</p>
+            <p class="hint">The log and each device page give the reason a device has, or does not have, each job.</p>
         </div>
     </div>
 </section>
 {% elif context %}
 <section class="section">
     <div class="card">
-        <div class="card-header"><h2>What the run used</h2></div>
+        <div class="card-header"><h2>Run details</h2></div>
         <div class="card-body">
             <dl class="details">
                 {% if context.device_name %}<dt>Device</dt><dd>{{ context.device_name }}, last reading {{ short_time(context.last_reading_at) or '–' }}</dd>{% endif %}
                 <dt>Hardware</dt><dd>{% if context.hardware %}{{ hardware_link(context.hardware) if hardware_in_flows else context.hardware }}{% if context.blueprints %} <span class="muted small">blueprints</span> {% for blueprint in context.blueprints %}{{ blueprint_link(blueprint) }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}{% else %}<span class="muted">not in flows</span>{% if context.hardware_url %} <span class="mono small">{{ context.hardware_url }}</span>{% endif %}{% endif %}</dd>
                 {% if context.versions %}<dt>Sensor ids</dt><dd>{{ versions_list(context.versions, calibrated) }}</dd>{% endif %}
-                {% if context.blueprint %}<dt>Blueprint</dt><dd>{{ blueprint_link(context.blueprint) }}{% if context.parameter_sets %} <span class="muted small">parameters of</span> {% for item in context.parameter_sets %}<a class="mono" href="{{ url_for('ui.edit_parameters', name=item) }}">{{ item }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</dd>{% endif %}
+                {% if context.blueprint %}<dt>Blueprint</dt><dd>{{ blueprint_link(context.blueprint) }}{% if context.parameter_sets %} <span class="muted small">parameter sets</span> {% for item in context.parameter_sets %}<a class="mono" href="{{ url_for('ui.edit_parameters', name=item) }}">{{ item }}</a>{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</dd>{% endif %}
                 {% if run.task == 'process' %}
                 <dt>Requested</dt><dd>from {{ short_time(context.min_date) or 'the first reading' }}{% if context.limit %}, at most {{ context.limit }} readings{% endif %}{% if context.sensors %} <span class="muted small">sensors</span> {{ context.sensors | join(', ') }}{% endif %}</dd>
                 {% if context.rows is defined %}<dt>Loaded</dt><dd>{{ context.rows }} rows, {{ period(context.loaded_from, context.loaded_to) }}</dd>{% endif %}
@@ -65,7 +65,7 @@
                 {% if context.min_date or context.max_date %}<dt>Period</dt><dd>{{ period(context.min_date, context.max_date) }}{% if context.mode %} <span class="muted small">{{ context.mode }}</span>{% endif %}{% if context.rows is defined %}, {{ context.rows }} rows{% endif %}</dd>{% endif %}
                 <dt>Backed up until</dt><dd>{{ short_time(context.last_requested_data) or 'nothing yet' }}{% if context.new_last_requested_data %} → {{ short_time(context.new_last_requested_data) }}{% endif %}</dd>
                 {% elif run.task == 'long' %}
-                {% if context.backup and context.backup.storage %}<dt>Backup first</dt><dd>{{ storage(context.backup.storage) }}{% if context.backup.new_last_requested_data %}, until {{ short_time(context.backup.new_last_requested_data) }}{% endif %}</dd>{% endif %}
+                {% if context.backup and context.backup.storage %}<dt>Prior backup</dt><dd>{{ storage(context.backup.storage) }}{% if context.backup.new_last_requested_data %}, until {{ short_time(context.backup.new_last_requested_data) }}{% endif %}</dd>{% endif %}
                 {% if context.start %}<dt>Window</dt><dd>{{ period(context.start, context.end) }}{% if context.storage %}, from {{ storage(context.storage) }}{% endif %}{% if context.rows is defined %}, {{ context.rows }} rows{% endif %}</dd>{% endif %}
                 {% if context.channels %}<dt>Channels</dt><dd>{{ context.channels | join(', ') }}</dd>{% endif %}
                 {% if context.results %}<dt>Results</dt><dd>{{ storage(context.results) }}{% if context.months %} <span class="muted small">months</span> {{ context.months | join(', ') }}{% endif %}</dd>{% endif %}

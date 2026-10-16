@@ -31,7 +31,7 @@
             <div class="field full">
                 <label for="name">Name</label>
                 <input class="input mono" id="name" name="name" value="{{ name }}" placeholder="SCD4X_CO2" required>
-                <span class="hint">As the blueprints write it. The firmware short title (lib/Sensors/Sensors.h) for new sensors.</span>
+                <span class="hint">As written in the blueprints. The firmware short title (lib/Sensors/Sensors.h) for new sensors.</span>
             </div>
             {% endif %}
             <div class="field">
@@ -42,7 +42,7 @@
             <div class="field">
                 <label for="unit">Unit</label>
                 <input class="input mono" id="unit" name="unit" value="{{ data.unit }}">
-                <span class="hint">Processing converts readings with it (e.g. ppm, ppb).</span>
+                <span class="hint">Used by processing to convert readings (e.g. ppm, ppb).</span>
             </div>
             <div class="field full">
                 <label for="description">Description</label>
@@ -64,7 +64,7 @@
     <div class="card-body">
         <div>
             <h3>Delete name</h3>
-            <p class="hint">{% if used %}The blueprint{{ 's' if used | length > 1 }} {{ used | join(', ') }} use{{ 's' if used | length == 1 }} it: those channels stop being processed.{% elif others %}Sensor {{ data.id }} is then processed as {{ (others | reject('equalto', name) | list)[0] }}. The history is kept.{% else %}Readings of sensor {{ data.id }} keep their API name. The history is kept.{% endif %}</p>
+            <p class="hint">{% if used %}The blueprint{{ 's' if used | length > 1 }} {{ used | join(', ') }} use{{ 's' if used | length == 1 }} it; those channels will no longer be processed.{% elif others %}Sensor {{ data.id }} is then processed as {{ (others | reject('equalto', name) | list)[0] }}. The history is kept.{% else %}Readings of sensor {{ data.id }} keep their API name. The history is kept.{% endif %}</p>
         </div>
         <form method="POST" action="{{ url_for('ui.delete', kind='name', key=name) }}" data-confirm="Delete name {{ name }}?">
             {{ csrf() }}

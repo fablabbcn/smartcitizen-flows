@@ -4,7 +4,7 @@
 {% block content %}
 <section class="hero">
     <h1>Smart Citizen Flows</h1>
-    <p>Processes and backs up Smart Citizen devices, and keeps the hardware, blueprints and calibrations they use.</p>
+    <p>Processing and backups of Smart Citizen devices, and the hardware, blueprints and calibrations they depend on.</p>
     {% if not current_user.is_authenticated %}
     <a class="btn primary" href="{{ url_for('auth.login') }}">Sign in</a>
     {% endif %}
@@ -15,7 +15,7 @@
     {% if jobs is not none %}
     <a class="card section-card" href="{{ url_for('jobs_ui.index') }}">
         <h2>Jobs</h2>
-        <p>Scheduled processing and backups per device. Run them now, pause or resume them.</p>
+        <p>Scheduled processing and backups per device, with manual runs, pause and resume.</p>
         <div class="figures">
             {{ badge('active', jobs.active ~ ' active') }}
             {{ badge('paused', jobs.paused ~ ' paused') }}
@@ -44,7 +44,7 @@
     </a>
     <a class="card section-card" href="{{ url_for('api.index') }}">
         <h2>API</h2>
-        <p>Read hardware, blueprints and calibrations as JSON. Editing needs a Smart Citizen token.</p>
+        <p>Read hardware, blueprints and calibrations as JSON. Changes require a Smart Citizen admin token.</p>
         <div class="figures"><code>/api/v1/</code></div>
     </a>
 </div>

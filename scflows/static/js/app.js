@@ -156,7 +156,7 @@
         if (!found) return;
         var text = found.label ? found.label + ' · ' + found.title : found.warning;
         if (kind && (found.afe ? 'afe_board' : 'alphasense_sensor') !== kind.value) {
-          text += ': choose ' + (found.afe ? 'AFE board' : 'Alphasense sensor') + ' and press Change';
+          text += '. Select ' + (found.afe ? 'AFE board' : 'Alphasense sensor') + ' as kind and press Change';
           hint.classList.add('warning-text');
         }
         if (found.warning) hint.classList.add('warning-text');
@@ -219,7 +219,7 @@
         var expected = na * gain;
         out.textContent = round(na) + ' × ' + round(gain) + ' = ' + round(expected) + ' mV/ppb';
         if (mv !== null && Math.abs(mv - expected) > 0.01 * Math.max(Math.abs(expected), Math.abs(mv))) {
-          out.textContent += ', not ' + round(mv) + ' (more than 1% apart)';
+          out.textContent += '; the value entered (' + round(mv) + ') differs by more than 1%';
           out.classList.add('warning-text');
         }
       });
@@ -227,7 +227,7 @@
       if (gainHint) {
         var off = usual !== null && gain !== null && Math.abs(gain - usual) > 0.005;
         gainHint.textContent = usual === null ? 'pcb_gain_mv_na'
-          : gainBox.getAttribute('data-gain-model') + ' sensors have ' + round(usual) + (off ? ', not ' + round(gain) : '');
+          : 'Expected for ' + gainBox.getAttribute('data-gain-model') + ': ' + round(usual) + (off ? ' (entered: ' + round(gain) + ')' : '');
         gainHint.classList.toggle('warning-text', off);
         gainHint.classList.toggle('mono', usual === null);
       }
@@ -242,7 +242,7 @@
       var input = byId(id);
       input.value = value;
       input.classList.add('auto-filled');
-      input.title = 'Worked out: ' + how;
+      input.title = 'Derived: ' + how;
       auto[id] = true;
     };
     var unmark = function (id, clear) {

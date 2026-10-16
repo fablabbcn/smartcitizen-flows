@@ -47,7 +47,7 @@ def test_jobs_table_links_devices_and_hardware(client):
 
     assert 'href="/jobs/devices/1"' in text and 'href="/metadata/hardware/SCAS_TEST1"' in text
     # SCAS_TEST2 mounts 202760040, without calibration
-    assert '1 uncal.' in text and '202760040' in text
+    assert '1 uncalibrated' in text and '202760040' in text
 
 
 def test_device_page(client):
@@ -77,7 +77,7 @@ def test_hardware_page_lists_its_devices(client):
     # Researchers see their own devices, linked to their health
     sign_in(client, 'researcher', hardware=['SCAS_TEST1', 'SCAS_TEST2'], devices=[])
     text = page(client, '/metadata/hardware/SCAS_TEST2')
-    assert 'Balcony' not in text and 'that you own' in text
+    assert 'Balcony' not in text and 'None of your devices with jobs' in text
     sign_in(client, 'researcher', hardware=['SCAS_TEST2'], devices=[2])
     assert 'href="/health/2"' in page(client, '/metadata/hardware/SCAS_TEST2')
 
@@ -108,7 +108,7 @@ def test_run_page_shows_what_the_run_used(client):
 
     text = page(client, f'/jobs/runs/{run.id}')
 
-    assert 'What the run used' in text and 'href="/metadata/hardware/SCAS_TEST2"' in text
+    assert 'Run details' in text and 'href="/metadata/hardware/SCAS_TEST2"' in text
     assert 'href="/jobs/devices/2"' in text and 'no calibration' in text
     assert 'https://s3.console.aws.amazon.com/s3/buckets/bucket?prefix=devices/2/' in text
 
@@ -203,9 +203,9 @@ def test_sync_run_page_shows_the_listing_and_changes(client):
     sign_in(client, 'admin')
 
     text = page(client, f'/jobs/runs/{run.id}')
-    assert 'What the sync saw' in text and 'which counts 3' in text and 'incomplete' in text
+    assert 'Sync summary' in text and '2 of 3 devices' in text and 'incomplete' in text
     assert '1 created' in text and 'href="/jobs/devices/1">Rooftop' in text and 'no changes' in text
-    assert 'What the run used' not in text
+    assert 'Run details' not in text
 
 
 def test_sync_run_keeps_what_it_saw(app, monkeypatch):

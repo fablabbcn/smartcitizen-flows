@@ -276,7 +276,7 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | `DOMAIN` | `flows.smartcitizen.me` | **No scheme.** Caddy requests the certificate for this name. Compose refuses to start without it. |
 | `PUBLIC_URL` | `https://flows.smartcitizen.me` | **With** the scheme. Used in links: the API root, lists, and the `blueprint_url` inside each hardware, which the connector follows. Without it, links are built from the request as seen behind Caddy, which is `http://`. It also makes the session cookie `Secure`. |
 | `BASE_POSTPROCESSING_URL` | `https://flows.smartcitizen.me/api/v1/` | **With the trailing slash.** Where smartcitizen-connector and scdata read hardware, blueprints and calibrations. Without it, processing silently reads them from GitHub instead of flows. |
-| `SC_BEARER` | The API token of a Smart Citizen **admin** | Processing posts the processed data with it, and the hourly sync searches devices and users with it. |
+| `SC_BEARER` | The API token of a Smart Citizen **admin** | Processing posts the processed data with it, and the hourly sync searches devices and users with it. Without it, processing runs are aborted with `NO_TOKEN` (dry runs still process), and `/jobs/` shows that posting is disabled. |
 | `FLASK_DEBUG` | `0` | Flask 3 applies `1` under gunicorn too: debug mode in production. |
 | `S3_DATA_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | The backup bucket and its credentials | Backups write raw device data there. boto3 reads `AWS_DEFAULT_REGION`: an old `AWS_REGION` alone is not enough. |
 

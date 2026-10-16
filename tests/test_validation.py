@@ -81,6 +81,14 @@ def test_slot_channels_of_an_afe_board_in_an_as_slot():
     assert slot_channels('AS_49_32', '17-000123') == ['ASPT1000', 'PT1000_POS']
 
 
+@pytest.mark.parametrize('slot', ['ASX_48_32', 'AS_48', 'AS_48_3', 'PT_49_23_1'])
+def test_slots_are_checked_whole(hardware, slot):
+    hardware['versions'][0]['ids'] = {slot: '212830246'}
+
+    assert check_hardware(hardware).errors == [
+        f'versions.0.ids.{slot}: unknown slot, expected AS_<address>_<channels> or PT_<address>_<channels>']
+
+
 def test_short_sensor_id(hardware):
     hardware['versions'][0]['ids'] = {'AS_48_32': ''}
 

@@ -1,4 +1,5 @@
 ''' Checks of hardware descriptions against what processing needs '''
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -8,6 +9,10 @@ from . import db
 from .calibrations import AFE_BOARD_ID, warnings as calibration_warnings
 from .models import Blueprint, Calibration
 from .schemas import HardwareIn
+
+
+# Hardware slots, as processing reads them: AS_<address>_<channels> or PT_<address>_<channels>, e.g. AS_4A_01
+SLOT = re.compile(r'(AS|PT)_[0-9a-fA-F]{2}_[0-9]{2}')
 
 
 @dataclass
@@ -95,7 +100,7 @@ def check_hardware(body):
         for slot, sensor_id in version.ids.items():
             where = f'versions.{index}.ids.{slot}'
             afe = slot in afe_slots
-            if slot[:2] not in ('AS', 'PT') or len(slot.split('_')) != 3:
+            if not SLOT.fullmatch(slot):
                 check.errors.append(f'{where}: unknown slot, expected AS_<address>_<channels> or PT_<address>_<channels>')
                 continue
             if slot.startswith('AS') and not afe and len(sensor_id) < 3:

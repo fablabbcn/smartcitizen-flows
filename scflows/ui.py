@@ -20,7 +20,7 @@ from .identity import EDITORS
 from .models import Blueprint as BlueprintModel, Calibration, ParameterSet, SensorName
 from .parameters import sensor_types
 from .names import used_by_blueprints
-from . import attachments, calibrations
+from . import attachments, calibrations, runlog
 from .schemas import AfeCalibration, AlphasenseCalibration
 from .validation import check_hardware
 
@@ -69,6 +69,12 @@ def valid_key(key):
 @ui.context_processor
 def sensor_codes():
     return {'sensor_codes': calibrations.code_table}
+
+
+@ui.app_template_filter('log_line')
+def log_line_filter(line):
+    ''' (time, level, message) of a line of the log of a run '''
+    return runlog.parse(line)
 
 
 @ui.app_template_filter('sensor_type')

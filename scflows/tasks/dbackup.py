@@ -11,6 +11,7 @@ import botocore
 
 from scflows.config import config
 from scflows.custom_logger import logger
+from scflows.runlog import log_line
 from scflows.tasks.context import describe, device_context, iso, library_warnings
 from scflows.tools import refresh_metadata
 
@@ -31,7 +32,7 @@ async def dbackup(device, up_to_date=False, context=None):
         except Exception as error:
             # The run keeps the log up to the error
             logger.exception(f'Backing up device {device} raised')
-            task_log.append(f'error: {type(error).__name__}: {error}')
+            task_log.append(log_line('error', f'{type(error).__name__}: {error}'))
             return task_log, ['FAILED', f'{type(error).__name__}: {error}']
 
 
@@ -50,7 +51,7 @@ async def back_up_device(device, up_to_date, task_log, context):
             logger.warning(msg)
         elif level == 'error':
             logger.error(msg)
-        return f'{level}: {msg}'
+        return log_line(level, msg)
 
     logger_handler(f'Backup instance for device {device}')
 

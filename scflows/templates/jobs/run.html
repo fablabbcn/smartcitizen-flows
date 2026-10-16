@@ -91,9 +91,8 @@
         </div>
         <div class="log" id="log" data-filter="all">
             {% for line in run.log or [] %}
-            {% set level, separator, message = line.partition(': ') %}
-            {% if not separator or level not in ('info', 'warning', 'error', 'debug') %}{% set level, message = '', line %}{% endif %}
-            <div class="log-line {{ level }}" data-text="{{ line }}"><span class="log-level">{{ level }}</span><span class="log-message">{{ message }}</span></div>
+            {% set stamp, level, message = line | log_line %}
+            <div class="log-line {{ level }}" data-text="{{ line }}">{% if stamp %}<time class="log-time" datetime="{{ stamp | replace(' ', 'T') }}Z" title="{{ stamp }} UTC">{{ stamp[11:] }}</time>{% else %}<span class="log-time"></span>{% endif %}<span class="log-level">{{ level }}</span><span class="log-message">{{ message }}</span></div>
             {% else %}
             <div class="empty">{{ 'No log yet' if run.state in ('queued', 'running') else 'No log' }}</div>
             {% endfor %}

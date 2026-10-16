@@ -20,6 +20,7 @@ from . import db, health, locks
 from .config import config
 from .custom_logger import logger
 from .models import Job, JobRun
+from .runlog import log_line, unstamped
 
 jobs_cli = AppGroup('jobs', help='Device jobs (processing and backups)')
 
@@ -527,7 +528,7 @@ SYNC_LOCK_SECONDS = 30 * 60
 
 
 class RunLog(logging.Handler):
-    ''' Log lines of a run, as runs keep them ("level: message") '''
+    ''' Log lines of a run, as runs keep them ("<time> level: message") '''
     def __init__(self, level=logging.INFO):
         super().__init__(level)
         self.lines = []
@@ -536,7 +537,7 @@ class RunLog(logging.Handler):
         message = record.getMessage()
         if record.exc_info and record.exc_info[1] is not None:
             message += f' ({type(record.exc_info[1]).__name__}: {record.exc_info[1]})'
-        self.lines.append(f'{record.levelname.lower()}: {message}')
+        self.lines.append(log_line(record.levelname.lower(), message, record.created))
 
 
 def sync_summary(report):
@@ -625,7 +626,8 @@ def run_sync(source='schedule', run_id=None):
         try:
             run = db.session.get(JobRun, run_id)
             run.state, run.message, run.finished_at = state, message, now()
-            run.log = log.lines + [line for line in warnings.lines if line not in log.lines]
+            logged = {unstamped(line) for line in log.lines}
+            run.log = log.lines + [line for line in warnings.lines if unstamped(line) not in logged]
             run.context = details or None
             db.session.commit()
             # Redis down now must not hide the result of the sync (already in the run) or its error

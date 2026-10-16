@@ -7,6 +7,7 @@ from flask import has_app_context
 from scflows import db
 from scflows.identity import hardware_name
 from scflows.models import Calibration, Hardware
+from scflows.runlog import log_line
 
 
 def iso(value):
@@ -68,7 +69,8 @@ class TaskLogHandler(logging.Handler):
     def __init__(self, task_log, level):
         super().__init__(level)
         self.task_log = task_log
-        # A message repeated (e.g. once per channel) is kept once, with a count: {line: [position, count]}
+        # A message repeated (e.g. once per channel) is kept once, at its first time, with a count:
+        # {unstamped line: [position, count, line]}
         self.seen = {}
 
     def emit(self, record):
@@ -78,15 +80,16 @@ class TaskLogHandler(logging.Handler):
         message = record.getMessage().strip()
         if record.exc_info and record.exc_info[1] is not None:
             message += f' ({type(record.exc_info[1]).__name__}: {record.exc_info[1]})'
-        line = f'{record.levelname.lower()}: [{record.name.split(".")[0]}] {message}'
-        if line in self.seen:
-            self.seen[line][1] += 1
+        key = f'{record.levelname.lower()}: [{record.name.split(".")[0]}] {message}'
+        if key in self.seen:
+            self.seen[key][1] += 1
             return
-        self.seen[line] = [len(self.task_log), 1]
+        line = log_line(record.levelname.lower(), f'[{record.name.split(".")[0]}] {message}', record.created)
+        self.seen[key] = [len(self.task_log), 1, line]
         self.task_log.append(line)
 
     def count_repeats(self):
-        for line, (position, count) in self.seen.items():
+        for position, count, line in self.seen.values():
             if count > 1 and position < len(self.task_log) and self.task_log[position] == line:
                 self.task_log[position] = f'{line} ({count} times)'
 

@@ -10,6 +10,7 @@ import scflows.jobs as jobs
 from scflows import db
 from scflows.metadata import import_metadata
 from scflows.models import Job, JobRun
+from scflows.runlog import STAMPED, unstamped
 from scflows.tasks.context import library_warnings
 
 from conftest import DATA, USERS
@@ -158,8 +159,10 @@ def test_library_warnings_go_to_the_innermost_task():
             logging.getLogger('scdata').error('cannot post')
             logging.getLogger('scdata').info('not kept')
 
-    assert outer == ['warning: [smartcitizen_connector] outer warning']
-    assert inner == ['error: [scdata] cannot post']
+    assert [unstamped(line) for line in outer] == ['warning: [smartcitizen_connector] outer warning']
+    assert [unstamped(line) for line in inner] == ['error: [scdata] cannot post']
+    # With the time they were logged
+    assert all(STAMPED.fullmatch(line) for line in outer + inner)
 
 
 def test_repeated_warnings_are_counted():
@@ -170,7 +173,7 @@ def test_repeated_warnings_are_counted():
             logging.getLogger('scdata').warning('WARNING_NULL_CHANNEL')
         task_log.append('info: done')
 
-    assert task_log == ['warning: [scdata] Requested channel is None (3 times)',
+    assert [unstamped(line) for line in task_log] == ['warning: [scdata] Requested channel is None (3 times)',
                         'warning: [scdata] WARNING_NULL_CHANNEL (3 times)', 'info: done']
 
 

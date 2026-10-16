@@ -1,4 +1,5 @@
 ''' Checks of hardware descriptions against what processing needs '''
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -8,6 +9,10 @@ from . import db
 from .calibrations import AFE_BOARD_ID, warnings as calibration_warnings
 from .models import Blueprint, Calibration
 from .schemas import HardwareIn
+
+
+# Hardware slots, as processing reads them: AS_<address>_<channels> or PT_<address>_<channels>, e.g. AS_4A_01
+SLOT = re.compile(r'(AS|PT)_[0-9a-fA-F]{2}_[0-9]{2}')
 
 
 @dataclass
@@ -25,10 +30,16 @@ class HardwareCheck:
 
 
 def slot_channels(slot, sensor_id):
-    ''' Blueprint channels that processing fills for a hardware slot, as the connector does '''
+    '''
+    Blueprint channels that processing fills for a hardware slot, as the connector does: an AFE board
+    (in an AS or a PT slot) fills its PT1000, which EC_SENSOR_TEMP uses, an Alphasense sensor its gas
+    '''
     from smartcitizen_connector.tools import get_alphasense, get_pt_temp
 
-    channels = get_alphasense(slot, sensor_id) if slot.startswith('AS') else get_pt_temp(slot, sensor_id)
+    if AFE_BOARD_ID.fullmatch(sensor_id):
+        channels = get_pt_temp('PT_' + slot.split('_', 1)[1], sensor_id)
+    else:
+        channels = get_alphasense(slot, sensor_id) if slot.startswith('AS') else get_pt_temp(slot, sensor_id)
     return [name for item in channels for name in item]
 
 
@@ -81,18 +92,24 @@ def check_hardware(body):
     calibrated = set(calibration_data)
 
     for index, version in enumerate(hardware.versions):
+        # AS slots hold an Alphasense sensor or an AFE board, PT slots an AFE board
+        afe_slots = [slot for slot, sensor_id in version.ids.items() if AFE_BOARD_ID.fullmatch(sensor_id)]
+        if len(afe_slots) > 1:
+            check.warnings.append(f'versions.{index}.ids: AFE boards in {", ".join(afe_slots)}, '
+                                  f'only one fills the PT1000 temperature (ASPT1000)')
         for slot, sensor_id in version.ids.items():
             where = f'versions.{index}.ids.{slot}'
-            if slot[:2] not in ('AS', 'PT') or len(slot.split('_')) != 3:
+            afe = slot in afe_slots
+            if not SLOT.fullmatch(slot):
                 check.errors.append(f'{where}: unknown slot, expected AS_<address>_<channels> or PT_<address>_<channels>')
                 continue
-            if slot.startswith('AS') and len(sensor_id) < 3:
+            if slot.startswith('AS') and not afe and len(sensor_id) < 3:
                 check.errors.append(f'{where}: sensor id {sensor_id!r} is too short to hold an Alphasense code')
                 continue
-            if slot.startswith('AS') and sensor_id[:3] not in connector_config._as_sensor_codes:
+            if slot.startswith('AS') and not afe and sensor_id[:3] not in connector_config._as_sensor_codes:
                 check.errors.append(f'{where}: unknown Alphasense sensor code {sensor_id[:3]}')
                 continue
-            if slot.startswith('PT') and not AFE_BOARD_ID.fullmatch(sensor_id):
+            if slot.startswith('PT') and not afe:
                 check.warnings.append(f'{where}: {sensor_id} does not look like an AFE board id (e.g. 10-002911)')
             if sensor_id not in calibrated:
                 check.warnings.append(f'{where}: no calibration for {sensor_id}')

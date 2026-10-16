@@ -90,10 +90,16 @@ Reading metadata is public (processing reads it without a token). Admins of the 
 | `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board). Optional `order_number` (string, `null` removes it): kept apart from the values, which processing reads as numbers. The response lists warnings for values that do not add up |
 | `PUT /api/v1/names/<name>` | admin | Create or replace a sensor name. New names go to the end of the list |
 | `DELETE /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>` | admin | Delete |
+| `GET /api/v1/hardware/<name>/attachments` | admin, researcher (their hardware) | Files attached to a hardware, with the url to download each |
+| `GET /api/v1/hardware/<name>/attachments/<id>` | admin, researcher (their hardware) | Download a file |
+| `POST /api/v1/hardware/<name>/attachments` | admin | Attach a file (multipart form: `file`, optional `description`): pdf, png, jpg, csv, xlsx or txt, up to 20 MB |
+| `DELETE /api/v1/hardware/<name>/attachments/<id>` | admin | Delete a file |
 | `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
 | `GET /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>/revisions` | anyone | History of changes |
 
 In the web interface, admins edit the metadata and run the jobs. Researchers sign in to see, read only, the hardware used by their devices (from the `postprocessing` of their devices when they sign in) and the calibrations of its sensors.
+
+Hardware can have files attached (certificates, calibration reports), in the hardware page or the API. They are stored next to the backups (`attachments/hardware/<name>/` in `S3_DATA_BUCKET`, or `STORAGE_ROOT`), are not public, and stay if the hardware is deleted.
 
 Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint, PT slots whose id does not look like an AFE board (`NN-NNNNNN`, e.g. 10-002911 or 17-000123), and mounted sensors whose calibration does not add up. Blueprints used by hardware cannot be deleted.
 

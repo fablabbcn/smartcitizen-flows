@@ -84,8 +84,8 @@ def index():
     parameter_sets = {item.name: item for item in db.session.execute(db.select(ParameterSet)).scalars()}
     calibration_items = visible_calibrations(identity)
     # Values that do not add up, per calibration (gain, sensitivities, zeros)
-    checks = {item.sensor_id: calibrations.warnings(item.data, item.sensor_id) for item in calibration_items
-              if item.kind == Calibration.ALPHASENSE_SENSOR}
+    checks = {item.sensor_id: calibrations.missing(item.data) + (calibrations.warnings(item.data, item.sensor_id)
+              if item.kind == Calibration.ALPHASENSE_SENSOR else []) for item in calibration_items}
     return render_template('metadata/index.html', hardware=visible_hardware(identity),
                            sensor_types=sensor_types(), parameter_sets=parameter_sets,
                            calibrations=calibration_items, names=names, used=used_by_blueprints(),
@@ -266,7 +266,8 @@ def render_calibration(sensor_id, kind, data, errors=None, new=False, order_numb
     return render_template('metadata/calibration.html', sensor_id=sensor_id, kind=kind, data=data,
                            groups=calibrations.groups(kind), optional=OPTIONAL_CALIBRATION_FIELDS,
                            kinds=list(CALIBRATION_FIELDS), errors=errors or [], new=new,
-                           warnings=calibrations.warnings(data, sensor_id) if data else [], order_number=order_number,
+                           warnings=(calibrations.missing(data) if not errors else []) + calibrations.warnings(data, sensor_id) if data else [],
+                           order_number=order_number,
                            expected_gain=calibrations.expected_gain(sensor_id), sensitivity_rows=calibrations.SENSITIVITY_ROWS,
                            readonly=not current_user.is_admin, **calibration_usage(sensor_id, new))
 
@@ -303,13 +304,13 @@ def edit_calibration(sensor_id):
 
 
 def save_calibration_form(sensor_id, kind, new=False):
-    data = calibration_from_form(request.form, kind)
+    data, filled = calibrations.complete(calibration_from_form(request.form, kind))
     order_number = request.form.get('order_number', '')
-    errors = []
+    errors = calibrations.missing(data)
     if new and not valid_key(sensor_id):
-        errors.append('sensor id: letters, numbers, "_" and "-" only (64 characters at most)')
+        errors.insert(0, 'sensor id: letters, numbers, "_" and "-" only (64 characters at most)')
     elif new and editing.find('calibration', sensor_id) is not None:
-        errors.append(f'sensor id: {sensor_id} already exists')
+        errors.insert(0, f'sensor id: {sensor_id} already exists')
     if not errors:
         try:
             editing.save_calibration(sensor_id, data, identity=current_user.identity, order_number=order_number)
@@ -324,7 +325,8 @@ def save_calibration_form(sensor_id, kind, new=False):
         return render_calibration(sensor_id, kind, data, errors, new=new, order_number=order_number)
     db.session.commit()
     found = calibrations.warnings(data, sensor_id)
-    flash(f'Calibration {sensor_id} saved' + (f' with {len(found)} warnings' if found else ''),
+    flash(f'Calibration {sensor_id} saved' + (f' with {len(found)} warnings' if found else '')
+          + (f'. Worked out: ' + ', '.join(f'{field} ({how})' for field, how in filled) if filled else ''),
           'warning' if found else 'info')
     return redirect(url_for('ui.edit_calibration', sensor_id=sensor_id))
 

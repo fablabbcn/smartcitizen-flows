@@ -11,9 +11,9 @@ from conftest import DATA, auth, served_hardware
 with open(join(DATA, 'hardware', 'SCAS_TEST1.json')) as file:
     HARDWARE = json.load(file)
 
-ALPHASENSE = {'ae_electronic_zero_mv': '', 'ae_sensor_zero_mv': -16.64, 'pcb_gain_mv_na': -0.73,
+ALPHASENSE = {'ae_electronic_zero_mv': 342.65, 'ae_sensor_zero_mv': -16.64, 'pcb_gain_mv_na': -0.73,
               'we_cross_sensitivity_no2_mv_ppb': '0', 'we_cross_sensitivity_no2_na_ppb': '0',
-              'we_electronic_zero_mv': '', 'we_sensitivity_mv_ppb': 0.414859, 'we_sensitivity_na_ppb': -0.5683,
+              'we_electronic_zero_mv': 355.56, 'we_sensitivity_mv_ppb': 0.414859, 'we_sensitivity_na_ppb': -0.5683,
               'we_sensor_zero_mv': -27.2}
 
 
@@ -54,7 +54,7 @@ def test_researchers_cannot_write(client, path, body):
 def test_creates_and_updates_calibration(client):
     response = client.put('/api/v1/calibrations/212999999', json=ALPHASENSE, headers=auth('admin-token'))
     assert response.status_code == 201
-    assert response.get_json() == {'data': ALPHASENSE, 'warnings': []}
+    assert response.get_json() == {'data': ALPHASENSE, 'warnings': [], 'filled': []}
 
     changed = dict(ALPHASENSE, we_sensitivity_na_ppb=0.6)
     response = client.put('/api/v1/calibrations/212999999.json', json=changed, headers=auth('admin-token'))

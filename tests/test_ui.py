@@ -154,12 +154,17 @@ def test_new_calibration(client):
     page = client.get('/metadata/calibrations/new?kind=afe_board').get_data(as_text=True)
     assert 'name="v20"' in page and 'name="we_sensor_zero_mv"' not in page
 
+    # Processing needs every value
+    page = client.post('/metadata/calibrations/new', data=form(sensor_id='10-000001', kind='afe_board',
+                                                                t20='20', v20='', action='save')).get_data(as_text=True)
+    assert 'v20: empty or not a number, and processing needs it' in page
+
     response = client.post('/metadata/calibrations/new', data=form(sensor_id='10-000001', kind='afe_board',
-                                                                    t20='20', v20='', action='save'))
+                                                                    t20='20', v20='0.3', action='save'))
 
     assert response.status_code == 302
     calibration = db.session.execute(db.select(Calibration).filter_by(sensor_id='10-000001')).scalar_one()
-    assert (calibration.kind, calibration.data) == ('afe_board', {'t20': 20, 'v20': ''})
+    assert (calibration.kind, calibration.data) == ('afe_board', {'t20': 20, 'v20': 0.3})
 
 
 def test_forms_require_csrf_token(client):

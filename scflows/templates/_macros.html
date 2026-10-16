@@ -16,6 +16,19 @@
 
 {% macro badge(value, label=None) %}<span class="badge {{ value }}">{{ label or value }}</span>{% endmacro %}
 
+{# Run now (with a dry run option) and pause or resume a job. next: the page to come back to #}
+{% macro job_actions(job, next=None) -%}
+<div class="row-actions">
+    <form id="run-{{ job.id }}" method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}">{{ csrf() }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}</form>
+    {% if job.task in ('process', 'long') %}<label class="check small" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run" form="run-{{ job.id }}"> Dry run</label>{% else %}<span></span>{% endif %}
+    <button class="btn sm" type="submit" form="run-{{ job.id }}">Run now</button>
+    <form method="POST" action="{{ url_for('jobs_ui.resume_job' if job.paused else 'jobs_ui.pause_job', job_id=job.id) }}">
+        {{ csrf() }}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <button class="btn sm {{ 'success' if job.paused else 'warning' }}" type="submit">{{ 'Resume' if job.paused else 'Pause' }}</button>
+    </form>
+</div>
+{%- endmacro %}
+
 {% macro job_status(job) %}
 {%- if job.paused %}{{ badge('paused') }}{% elif job.enabled %}{{ badge('active') }}{% else %}{{ badge('disabled') }}{% endif %}
 {%- if job.source == 'manual' %} <span class="badge plain">manual</span>{% endif %}

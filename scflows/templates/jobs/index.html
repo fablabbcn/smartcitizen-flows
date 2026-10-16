@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import badge, csrf, datetime, device_link, short_datetime, duration, hardware_link, job_status, table_tools with context %}
+{% from "_macros.html" import badge, csrf, datetime, device_link, short_datetime, duration, hardware_link, job_actions, job_status, table_tools with context %}
 {% block title %}Jobs{% endblock %}
 {% block content %}
 <div class="page-header">
@@ -83,15 +83,7 @@
                         <td class="nowrap">{{ job_status(job) }}</td>
                         <td class="nowrap" data-value="{{ job.next_run_at.isoformat() }}">{{ short_datetime(job.next_run_at) }}</td>
                         <td class="clip narrow" title="{{ last.message if last and last.message else '' }}">{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
-                        <td class="actions"><div class="row-actions">
-                            <form id="run-{{ job.id }}" method="POST" action="{{ url_for('jobs_ui.run_job', job_id=job.id) }}">{{ csrf() }}</form>
-                            {% if job.task in ('process', 'long') %}<label class="check small" title="Process without posting (process) or storing (long) the results"><input type="checkbox" name="dry_run" form="run-{{ job.id }}"> Dry run</label>{% else %}<span></span>{% endif %}
-                            <button class="btn sm" type="submit" form="run-{{ job.id }}">Run now</button>
-                            <form method="POST" action="{{ url_for('jobs_ui.resume_job' if job.paused else 'jobs_ui.pause_job', job_id=job.id) }}">
-                                {{ csrf() }}
-                                <button class="btn sm {{ 'success' if job.paused else 'warning' }}" type="submit">{{ 'Resume' if job.paused else 'Pause' }}</button>
-                            </form>
-                        </div></td>
+                        <td class="actions">{{ job_actions(job) }}</td>
                     </tr>
                 {% else %}
                     <tr><td colspan="8" class="empty">No jobs yet. They are created by the hourly sync, or with "Add job".</td></tr>

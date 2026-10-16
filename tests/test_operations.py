@@ -136,7 +136,7 @@ def test_interface_pause_resume(client, process_job):
 def test_interface_run_and_add_for_a_device(client, process_job, queued):
     sign_in(client, 'admin')
 
-    client.post('/jobs/run', data={'csrf': 'token', 'device_id': '42', 'task': 'backup', 'dry_run': 'on'})
+    client.post('/jobs/run', data={'csrf': 'token', 'device_id': '42', 'task': 'backup'})
     item = run(queued[0])
     assert (item.device_id, item.task, item.dry_run) == (42, 'backup', False)
 
@@ -227,3 +227,43 @@ def test_api_selection_is_validated(client, sc_me, several):
     assert client.patch('/api/v1/jobs', json={'paused': True, 'job_ids': [1]},
                         headers=auth('researcher-token')).status_code == 403
     assert paused() == set()
+
+
+# From the device page
+
+def test_device_page_runs_and_pauses_jobs(client, process_job, queued):
+    sign_in(client, 'admin')
+    page = client.get('/jobs/devices/1').get_data(as_text=True)
+    assert f'action="/jobs/{process_job.id}/run"' in page and f'action="/jobs/{process_job.id}/pause"' in page
+    assert 'name="dry_run" form="run-' in page and 'value="/jobs/devices/1"' in page
+
+    response = client.post(f'/jobs/{process_job.id}/run', data={'csrf': 'token', 'dry_run': 'on', 'next': '/jobs/devices/1'})
+    assert response.status_code == 302 and response.headers['Location'].endswith('/jobs/devices/1')
+    assert run(queued[0]).dry_run
+
+    response = client.post(f'/jobs/{process_job.id}/pause', data={'csrf': 'token', 'next': '/jobs/devices/1'})
+    assert response.headers['Location'].endswith('/jobs/devices/1') and jobs.find_job(1, 'process').paused
+    assert f'action="/jobs/{process_job.id}/resume"' in client.get('/jobs/devices/1').get_data(as_text=True)
+
+    # Any task, without a job too
+    response = client.post('/jobs/run', data={'csrf': 'token', 'device_id': '1', 'task': 'long', 'dry_run': 'on',
+                                              'next': '/jobs/devices/1'})
+    assert response.headers['Location'].endswith('/jobs/devices/1') and run(queued[-1]).task == 'long'
+
+
+@pytest.mark.parametrize('target', ['https://example.com/', '//example.com/jobs/', '/metadata/', '/jobs/\\\\example.com',
+                                    '/jobs/../', '/jobs/devices/../../metadata/', '/jobs/%2e%2e/', '/jobs/%252e%252e/',
+                                    '/jobs/./../', '/jobs/%2F%2Fexample.com'])
+def test_actions_only_go_back_to_jobs_pages(client, process_job, target):
+    sign_in(client, 'admin')
+    response = client.post(f'/jobs/{process_job.id}/pause', data={'csrf': 'token', 'next': target})
+    assert response.headers['Location'].endswith('/jobs/')
+
+
+def test_backups_have_no_dry_run(client, process_job, queued):
+    sign_in(client, 'admin')
+    page = client.post('/jobs/run', data={'csrf': 'token', 'device_id': '1', 'task': 'backup', 'dry_run': 'on',
+                                          'next': '/jobs/devices/1'}, follow_redirects=True).get_data(as_text=True)
+    assert queued == [] and 'Backups have no dry run' in page
+    client.post('/jobs/run', data={'csrf': 'token', 'device_id': '1', 'task': 'backup'})
+    assert len(queued) == 1 and not run(queued[0]).dry_run

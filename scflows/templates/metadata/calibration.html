@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import csrf, hardware_link, kind_label with context %}
+{% from "_macros.html" import csrf, hardware_link, kind_label, sensor_type with context %}
 {% from "metadata/_devices.html" import devices_section with context %}
 {% block title %}{{ 'New calibration' if new else sensor_id }}{% endblock %}
 {% block page_class %}narrow{% endblock %}
@@ -7,7 +7,7 @@
 <div class="breadcrumbs"><a href="{{ url_for('ui.index') }}#calibrations">Metadata</a><span>Calibrations</span><span>{{ 'New' if new else sensor_id }}</span></div>
 <div class="page-header">
     <div>
-        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span></h1>
+        <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span>{% if not new %} {{ sensor_type(sensor_id) }}{% endif %}</h1>
         <p class="subtitle">{{ 'Values from the Alphasense sensor sheet, in its order.' if kind == 'alphasense_sensor' else 'Values from the AFE board sheet.' }}{% if order_number and not new %} Order <span class="mono">{{ order_number }}</span>.{% endif %}</p>
     </div>
     {% if not new %}
@@ -34,7 +34,8 @@
         <div class="card-body form-grid">
             <div class="field">
                 <label for="sensor_id">Sensor id</label>
-                <input class="input mono" id="sensor_id" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required>
+                <input class="input mono" id="sensor_id" name="sensor_id" value="{{ sensor_id }}" placeholder="212830246" required autocomplete="off">
+                <p class="hint" data-sensor-type="sensor_id" data-kind="kind" aria-live="polite"></p>
             </div>
             <div class="field">
                 <label for="kind">Kind</label>
@@ -69,18 +70,42 @@
     <div class="card">
         <div class="card-header"><h2>Values</h2></div>
         <div class="card-body">
-            {% for title, fields in groups %}
-            <h3 class="group-title">{{ title }}</h3>
-            <div class="form-grid cols-3">
-                {% for field, label in fields %}
+            {# context: read by screen readers before the label (e.g. "WE sensitivity" before "nA/ppb") #}
+            {% macro value_field(field, label, context=None) %}
                 <div class="field">
-                    <label for="{{ field }}">{{ label }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
+                    <label for="{{ field }}">{% if context %}<span class="sr-only">{{ context }} </span>{% endif %}{{ label }}{% if field in optional %} <span class="optional">(optional)</span>{% endif %}</label>
                     <input class="input mono" id="{{ field }}" name="{{ field }}" value="{{ data.get(field, '') }}" inputmode="decimal">
                     <span class="hint mono">{{ field }}</span>
                 </div>
-                {% endfor %}
+            {% endmacro %}
+            {% for title, fields in groups if title not in ('Gain', 'Sensitivity') %}
+            <h3 class="group-title">{{ title }}</h3>
+            <div class="form-grid cols-3">
+                {% for field, label in fields %}{{ value_field(field, label) }}{% endfor %}
             </div>
             {% endfor %}
+            {% if kind == 'alphasense_sensor' %}
+            {# The PCB gain turns sensitivities in nA/ppb into mV/ppb: shown as the relation it is #}
+            <h3 class="group-title">Gain and sensitivity</h3>
+            <div class="form-grid cols-3" data-gain-check="{{ expected_gain[0] if expected_gain else '' }}" data-gain-model="{{ expected_gain[1] if expected_gain else '' }}">
+                <div class="field">
+                    <label for="pcb_gain_mv_na">PCB gain (mV/nA)</label>
+                    <input class="input mono" id="pcb_gain_mv_na" name="pcb_gain_mv_na" value="{{ data.get('pcb_gain_mv_na', '') }}" inputmode="decimal">
+                    <span class="hint" data-gain-hint>{% if expected_gain %}{{ expected_gain[1] }} sensors have {{ expected_gain[0] }}{% else %}<span class="mono">pcb_gain_mv_na</span>{% endif %}</span>
+                </div>
+            </div>
+            <div class="relation-rows">
+                {% for label, na_field, mv_field in sensitivity_rows %}
+                <div class="relation" data-relation data-na="{{ na_field }}" data-mv="{{ mv_field }}">
+                    <span class="relation-title">{{ label }}</span>
+                    {{ value_field(na_field, 'nA/ppb', label) }}
+                    <span class="relation-op" aria-hidden="true">× <span class="mono" data-gain-value>{{ data.get('pcb_gain_mv_na', '') or 'gain' }}</span> =</span>
+                    {{ value_field(mv_field, 'mV/ppb', label) }}
+                    <span class="hint relation-expected" data-expected aria-live="polite"></span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -128,4 +153,5 @@
     </div>
 </div>
 {% endif %}
+<script type="application/json" id="sensor-codes">{{ sensor_codes() | tojson }}</script>
 {% endblock %}

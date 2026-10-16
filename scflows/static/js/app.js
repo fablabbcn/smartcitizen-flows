@@ -126,6 +126,118 @@
     update();
   });
 
+  // Sensor ids: the Alphasense type from the code of the id (the table comes from smartcitizen-connector), as typed
+  var codesElement = document.getElementById('sensor-codes');
+  var codes = null;
+  try { codes = codesElement ? JSON.parse(codesElement.textContent) : null; } catch (error) {}
+  var describe = function (id) {
+    id = (id || '').trim();
+    if (!id) return null;
+    var afe = /^([0-9]{2})-[0-9]{6}$/.exec(id);
+    if (afe) {
+      return codes.afe.indexOf(afe[1]) !== -1 ? { label: 'AFE board', title: 'Alphasense AFE board, for A-series sensors with a PT1000 (code ' + afe[1] + ')', afe: true }
+        : { warning: 'AFE board id with an unknown code ' + afe[1], afe: true };
+    }
+    // An AFE board id being typed (fewer than six digits after the dash), or one with the wrong length
+    if (/^[0-9]{2}(-[0-9]{0,5})?$/.test(id) || id.length < 3) return null;
+    if (/^[0-9]{2}-/.test(id)) return { warning: 'AFE board ids have six digits after the dash (e.g. 10-002911)', afe: true };
+    var found = codes.sensors[id.slice(0, 3)];
+    return found ? { label: found[0], title: found[1], gain: found[2], afe: false } : { warning: 'Unknown Alphasense code ' + id.slice(0, 3), afe: false };
+  };
+  if (codes) {
+    // New calibration: the type under the id, and whether it needs the other form
+    document.querySelectorAll('[data-sensor-type]').forEach(function (hint) {
+      var input = document.getElementById(hint.getAttribute('data-sensor-type'));
+      var kind = document.getElementById(hint.getAttribute('data-kind'));
+      var update = function () {
+        var found = describe(input.value);
+        hint.textContent = '';
+        hint.classList.remove('warning-text');
+        if (!found) return;
+        var text = found.label ? found.label + ' · ' + found.title : found.warning;
+        if (kind && (found.afe ? 'afe_board' : 'alphasense_sensor') !== kind.value) {
+          text += ': choose ' + (found.afe ? 'AFE board' : 'Alphasense sensor') + ' and press Change';
+          hint.classList.add('warning-text');
+        }
+        if (found.warning) hint.classList.add('warning-text');
+        hint.textContent = text;
+        // The usual PCB gain of this type, for the gain check below
+        var gainBox = document.querySelector('[data-gain-check]');
+        var gainField = document.getElementById('pcb_gain_mv_na');
+        if (gainBox && gainField && !found.afe) {
+          gainBox.setAttribute('data-gain-check', found.gain === null || found.gain === undefined ? '' : found.gain);
+          gainBox.setAttribute('data-gain-model', found.label || '');
+          gainField.dispatchEvent(new Event('input'));
+        }
+      };
+      input.addEventListener('input', update);
+      if (kind) kind.addEventListener('change', update);
+      update();
+    });
+    // Hardware versions: the type of each slot, line by line
+    document.querySelectorAll('[data-slot-types]').forEach(function (list) {
+      var area = document.getElementById(list.getAttribute('data-slot-types'));
+      var update = function () {
+        list.textContent = '';
+        area.value.split('\n').forEach(function (line) {
+          var parts = line.split('=');
+          if (parts.length !== 2 || !parts[1].trim()) return;
+          var slot = parts[0].trim(), id = parts[1].trim(), found = describe(id);
+          if (!found) return;
+          var item = document.createElement('li');
+          var problem = found.warning || (slot.indexOf('PT') === 0 && !found.afe ? 'a PT slot needs an AFE board id'
+            : slot.indexOf('AS') === 0 && found.afe ? 'an AS slot needs an Alphasense sensor id' : null);
+          item.textContent = slot + ' ' + id + ': ' + (found.label || '') + (problem ? (found.label ? ' · ' : '') + problem : '');
+          if (found.title) item.title = found.title;
+          if (problem) item.className = 'warning-text';
+          list.appendChild(item);
+        });
+      };
+      area.addEventListener('input', update);
+      update();
+    });
+  }
+
+  // Calibrations: mV/ppb = nA/ppb × PCB gain, worked out as the values are typed, and the usual gain of the sensor type
+  var gainInput = document.getElementById('pcb_gain_mv_na');
+  if (gainInput) {
+    var gainBox = document.querySelector('[data-gain-check]');
+    var gainHint = document.querySelector('[data-gain-hint]');
+    // As the server: only whole numbers count ("-0.73abc" is not -0.73), and blanks are empty
+    var number = function (value) { var parsed = value.trim() === '' ? NaN : Number(value); return isFinite(parsed) ? parsed : null; };
+    var round = function (value) { return parseFloat(value.toPrecision(4)).toString(); };
+    var updateRelations = function () {
+      var gain = number(gainInput.value);
+      document.querySelectorAll('[data-gain-value]').forEach(function (item) { item.textContent = gain === null ? 'gain' : gainInput.value.trim(); });
+      document.querySelectorAll('[data-relation]').forEach(function (row) {
+        var na = number(document.getElementById(row.getAttribute('data-na')).value);
+        var mv = number(document.getElementById(row.getAttribute('data-mv')).value);
+        var out = row.querySelector('[data-expected]');
+        out.textContent = '';
+        out.classList.remove('warning-text');
+        if (gain === null || na === null) return;
+        var expected = na * gain;
+        out.textContent = round(na) + ' × ' + round(gain) + ' = ' + round(expected) + ' mV/ppb';
+        if (mv !== null && Math.abs(mv - expected) > 0.01 * Math.max(Math.abs(expected), Math.abs(mv))) {
+          out.textContent += ', not ' + round(mv) + ' (more than 1% apart)';
+          out.classList.add('warning-text');
+        }
+      });
+      var usual = gainBox ? number(gainBox.getAttribute('data-gain-check')) : null;
+      if (gainHint) {
+        var off = usual !== null && gain !== null && Math.abs(gain - usual) > 0.005;
+        gainHint.textContent = usual === null ? 'pcb_gain_mv_na'
+          : gainBox.getAttribute('data-gain-model') + ' sensors have ' + round(usual) + (off ? ', not ' + round(gain) : '');
+        gainHint.classList.toggle('warning-text', off);
+        gainHint.classList.toggle('mono', usual === null);
+      }
+    };
+    document.querySelectorAll('[data-relation] input, #pcb_gain_mv_na').forEach(function (input) {
+      input.addEventListener('input', updateRelations);
+    });
+    updateRelations();
+  }
+
   // Tabs inside a page: panels are shown one at a time, the choice is kept in the url hash
   document.querySelectorAll('[data-tabs]').forEach(function (tabs) {
     var buttons = tabs.querySelectorAll('[data-tab]');

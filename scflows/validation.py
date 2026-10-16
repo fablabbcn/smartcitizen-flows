@@ -98,7 +98,7 @@ def check_hardware(body):
                 check.warnings.append(f'{where}: no calibration for {sensor_id}')
             else:
                 check.warnings += [f'{where}: calibration of {sensor_id}: {warning}'
-                                   for warning in calibration_warnings(calibration_data[sensor_id])]
+                                   for warning in calibration_warnings(calibration_data[sensor_id], sensor_id)]
             for blueprint in processing:
                 blueprint_channels = {channel['name'] for channel in blueprint.body.get('channels', [])}
                 missing = [channel for channel in slot_channels(slot, sensor_id) if channel not in blueprint_channels]

@@ -148,3 +148,76 @@ def test_hardware_check_flags_afe_ids_and_calibrations(client):
 
     assert 'versions.0.ids.PT_49_23: 10002911 does not look like an AFE board id (e.g. 10-002911)' in warnings
     assert any(warning.startswith('versions.0.ids.AS_48_32: calibration of 212830246: WE total zero') for warning in warnings)
+
+
+@pytest.mark.parametrize('sensor_id, label', [('164400105', 'SO2-B4'), ('134000001', 'SO2-A4'), ('212830246', 'NO2-A43F'),
+                                               ('204042163', 'OX-B431'), ('163040003', 'H2S-B4'), ('133000001', 'H2S-A4'),
+                                               ('10-002911', 'AFE board'), ('17-000123', 'AFE board')])
+def test_sensor_type_from_the_code(sensor_id, label):
+    assert calibrations.sensor_type(sensor_id)[0] == label
+
+
+def test_unknown_codes_have_no_type():
+    assert calibrations.sensor_type('73002320') is None and calibrations.sensor_type('99-000001') is None
+    assert calibrations.sensor_type('164400105')[1] == 'Alphasense B-series SO2 sensor (code 164)'
+
+
+def test_calibration_pages_show_the_type(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert 'title="Alphasense A-series NO2 sensor (code 212)">NO2-A43F</span>' in page
+    listing = client.get('/metadata/').get_data(as_text=True)
+    assert '>NO2-A43F</span>' in listing and 'AFE board' in listing
+
+
+def test_forms_carry_the_code_table(client):
+    import json, re
+    sign_in(client)
+    for path in ('/metadata/calibrations/new', '/metadata/hardware/SCAS_TEST1'):
+        page = client.get(path).get_data(as_text=True)
+        # In the page body, not in the head
+        body = page[page.index('<main'):]
+        table = json.loads(re.search(r'<script type="application/json" id="sensor-codes">(.*?)</script>', body, re.S).group(1))
+        assert table['sensors']['164'] == ['SO2-B4', 'Alphasense B-series SO2 sensor (code 164)', 0.8]
+        assert table['afe'] == ['10', '12', '17']
+
+
+@pytest.mark.parametrize('sensor_id, gain', [('162031254', 0.8), ('132000001', 0.8), ('164400105', 0.8), ('163040003', 0.8),
+                                              ('212830246', -0.73), ('204042163', -0.73), ('160000001', None),
+                                              ('10-002911', None), ('999000001', None)])
+def test_usual_gain_by_type(sensor_id, gain):
+    found = calibrations.expected_gain(sensor_id)
+    assert (found[0] if found else None) == gain
+
+
+def test_gain_must_be_the_usual_one_for_the_type():
+    # GOOD has a -0.73 gain: right for an NO2 sensor, wrong for a CO sensor
+    assert calibrations.warnings(GOOD, '212830246') == []
+    assert 'PCB gain: -0.73 mV/nA, but CO-B4 sensors have 0.8 mV/nA' in calibrations.warnings(GOOD, '162031254')
+    # Without the id (or for NO), the gain is not checked
+    assert calibrations.warnings(GOOD) == [] and calibrations.warnings(GOOD, '160000001') == []
+
+
+def test_form_shows_the_sensitivities_through_the_gain(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert 'data-relation data-na="we_sensitivity_na_ppb" data-mv="we_sensitivity_mv_ppb"' in page
+    assert 'data-relation data-na="we_cross_sensitivity_no2_na_ppb" data-mv="we_cross_sensitivity_no2_mv_ppb"' in page
+    assert 'NO2-A43F sensors have -0.73' in page
+
+
+def test_list_flags_calibrations_with_warnings(client):
+    sign_in(client)
+    item = calibration('212830246')
+    item.data = dict(GOOD, pcb_gain_mv_na=0.8)
+    db.session.commit()
+
+    listing = client.get('/metadata/').get_data(as_text=True)
+    assert 'PCB gain: 0.8 mV/nA, but NO2-A43F sensors have -0.73 mV/nA' in listing and 'warning' in listing
+
+
+def test_sensitivity_fields_are_labelled_with_their_row(client):
+    sign_in(client)
+    page = client.get('/metadata/calibrations/212830246').get_data(as_text=True)
+    assert '<label for="we_sensitivity_na_ppb"><span class="sr-only">WE sensitivity </span>nA/ppb' in page
+    assert '<label for="we_cross_sensitivity_no2_mv_ppb"><span class="sr-only">NO2 cross sensitivity </span>mV/ppb' in page

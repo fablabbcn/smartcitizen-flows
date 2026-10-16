@@ -15,6 +15,7 @@ from scflows.custom_logger import logger
 from scflows.models import Blueprint
 from scflows.parameters import apply_parameters
 from scflows.storage import month_start, root, write_processed
+from scflows.runlog import log_line, tagged
 from scflows.tasks.context import describe, device_context, device_hardware, iso, library_warnings
 from scflows.tasks.dprocess import health_checks, period
 from scflows.tools import refresh_metadata
@@ -42,7 +43,7 @@ async def back_up(device_id, logger_handler, task_log, context=None):
                                                  context=context if context is not None else {})
     finally:
         locks.release(key, token)
-    task_log += [f'backup {line}' for line in backup_log]
+    task_log += [tagged(line, 'backup') for line in backup_log]
     # No new data is fine: the backup is up to date
     return backup_state[0] == 'SUCCESS' or backup_state[1] in ('NO_NEW_DATA', 'EMPTY_DATA')
 
@@ -58,7 +59,7 @@ async def dlong(device_id, dry_run=False, context=None):
         except Exception as error:
             # The run keeps the log up to the error
             logger.exception(f'Long processing of device {device_id} raised')
-            task_log.append(f'error: {type(error).__name__}: {error}')
+            task_log.append(log_line('error', f'{type(error).__name__}: {error}'))
             return task_log, ['FAILED', f'{type(error).__name__}: {error}'], None
 
 
@@ -66,7 +67,7 @@ async def long_device(device_id, dry_run, task_log, context):
 
     def logger_handler(msg, level='info'):
         getattr(logger, level)(msg)
-        return f'{level}: {msg}'
+        return log_line(level, msg)
 
     def done(state, message, health=None):
         task_log.append(logger_handler(f'Concluded long job for {device_id}'))

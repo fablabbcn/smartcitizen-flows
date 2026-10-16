@@ -9,6 +9,7 @@ import scflows.jobs as jobs
 import scflows.worker as worker
 from scflows import db
 from scflows.models import Job, JobRun
+from scflows.runlog import unstamped
 
 from conftest import USERS, auth
 
@@ -201,15 +202,27 @@ def device_row(device_id, hardware_url, name=None, last_reading_at='2026-10-01T0
             'postprocessing': {'hardware_url': hardware_url, 'latest_postprocessing': latest}}
 
 
+class Unstamped:
+    ''' Lines of a log as they come, without their times '''
+    def __init__(self, lines):
+        self.lines = lines
+
+    def __iter__(self):
+        return (unstamped(line) for line in self.lines)
+
+    def __contains__(self, line):
+        return line in list(self)
+
+
 @pytest.fixture
 def log():
-    ''' What the sync logs, as its run keeps it '''
+    ''' What the sync logs, as its run keeps it, without the times '''
     handler = jobs.RunLog()
     previous = jobs.logger.disabled, jobs.logger.level
     jobs.logger.disabled = False
     jobs.logger.setLevel('INFO')
     jobs.logger.addHandler(handler)
-    yield handler.lines
+    yield Unstamped(handler.lines)
     jobs.logger.removeHandler(handler)
     jobs.logger.disabled, _ = previous
     jobs.logger.setLevel(previous[1])
@@ -505,6 +518,18 @@ def test_run_page_shows_log_levels(app, client):
     assert '<div class="log-line warning" data-text="warning: no data">' in page
     assert '<span class="log-message">not posted</span>' in page
     assert '<div class="log-line " data-text="plain line">' in page
+
+
+def test_run_page_shows_log_times(app, client):
+    run = make_run(state='success', log=['2026-10-16 10:15:03 warning: [scdata] no data', 'info: before the times'])
+
+    sign_in(client, 'admin')
+    page = client.get(f'/jobs/runs/{run.id}').get_data(as_text=True)
+
+    assert ('<div class="log-line warning" data-text="2026-10-16 10:15:03 warning: [scdata] no data">'
+            '<time class="log-time" datetime="2026-10-16T10:15:03Z" title="2026-10-16 10:15:03 UTC">10:15:03</time>'
+            '<span class="log-level">warning</span><span class="log-message">[scdata] no data</span>') in page
+    assert '<span class="log-time"></span><span class="log-level">info</span><span class="log-message">before the times</span>' in page
 
 
 def test_overview_figures(app, client):

@@ -7,6 +7,7 @@ import pytest
 
 import scflows.tasks.dprocess as dprocess_module
 from scflows.config import config
+from scflows.runlog import STAMPED, unstamped
 from scflows.tasks.dprocess import dprocess
 
 LATEST = datetime(2025, 11, 28, tzinfo=timezone.utc)
@@ -173,6 +174,8 @@ def test_context_says_what_the_run_used(monkeypatch, refreshed):
     context = {}
 
     log, state, _ = asyncio.run(dprocess(1, dry_run=True, context=context))
+    assert all(STAMPED.fullmatch(line) for line in log)
+    log = [unstamped(line) for line in log]
 
     assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
     assert context['device_name'] == 'Kit 1' and context['blueprint'] == 'sc_air'
@@ -189,7 +192,7 @@ def test_errors_keep_the_log(monkeypatch, refreshed):
     log, state, health = asyncio.run(dprocess(1))
 
     assert state == ['FAILED', 'ConnectionError: API down'] and health is None
-    assert log[-1] == 'error: ConnectionError: API down'
+    assert unstamped(log[-1]) == 'error: ConnectionError: API down'
 
 
 @pytest.mark.parametrize('value', [None, '', '  '])
@@ -204,6 +207,6 @@ def test_without_a_token_only_dry_runs_process(run, monkeypatch, value):
 
     # Nothing is loaded nor posted
     assert state == ['ABORTED', 'NO_TOKEN'] and FakeDevice.instance is None and health is None
-    assert log == ['error: SC_BEARER is not set: posting is disabled. Only dry runs can process devices.']
+    assert [unstamped(line) for line in log] == ['error: SC_BEARER is not set: posting is disabled. Only dry runs can process devices.']
     # Dry runs still process
     assert run(dry_run=True)[0] == ['SUCCESS', 'PROCESSED AND UPLOADED']

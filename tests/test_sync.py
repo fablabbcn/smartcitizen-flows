@@ -1,4 +1,5 @@
 import pytest
+from scflows.runlog import unstamped
 from flask import g
 
 import scflows.jobs as jobs
@@ -47,7 +48,8 @@ def test_sync_is_a_run_with_its_log(app, redis, report):
     [run] = sync_runs()
     assert (run.state, run.device_id, run.username) == ('success', None, 'oscar')
     assert run.message == 'process 2 created, 1 disabled'
-    assert 'info: Sync requested by oscar' in run.log and 'info: 120 devices with postprocessing' in run.log
+    log = [unstamped(line) for line in run.log]
+    assert 'info: Sync requested by oscar' in log and 'info: 120 devices with postprocessing' in log
     assert run.started_at and run.finished_at and jobs.last_sync()['run_id'] == run.id
 
 
@@ -83,7 +85,7 @@ def test_failed_sync_is_recorded(app, redis, monkeypatch):
     assert not jobs.sync_running()
     [run] = sync_runs()
     assert (run.state, run.message) == ('failed', 'RuntimeError: API down')
-    assert 'error: Sync failed (RuntimeError: API down)' in run.log
+    assert 'error: Sync failed (RuntimeError: API down)' in [unstamped(line) for line in run.log]
 
 
 def test_beat_syncs_every_hour():

@@ -429,16 +429,16 @@ def fail_stale_runs():
     stopped, e.g. restarted by a deploy. Returns how many
     '''
     at = now()
-    stale = db.session.execute(db.select(JobRun).where(JobRun.state == JobRun.RUNNING, db.or_(
+    # One conditional update: a run that finishes meanwhile is no longer running, and keeps its result
+    stale = db.session.execute(db.update(JobRun).where(JobRun.state == JobRun.RUNNING, db.or_(
         db.and_(JobRun.task != JobRun.SYNC, JobRun.started_at < at - timedelta(seconds=locks.LOCK_SECONDS)),
         db.and_(JobRun.task == JobRun.SYNC, JobRun.started_at < at - timedelta(seconds=SYNC_LOCK_SECONDS))))
-    ).scalars().all()
-    for run in stale:
-        run.state, run.message, run.finished_at = JobRun.FAILED, 'STALE: the worker stopped during the run', now()
+        .values(state=JobRun.FAILED, message='STALE: the worker stopped during the run', finished_at=at)
+        .execution_options(synchronize_session=False)).rowcount
+    db.session.commit()
     if stale:
-        db.session.commit()
-        logger.warning(f'Marked {len(stale)} stale runs as failed')
-    return len(stale)
+        logger.warning(f'Marked {stale} stale runs as failed')
+    return stale
 
 
 def dispatch_due_jobs():

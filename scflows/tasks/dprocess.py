@@ -35,6 +35,21 @@ async def dprocess(device, dry_run = False, context = None):
             return task_log, ['FAILED', f'{type(error).__name__}: {error}'], None
 
 
+def posting_summary(handler, dry_run):
+    ''' Lines on what the Smart Citizen API client posted (or would post, in a dry run), and what it did not '''
+    posted, not_posted = getattr(handler, 'posted', None) or {}, getattr(handler, 'not_posted', None) or {}
+    lines = []
+    if posted:
+        lines.append(('Would post: ' if dry_run else 'Posted: ') + ', '.join(
+            f"{name} (sensor {item['id']}, {item['readings']} readings)" for name, item in posted.items()))
+    by_reason = {}
+    for name, reason in not_posted.items():
+        by_reason.setdefault(reason, []).append(name)
+    for reason, names in by_reason.items():
+        lines.append(f'Not posted ({reason}): {", ".join(names)}')
+    return lines
+
+
 async def process_device(device, dry_run, task_log, context):
 
     def logger_handler(msg, level='info'):
@@ -115,8 +130,12 @@ async def process_device(device, dry_run, task_log, context):
                     # Post results
                     if d.postprocessing_updated:
                         task_log.append(logger_handler(f'Posting {len(channels)} channels{" (dry run)" if dry_run else ""}'))
-                        if await d.post(columns = 'channels', dry_run=dry_run, max_retries=3, with_postprocessing=True):
-                            task_log.append(logger_handler(f'Device {device} was posted'))
+                        posted = await d.post(columns = 'channels', dry_run=dry_run, max_retries=3, with_postprocessing=True)
+                        for line in posting_summary(d.handler, dry_run):
+                            task_log.append(logger_handler(line))
+                        if posted:
+                            task_log.append(logger_handler(f'Dry run: nothing was posted for device {device}' if dry_run
+                                                           else f'Device {device} was posted'))
                             task_state = ['SUCCESS', 'PROCESSED AND UPLOADED']
                         else:
                             task_log.append(logger_handler(f'Device {device} was not posted (see the warnings above)', 'error'))

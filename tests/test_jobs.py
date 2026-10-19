@@ -354,6 +354,20 @@ def test_stale_running_runs_fail(app, queued):
     assert db.session.get(JobRun, recent.id).state == 'running'
 
 
+def test_stale_syncs_fail_once_their_lock_expires(app, queued):
+    # A deploy restarts the workers during a sync: it would otherwise show running for LOCK_SECONDS
+    old = make_run(device_id=None, task='sync', state='running',
+                   started_at=jobs.now() - timedelta(seconds=jobs.SYNC_LOCK_SECONDS + 60))
+    recent = make_run(device_id=None, task='sync', state='running', started_at=jobs.now())
+
+    jobs.dispatch_due_jobs()
+
+    db.session.expire_all()
+    assert db.session.get(JobRun, old.id).state == 'failed'
+    assert db.session.get(JobRun, old.id).message.startswith('STALE')
+    assert db.session.get(JobRun, recent.id).state == 'running'
+
+
 def test_next_run_keeps_the_minute_after_downtime(app):
     item = SimpleNamespace(next_run_at=datetime(2026, 10, 1, 0, 17, tzinfo=timezone.utc), interval_hours=3)
 

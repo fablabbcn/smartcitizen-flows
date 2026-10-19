@@ -57,6 +57,9 @@ class FakeDevice:
 
     async def post(self, **kwargs):
         self.posted = kwargs
+        # What the Smart Citizen API client records
+        self.handler.posted = {'SO2': {'id': 123, 'readings': 1000}}
+        self.handler.not_posted = {'SO2_WE': 'no sensor id', 'SO2_AE': 'no sensor id'}
         return FakeDevice.options.get('post', True)
 
 
@@ -95,6 +98,24 @@ def test_success(run):
     assert device.posted['columns'] == 'channels'
     assert device.posted['dry_run'] is True
     assert device.posted['with_postprocessing'] is True
+
+
+def test_the_log_says_what_is_posted(monkeypatch, refreshed):
+    monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
+    FakeDevice.options = {}
+
+    log, state, _ = asyncio.run(dprocess(1, dry_run=True))
+    lines = [unstamped(line) for line in log]
+
+    assert 'info: Would post: SO2 (sensor 123, 1000 readings)' in lines
+    assert 'info: Not posted (no sensor id): SO2_WE, SO2_AE' in lines
+    assert 'info: Dry run: nothing was posted for device 1' in lines
+
+    log, state, _ = asyncio.run(dprocess(1))
+    lines = [unstamped(line) for line in log]
+
+    assert 'info: Posted: SO2 (sensor 123, 1000 readings)' in lines
+    assert 'info: Device 1 was posted' in lines
 
 
 def test_no_sensors_to_load(run):

@@ -56,10 +56,10 @@ def hardware_name(hardware_url):
     value = (hardware_url or '').strip()
     if '/' in value:
         path, _, value = value.rpartition('/')
-        if not path.endswith('hardware'):
+        if path.rpartition('/')[2] != 'hardware':
             return None
     name = value.removesuffix('.json')
-    return name if HARDWARE_NAME.match(name) else None
+    return name if HARDWARE_NAME.fullmatch(name) else None
 
 
 def device_ids(devices):

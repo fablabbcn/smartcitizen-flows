@@ -61,6 +61,9 @@ async def back_up_device(device, up_to_date, task_log, context):
 
     # All its sensors are backed up, whatever the blueprints of its hardware
     d = sc.Device(params=sc.APIParams(id=device))
+    # Also the readings before the first hardware version, which scdata does not load for processing:
+    # each backup stores the end of its period, so readings left out would never be requested again
+    d.versions = []
     s3 = boto3.resource('s3')
     task_state = [None, None]
 

@@ -82,7 +82,7 @@ docker compose exec web flask --app scflows metadata import <smartcitizen-data c
 docker compose exec web flask --app scflows jobs sync
 ```
 
-Jobs can be run by hand, also as dry runs (nothing is posted nor stored):
+Jobs can be run by hand, also as dry runs, which neither post nor store the processed results (a long run still backs the device up first):
 
 ```
 flask --app scflows jobs list [--task process|backup|long]

@@ -4,11 +4,11 @@ Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows
 
 ![](assets/flows.png)
 
-## How devices are processed
+## Processing
 
 A device is processed when its postprocessing in the Smart Citizen API has a `hardware_url` that names a hardware in flows (`SCAS210022`, or a url ending in `hardware/SCAS210022.json`). The hardware lists its blueprints by name, at most one of each kind (`meta.kind` of the blueprint, `process` when missing):
 
-| Kind | Job | What it does |
+| Kind | Job | Description |
 |---|---|---|
 | `process` | `process`, every 3 hours | Processes the latest readings (up to 1000) and posts the results to the Smart Citizen API |
 | `long` | `long`, weekly (`meta.every_days`) | Backs the device up, processes the last `meta.window_days` (90 by default) of its backups with algorithms that need months of data (baselines), and stores the results in S3. Nothing is posted |
@@ -16,7 +16,7 @@ A device is processed when its postprocessing in the Smart Citizen API has a `ha
 
 A hardware has a `process` blueprint, a `long` one, or both, and can add a `backup` one when it has no `long` one (long processing already backs up), or only have a `backup` one. Devices are only processed with the blueprints of their hardware: the `blueprint_url` of their postprocessing is not used.
 
-`celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour, so devices get or lose jobs as their hardware changes. A job never runs twice at the same time for a device. Each run keeps its log, its result and what it used (hardware, blueprint, period, channels).
+`celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour, so devices get or lose jobs as their hardware changes. A job never runs twice at the same time for a device. Each run keeps its log, its result, and the hardware, blueprint, period and channels it used.
 
 Every run also runs the health checks of its blueprint (gaps, implausible, flat and outlier values), and keeps the result for 30 days: `ok`, `warning`, or `problem` when 20% or more of the readings are flagged.
 

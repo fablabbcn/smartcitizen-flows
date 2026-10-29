@@ -59,6 +59,7 @@ class FakeDevice:
     options = {}
 
     def __init__(self, params, **kwargs):
+        self.kwargs = kwargs
         hardware = FakeDevice.options.get('hardware', 'SCAS_TEST1')
         self.handler = SimpleNamespace(json=SimpleNamespace(
             name='Kit', postprocessing=SimpleNamespace(hardware_url=f'https://flows/api/v1/hardware/{hardware}.json')))
@@ -103,7 +104,7 @@ def long_hardware(app):
     editing.save_blueprint('test_long', dict(body, meta={'kind': 'long', 'window_days': 90, 'every_days': 7},
                                              channels=channels))
     hardware = editing.find('hardware', 'SCAS_TEST1')
-    hardware.blueprints = [hardware.blueprint, editing.find('blueprint', 'test_long')]
+    hardware.blueprints = [editing.find('blueprint', 'test_air'), editing.find('blueprint', 'test_long')]
     db.session.commit()
 
 
@@ -332,3 +333,9 @@ def test_backups_are_read_from_the_storage_root(run, root):
     _, device, _, _ = run()
 
     assert device.loaded_with['root'] == str(root)
+
+
+def test_the_device_is_loaded_with_the_long_blueprint(run):
+    run(dry_run=True)
+
+    assert FakeDevice.instance.kwargs == {'blueprint_kind': 'long'}

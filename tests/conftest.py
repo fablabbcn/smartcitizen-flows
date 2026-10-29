@@ -77,12 +77,12 @@ def auth(token):
     return {'Authorization': f'Bearer {token}'}
 
 
-def served_hardware(source, blueprint='test_air', base='http://localhost'):
-    ''' A hardware file as flows serves it: the blueprint by name and its url in flows '''
-    served = {'blueprint': blueprint, 'blueprint_url': f'{base}/api/v1/blueprints/{blueprint}.json',
-              'blueprints': source.get('blueprints', [blueprint])}
-    served.update({key: value for key, value in source.items() if key not in ('blueprint', 'blueprint_url', 'blueprints')})
-    return served
+def served_hardware(source, name='SCAS_TEST1', base='http://localhost'):
+    ''' A hardware file as flows serves it, in the list and by name: all the keys, with its name and url '''
+    return {'name': name, 'blueprints': source['blueprints'], 'description': source.get('description'),
+            'comment': source.get('comment'), 'forwarding': source.get('forwarding'),
+            'parameters': source.get('parameters') or {}, 'versions': source['versions'],
+            'url': f'{base}/api/v1/hardware/{name}.json'}
 
 
 class FakeRedis:

@@ -85,7 +85,7 @@ def test_put_hardware_with_warnings(client):
     assert body['data']['description'] == 'Updated'
     assert body['warnings'] == ['versions.0.ids.AS_48_32: channels not in blueprint test_air: NO2_AE',
                                 'versions.0.ids.PT_49_23: channels not in blueprint test_air: ASPT1000, PT1000_POS']
-    assert client.get('/api/v1/hardware/SCAS_TEST1.json').get_json() == served_hardware(hardware, 'test_air')
+    assert client.get('/api/v1/hardware/SCAS_TEST1.json').get_json() == served_hardware(hardware)
 
 
 def test_blueprint_deleted_after_the_check(client, monkeypatch):
@@ -109,7 +109,7 @@ def test_invalid_hardware_is_not_saved(client):
 
     assert response.status_code == 422
     assert response.get_json()['errors'] == ['versions.0.ids.AS_48_32: unknown Alphasense sensor code 730']
-    assert client.get('/api/v1/hardware/SCAS_TEST1').get_json() == served_hardware(HARDWARE, 'test_air')
+    assert client.get('/api/v1/hardware/SCAS_TEST1').get_json() == served_hardware(HARDWARE)
 
 
 def test_put_hardware_round_trip(client):
@@ -123,14 +123,12 @@ def test_put_hardware_round_trip(client):
 
 
 def test_put_hardware_by_blueprint_name(client):
-    hardware = {key: value for key, value in HARDWARE.items() if key != 'blueprint_url'}
-
-    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint='test_air'),
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(HARDWARE, blueprints=['test_air']),
                           headers=auth('admin-token'))
     assert response.status_code == 201
-    assert response.get_json()['data']['blueprint_url'] == 'http://localhost/api/v1/blueprints/test_air.json'
+    assert response.get_json()['data'] == served_hardware(HARDWARE, 'SCAS_NEW')
 
-    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint='missing'),
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(HARDWARE, blueprints=['missing']),
                           headers=auth('admin-token'))
     assert response.status_code == 422
     assert response.get_json()['errors'] == ['blueprints: missing is not in flows']
@@ -144,14 +142,13 @@ def test_check_hardware_is_public(client):
 
 
 def test_hardware_requires_blueprint_in_flows(client):
-    hardware = {key: value for key, value in HARDWARE.items() if key != 'blueprint_url'}
+    hardware = {key: value for key, value in HARDWARE.items() if key != 'blueprints'}
 
     response = client.put('/api/v1/hardware/SCAS_NEW', json=hardware, headers=auth('admin-token'))
     assert response.status_code == 422
     assert response.get_json()['errors'] == ['blueprints: required, one or two blueprints in flows']
 
-    github = 'https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/blueprints/sck_21.json'
-    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprint_url=github),
+    response = client.put('/api/v1/hardware/SCAS_NEW', json=dict(hardware, blueprints=['sck_21']),
                           headers=auth('admin-token'))
     assert response.status_code == 422
     assert response.get_json()['errors'] == ['blueprints: sck_21 is not in flows']
@@ -161,11 +158,11 @@ def test_new_blueprint_can_be_used(client):
     blueprint = client.get('/api/v1/blueprints/test_air').get_json()
     assert client.put('/api/v1/blueprints/other', json=blueprint, headers=auth('admin-token')).status_code == 201
 
-    response = client.put('/api/v1/hardware/SCAS_TEST2', json=dict(HARDWARE, blueprint_url=None, blueprint='other'),
+    response = client.put('/api/v1/hardware/SCAS_TEST2', json=dict(HARDWARE, blueprints=['other']),
                           headers=auth('admin-token'))
 
     assert response.status_code == 200
-    assert response.get_json()['data']['blueprint_url'] == 'http://localhost/api/v1/blueprints/other.json'
+    assert response.get_json()['data']['blueprints'] == ['other']
 
 
 def test_blueprint_in_use_cannot_be_deleted(client):
@@ -197,8 +194,9 @@ def test_delete_requires_admin(client):
 
     revisions = client.get('/api/v1/hardware/SCAS_TEST1/revisions').get_json()
     assert [item['action'] for item in revisions] == ['delete', 'import']
+    # The description as stored: without its name and url
     assert revisions[0]['before'] == {key: value for key, value in served_hardware(HARDWARE).items()
-                                      if key != 'blueprint_url'}
+                                      if key not in ('name', 'url')}
     assert revisions[0]['after'] is None
 
 
@@ -227,7 +225,7 @@ def kinds(client):
 
 
 def put_blueprints(client, names):
-    return client.put('/api/v1/hardware/SCAS_TEST1', json=dict(HARDWARE, blueprint_url=None, blueprints=names),
+    return client.put('/api/v1/hardware/SCAS_TEST1', json=dict(HARDWARE, blueprints=names),
                       headers=auth('admin-token'))
 
 
@@ -236,9 +234,8 @@ def test_hardware_with_process_and_long(client, kinds):
 
     assert response.status_code == 200
     served = client.get('/api/v1/hardware/SCAS_TEST1.json').get_json()
-    # smartcitizen-connector gets the processing blueprint
-    assert (served['blueprint'], served['blueprints']) == ('test_air', ['test_air', 'test_long'])
-    assert served['blueprint_url'] == 'http://localhost/api/v1/blueprints/test_air.json'
+    # smartcitizen-connector reads each one and picks it by its kind
+    assert served['blueprints'] == ['test_air', 'test_long']
     assert {item['name']: item['kind'] for item in client.get('/api/v1/blueprints').get_json()} == {
         'test_air': 'process', 'test_backup': 'backup', 'test_long': 'long'}
     # Order kept, and changed
@@ -246,11 +243,10 @@ def test_hardware_with_process_and_long(client, kinds):
     assert client.get('/api/v1/hardware/SCAS_TEST1').get_json()['blueprints'] == ['test_long', 'test_air']
 
 
-def test_long_only_hardware_serves_the_long_blueprint(client, kinds):
+def test_long_only_hardware(client, kinds):
     assert put_blueprints(client, ['test_long']).status_code == 200
 
-    served = client.get('/api/v1/hardware/SCAS_TEST1.json').get_json()
-    assert (served['blueprint'], served['blueprints']) == ('test_long', ['test_long'])
+    assert client.get('/api/v1/hardware/SCAS_TEST1.json').get_json()['blueprints'] == ['test_long']
 
 
 @pytest.mark.parametrize('names, error', [

@@ -86,14 +86,6 @@ class Hardware(TimestampMixin, db.Model):
         return next((blueprint for blueprint in self.blueprints if blueprint.kind == kind), None)
 
     @property
-    def blueprint(self):
-        '''
-        The blueprint smartcitizen-connector and scdata get from the hardware (blueprint_url):
-        the processing blueprint, or the first one
-        '''
-        return self.blueprint_of(Blueprint.PROCESS) or next(iter(self.blueprints), None)
-
-    @property
     def kinds(self):
         return [blueprint.kind for blueprint in self.blueprints]
 
@@ -102,24 +94,14 @@ class Hardware(TimestampMixin, db.Model):
         ''' Sensor ids of all versions, without repetitions '''
         return list(dict.fromkeys(sensor_id for version in self.versions for sensor_id in version.ids.values()))
 
-    def to_json(self, blueprint_url=None):
-        '''
-        Same structure as the hardware files, with the blueprint name. Optional keys are left out when empty.
-        blueprint_url: url of the blueprint in flows (built by the API)
-        '''
-        result = {'blueprint': self.blueprint.name if self.blueprint else None}
-        if blueprint_url:
-            result['blueprint_url'] = blueprint_url
-        result['blueprints'] = [blueprint.name for blueprint in self.blueprints]
-        result['description'] = self.description
-        if self.comment is not None:
-            result['comment'] = self.comment
-        if self.forwarding is not None:
-            result['forwarding'] = self.forwarding
-        if self.parameters:
-            result['parameters'] = self.parameters
-        result['versions'] = [version.to_json() for version in self.versions]
-        return result
+    def to_json(self):
+        ''' The hardware description, with all its keys (the API adds its name and url) '''
+        return {'blueprints': [blueprint.name for blueprint in self.blueprints],
+                'description': self.description,
+                'comment': self.comment,
+                'forwarding': self.forwarding,
+                'parameters': self.parameters or {},
+                'versions': [version.to_json() for version in self.versions]}
 
 
 class HardwareVersion(db.Model):

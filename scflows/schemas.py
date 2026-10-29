@@ -1,15 +1,8 @@
 ''' Validation of metadata sent to the API '''
 from datetime import date
-from os.path import basename, splitext
 from typing import Any, Dict, List, Optional, Union
-from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-
-def url_name(url):
-    ''' Name of a file from its url: .../blueprints/sc_air.json -> sc_air '''
-    return splitext(basename(urlparse(str(url)).path))[0]
 
 
 # Values in calibrations.json are numbers or numeric strings, sometimes empty
@@ -31,14 +24,13 @@ class HardwareVersionIn(BaseModel):
 
 
 class HardwareIn(BaseModel):
-    ''' Same structure as the hardware files of smartcitizen-data, plus the blueprint name '''
+    ''' A hardware description, as flows serves it: name and url are not stored '''
     model_config = ConfigDict(extra='forbid')
 
-    # Blueprints in flows: one or two of different kinds (process, long, backup). A single
-    # blueprint (name) or blueprint_url is accepted too (e.g. from the hardware files)
-    blueprints: Optional[List[str]] = None
-    blueprint: Optional[str] = Field(default=None, pattern=r'^[A-Za-z0-9_-]{1,64}$')
-    blueprint_url: Optional[str] = None
+    name: Optional[str] = None
+    url: Optional[str] = None
+    # Blueprints in flows: one or two of different kinds (process, long, backup)
+    blueprints: List[str] = []
     description: Optional[str] = None
     comment: Optional[str] = None
     forwarding: Optional[str] = None
@@ -46,26 +38,9 @@ class HardwareIn(BaseModel):
     parameters: Optional[Dict[str, Dict[str, Any]]] = None
     versions: List[HardwareVersionIn] = []
 
-    @model_validator(mode='after')
-    def check_blueprint(self):
-        if self.blueprint and self.blueprint_url and url_name(self.blueprint_url) != self.blueprint:
-            raise ValueError('"blueprint" and "blueprint_url" refer to different blueprints')
-        # The single blueprint served with the list (e.g. a hardware sent back as received) must be in it
-        if self.blueprints is not None and self.blueprint_name and self.blueprint_name not in self.blueprints:
-            raise ValueError(f'"blueprint" {self.blueprint_name} is not in "blueprints"')
-        return self
-
-    @property
-    def blueprint_name(self):
-        ''' Name of the referenced blueprint, from blueprint or blueprint_url '''
-        return self.blueprint or (url_name(self.blueprint_url) if self.blueprint_url else None)
-
     @property
     def blueprint_names(self):
-        ''' The blueprints of the hardware: blueprints, or the single blueprint given '''
-        if self.blueprints is not None:
-            return list(dict.fromkeys(self.blueprints))
-        return [self.blueprint_name] if self.blueprint_name else []
+        return list(dict.fromkeys(self.blueprints))
 
 
 class AlphasenseCalibration(BaseModel):

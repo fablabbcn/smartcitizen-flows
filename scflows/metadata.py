@@ -146,20 +146,14 @@ def verify_metadata(source):
         if not same:
             differences.append(f'{relative_path}: served content differs')
 
-    def hardware_by_blueprint_name(data):
-        ''' Hardware served by flows links blueprints in flows: compare the blueprint names '''
-        data = dict(data)
-        url = data.pop('blueprint_url', None)
-        data['blueprint'] = data.get('blueprint') or (name_of(url) if url else None)
-        # Hardware files have one blueprint: flows serves it in a list too
-        if data.get('blueprints') == [data['blueprint']]:
-            data.pop('blueprints')
-        return data
+    def hardware_description(data):
+        ''' Flows serves the hardware with its name and url, and all the keys: compare the ones with a value '''
+        return {key: value for key, value in data.items() if key not in ('name', 'url') and value not in (None, {})}
 
     for blueprint in db.session.execute(db.select(Blueprint)).scalars():
         compare(f'blueprints/{blueprint.name}.json', f'blueprints/{blueprint.name}.json')
     for hardware in db.session.execute(db.select(Hardware)).scalars():
-        compare(f'hardware/{hardware.name}.json', f'hardware/{hardware.name}.json', hardware_by_blueprint_name)
+        compare(f'hardware/{hardware.name}.json', f'hardware/{hardware.name}.json', hardware_description)
     compare('calibrations/calibrations.json', 'calibrations/calibrations.json')
     # Ids are strings in the file, numbers in flows
     compare('names/SCDevice.json', 'names/SCDevice.json',

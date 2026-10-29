@@ -59,7 +59,8 @@ async def back_up_device(device, up_to_date, task_log, context):
     # Changes made in flows (calibrations, blueprints) apply without restarting the worker
     refresh_metadata()
 
-    d = sc.Device(blueprint='sc_air', params=sc.APIParams(id=device))
+    # All its sensors are backed up, whatever the blueprints of its hardware
+    d = sc.Device(params=sc.APIParams(id=device))
     s3 = boto3.resource('s3')
     task_state = [None, None]
 

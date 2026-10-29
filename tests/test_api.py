@@ -5,7 +5,7 @@ import pytest
 
 from scflows.metadata import import_metadata
 
-from conftest import DATA, served_hardware
+from conftest import DATA, auth, served_hardware
 
 
 def source_json(*path):
@@ -29,21 +29,49 @@ def test_hardware(client, path):
 
     assert response.status_code == 200
     assert response.headers['Cache-Control'] == 'public, max-age=300'
-    assert response.get_json() == served_hardware(source_json('hardware', 'SCAS_TEST1.json'), 'test_air')
+    assert response.get_json() == served_hardware(source_json('hardware', 'SCAS_TEST1.json'))
 
 
-def test_hardware_links_blueprint_in_flows(client):
+def test_hardware_lists_its_blueprints_by_name(client):
     data = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
 
-    assert data['blueprint'] == 'test_air'
-    assert data['blueprint_url'] == 'http://localhost/api/v1/blueprints/test_air.json'
-    assert client.get(data['blueprint_url']).get_json() == source_json('blueprints', 'test_air.json')
+    assert data['blueprints'] == ['test_air']
+    assert 'blueprint' not in data and 'blueprint_url' not in data
+    assert client.get('/api/v1/blueprints/test_air.json').get_json() == source_json('blueprints', 'test_air.json')
 
 
-def test_hardware_optional_keys(client):
-    # No comment in the file: no comment key
-    assert client.get('/api/v1/hardware/SCAS_TEST2.json').get_json() == \
-        served_hardware(source_json('hardware', 'SCAS_TEST2.json'))
+def test_hardware_has_all_its_keys(client):
+    # No comment nor parameters in the file: served empty
+    data = client.get('/api/v1/hardware/SCAS_TEST2.json').get_json()
+
+    assert data == served_hardware(source_json('hardware', 'SCAS_TEST2.json'), 'SCAS_TEST2')
+    assert data['comment'] is None and data['parameters'] == {}
+
+
+def test_the_list_serves_each_hardware_as_by_name(client):
+    listed = client.get('/api/v1/hardware').get_json()
+
+    assert [item['name'] for item in listed] == ['SCAS_TEST1', 'SCAS_TEST2']
+    for item in listed:
+        assert item == client.get(item['url']).get_json()
+
+
+def test_a_hardware_can_be_sent_back_as_served(client, sc_me):
+    served = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
+
+    response = client.put('/api/v1/hardware/SCAS_TEST1', json=dict(served, description='changed'), headers=auth('admin-token'))
+
+    assert response.status_code == 200, response.get_json()
+    assert client.get('/api/v1/hardware/SCAS_TEST1').get_json() == dict(served, description='changed')
+
+
+def test_the_name_must_be_the_one_of_the_url(client, sc_me):
+    served = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
+
+    response = client.put('/api/v1/hardware/SCAS_TEST1', json=dict(served, name='SCAS_OTHER'), headers=auth('admin-token'))
+
+    assert response.status_code == 422
+    assert 'name: SCAS_OTHER is not SCAS_TEST1' in str(response.get_json())
 
 
 def test_public_url(app, client):
@@ -51,7 +79,7 @@ def test_public_url(app, client):
 
     data = client.get('/api/v1/hardware/SCAS_TEST1').get_json()
 
-    assert data['blueprint_url'] == 'https://flows.smartcitizen.me/api/v1/blueprints/test_air.json'
+    assert data['url'] == 'https://flows.smartcitizen.me/api/v1/hardware/SCAS_TEST1.json'
     assert client.get('/api/v1/blueprints').get_json()[0]['url'] == \
         'https://flows.smartcitizen.me/api/v1/blueprints/test_air.json'
 
@@ -77,10 +105,8 @@ def test_index(client, path):
 
 def test_hardware_list(client):
     assert client.get('/api/v1/hardware').get_json() == [
-        {'name': 'SCAS_TEST1', 'description': '1SEN55-2ELEC-AFE', 'blueprint': 'test_air', 'blueprints': ['test_air'],
-         'url': 'http://localhost/api/v1/hardware/SCAS_TEST1.json'},
-        {'name': 'SCAS_TEST2', 'description': 'Forwarded kit', 'blueprint': 'test_air', 'blueprints': ['test_air'],
-         'url': 'http://localhost/api/v1/hardware/SCAS_TEST2.json'},
+        served_hardware(source_json('hardware', 'SCAS_TEST1.json')),
+        served_hardware(source_json('hardware', 'SCAS_TEST2.json'), 'SCAS_TEST2'),
     ]
 
 

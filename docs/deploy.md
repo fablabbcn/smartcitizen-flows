@@ -274,7 +274,7 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | `POSTGRES_PASSWORD` | A generated value | |
 | `SQLALCHEMY_DATABASE_URI` | `postgresql+psycopg://flows:<POSTGRES_PASSWORD>@postgres:5432/flows` | **A second copy of the same password**: nothing derives one from the other. See [Troubleshooting](#troubleshooting) if `web` cannot connect. |
 | `DOMAIN` | `flows.smartcitizen.me` | **No scheme.** Caddy requests the certificate for this name. Compose refuses to start without it. |
-| `PUBLIC_URL` | `https://flows.smartcitizen.me` | **With** the scheme. Used in links: the API root, lists, and the `blueprint_url` inside each hardware, which the connector follows. Without it, links are built from the request as seen behind Caddy, which is `http://`. It also makes the session cookie `Secure`. |
+| `PUBLIC_URL` | `https://flows.smartcitizen.me` | **With** the scheme. Used in links: the API root, and the `url` of each hardware and blueprint. Without it, links are built from the request as seen behind Caddy, which is `http://`. It also makes the session cookie `Secure`. |
 | `BASE_POSTPROCESSING_URL` | `https://flows.smartcitizen.me/api/v1/` | **With the trailing slash.** Where smartcitizen-connector and scdata read hardware, blueprints and calibrations. Without it, processing silently reads them from GitHub instead of flows. |
 | `SC_BEARER` | The API token of a Smart Citizen **admin** | Processing posts the processed data with it, and the hourly sync searches devices and users with it. Without it, processing runs are aborted with `NO_TOKEN` (dry runs still process), and `/jobs/` shows that posting is disabled. |
 | `FLASK_DEBUG` | `0` | Flask 3 applies `1` under gunicorn too: debug mode in production. |
@@ -395,8 +395,8 @@ curl -sS https://flows.smartcitizen.me/api/v1/ | python3 -m json.tool
 curl -sS https://flows.smartcitizen.me/api/v1/hardware/SCAS220013.json | python3 -m json.tool
 ```
 
-The hardware shows `"blueprint": "sc_air"` and
-`"blueprint_url": "https://flows.smartcitizen.me/api/v1/blueprints/sc_air.json"`.
+The hardware shows its `"blueprints": ["sc_air"]` and
+`"url": "https://flows.smartcitizen.me/api/v1/hardware/SCAS220013.json"`.
 An `http://` link there means `PUBLIC_URL` is not set.
 
 Check token verification without changing anything, with an **admin** token:

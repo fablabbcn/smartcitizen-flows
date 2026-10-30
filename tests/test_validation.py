@@ -107,9 +107,8 @@ def test_missing_calibration(hardware):
 
 
 @pytest.mark.parametrize('change, error', [
-    ({'blueprint_url': None}, 'blueprints: required, one or two blueprints in flows'),
-    ({'blueprint_url': 'https://example.com/blueprints/other.json'}, 'blueprints: other is not in flows'),
-    ({'blueprint_url': None, 'blueprint': 'other'}, 'blueprints: other is not in flows'),
+    ({'blueprints': []}, 'blueprints: required, one or two blueprints in flows'),
+    ({'blueprints': ['other']}, 'blueprints: other is not in flows'),
 ])
 def test_blueprint_must_be_in_flows(hardware, change, error):
     hardware.update(change)
@@ -127,8 +126,8 @@ def test_overlapping_versions(hardware):
     assert check_hardware(hardware).valid
 
 
-def test_blueprint_and_url_must_match(hardware):
-    hardware['blueprint'] = 'other'
+@pytest.mark.parametrize('key', ['blueprint', 'blueprint_url'])
+def test_only_the_list_of_blueprints(hardware, key):
+    hardware[key] = 'test_air'
 
-    assert check_hardware(hardware).errors == [
-        'body: Value error, "blueprint" and "blueprint_url" refer to different blueprints']
+    assert check_hardware(hardware).errors == [f'{key}: Extra inputs are not permitted']

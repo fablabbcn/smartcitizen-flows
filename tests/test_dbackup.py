@@ -30,6 +30,9 @@ class FakeDevice:
         self.handler = SimpleNamespace(json=SimpleNamespace(created_at=created_at, last_reading_at=last_reading_at))
         self.data = pd.DataFrame()
         self.loaded = False
+        # Hardware versions: scdata does not load the readings before the first one
+        self.versions = [{'from_date': created_at + datetime.timedelta(days=2)}]
+        FakeDevice.instance = self
 
     def __bool__(self):
         return True
@@ -103,3 +106,14 @@ def test_whole_periods_are_backed_up(s3, monkeypatch):
     assert state == ['SUCCESS', 'BACKUP_DONE']
     until = datetime.datetime.fromisoformat(json.loads(s3['devices/1/request.json'])['last_requested_data'])
     assert until == start + datetime.timedelta(days=dbackup_module.config._backup_interval_days)
+
+
+def test_backups_keep_the_readings_before_the_first_hardware_version(s3, monkeypatch):
+    utc = datetime.timezone.utc
+    created = datetime.datetime(2026, 10, 1, tzinfo=utc)
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(created, created + datetime.timedelta(days=5)))
+
+    _, state = asyncio.run(dbackup_module.dbackup(1))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    assert FakeDevice.instance.versions == []

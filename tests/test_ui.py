@@ -129,7 +129,7 @@ def test_new_hardware(client):
     sign_in(client, 'admin')
 
     assert client.post('/metadata/hardware/new', data=hardware_form(name='SCAS_NEW')).status_code == 302
-    assert hardware('SCAS_NEW').blueprint.name == 'test_air'
+    assert [blueprint.name for blueprint in hardware('SCAS_NEW').blueprints] == ['test_air']
 
     page = client.post('/metadata/hardware/new', data=hardware_form(name='SCAS_NEW')).get_data(as_text=True)
     assert 'SCAS_NEW already exists' in page

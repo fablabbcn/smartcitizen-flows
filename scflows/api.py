@@ -34,8 +34,8 @@ def blueprint_url(name):
 
 
 def hardware_json(item):
-    ''' Hardware, with the url of its blueprint in flows '''
-    return item.to_json(blueprint_url=blueprint_url(item.blueprint.name) if item.blueprint else None)
+    ''' Hardware as served in the list and by name: its description, with its name and url '''
+    return {'name': item.name, **item.to_json(), 'url': external_url('api.get_hardware', name=f'{item.name}.json')}
 
 
 def get_by_name(model, name, field='name'):
@@ -70,7 +70,7 @@ def index():
     return {
         'name': 'Smart Citizen Flows',
         'version': package_version,
-        'documentation': 'https://github.com/fablabbcn/smartcitizen-flows#processing-metadata',
+        'documentation': 'https://github.com/fablabbcn/smartcitizen-flows#api',
         'links': {
             'blueprints': external_url('api.list_blueprints'),
             'hardware': external_url('api.list_hardware'),
@@ -110,12 +110,7 @@ def get_blueprint(name):
 @api.get('/hardware')
 def list_hardware():
     hardware = db.session.execute(db.select(Hardware).order_by(Hardware.name)).scalars()
-    return jsonify([{'name': item.name,
-                     'description': item.description,
-                     'blueprint': item.blueprint.name if item.blueprint else None,
-                     'blueprints': [blueprint.name for blueprint in item.blueprints],
-                     'url': external_url('api.get_hardware', name=f'{item.name}.json')}
-                    for item in hardware])
+    return jsonify([hardware_json(item) for item in hardware])
 
 
 @api.get('/hardware/<name>')
@@ -292,6 +287,8 @@ def hardware_with_access(name):
 def put_hardware(name):
     key = key_of(name)
     check = check_hardware(json_body())
+    if check.hardware is not None and check.hardware.name not in (None, key):
+        check.errors.append(f'name: {check.hardware.name} is not {key}')
     if not check.valid:
         unprocessable(check.errors)
     try:

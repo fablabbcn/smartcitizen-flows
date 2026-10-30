@@ -6,9 +6,13 @@ import pandas as pd
 import pytest
 
 import scflows.tasks.dprocess as dprocess_module
+from scflows import db, editing
 from scflows.config import config
+from scflows.metadata import import_metadata
 from scflows.runlog import STAMPED, unstamped
 from scflows.tasks.dprocess import dprocess
+
+from conftest import DATA
 
 LATEST = datetime(2025, 11, 28, tzinfo=timezone.utc)
 
@@ -19,9 +23,13 @@ class FakeDevice:
 
     def __init__(self, params, **kwargs):
         self.params = params
+        hardware = FakeDevice.options.get('hardware', 'SCAS_TEST1')
+        postprocessing = SimpleNamespace(hardware_url=f'https://flows/api/v1/hardware/{hardware}.json')
         self.handler = SimpleNamespace(postprocessing={'latest_postprocessing': LATEST},
-                                       json=SimpleNamespace(name='Kit 1'))
+                                       json=SimpleNamespace(name='Kit 1', postprocessing=postprocessing))
+        self.kwargs = kwargs
         self.blueprint = 'sc_air'
+        self.used_blueprint = None
         self.checks = FakeDevice.options.get('checks', ['GAPS'])
         self.health = {}
         self.options = SimpleNamespace(min_date=None, channels=[], limit=None)
@@ -33,6 +41,11 @@ class FakeDevice:
         self.postprocessing_updated = False
         self.posted = None
         FakeDevice.instance = self
+
+    def use_blueprint(self, name, blueprint):
+        self.blueprint = name
+        self.used_blueprint = blueprint
+        return True
 
     async def load(self):
         self.loaded = FakeDevice.options.get('load', True)
@@ -64,6 +77,12 @@ class FakeDevice:
 
 
 @pytest.fixture
+def hardware(app):
+    ''' SCAS_TEST1, with test_air as its process blueprint '''
+    import_metadata(DATA)
+
+
+@pytest.fixture
 def refreshed(monkeypatch):
     calls = []
     monkeypatch.setattr(dprocess_module, 'refresh_metadata', lambda: calls.append(True))
@@ -76,7 +95,7 @@ def token(monkeypatch):
 
 
 @pytest.fixture
-def run(monkeypatch, refreshed):
+def run(monkeypatch, refreshed, hardware):
     monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
 
     def run_dprocess(dry_run=False, **options):
@@ -100,7 +119,7 @@ def test_success(run):
     assert device.posted['with_postprocessing'] is True
 
 
-def test_the_log_says_what_is_posted(monkeypatch, refreshed):
+def test_the_log_says_what_is_posted(monkeypatch, refreshed, hardware):
     monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
     FakeDevice.options = {}
 
@@ -165,7 +184,7 @@ def test_health_checks_are_returned(run):
     _, device = run()
 
     assert device.returned_health == {'start': None, 'end': None, 'rows': 1, 'device_name': 'Kit 1',
-                                      'blueprint': 'sc_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
+                                      'blueprint': 'test_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
 
 
 def test_health_checks_also_when_processing_fails(run):
@@ -189,7 +208,7 @@ def test_no_health_without_checks_or_data(run, options):
     assert device.returned_health is None
 
 
-def test_context_says_what_the_run_used(monkeypatch, refreshed):
+def test_context_says_what_the_run_used(monkeypatch, refreshed, hardware):
     monkeypatch.setattr(dprocess_module.sc, 'Device', FakeDevice)
     FakeDevice.options = {}
     context = {}
@@ -199,7 +218,7 @@ def test_context_says_what_the_run_used(monkeypatch, refreshed):
     log = [unstamped(line) for line in log]
 
     assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
-    assert context['device_name'] == 'Kit 1' and context['blueprint'] == 'sc_air'
+    assert context['device_name'] == 'Kit 1' and context['blueprint'] == 'test_air'
     assert context['sensors'] == ['ADC_48_2', 'TEMP'] and context['rows'] == 1
     assert 'info: Device Kit 1, last reading None' in log and any(line.startswith('info: Posting') for line in log)
 
@@ -231,3 +250,33 @@ def test_without_a_token_only_dry_runs_process(run, monkeypatch, value):
     assert [unstamped(line) for line in log] == ['error: SC_BEARER is not set: posting is disabled. Only dry runs can process devices.']
     # Dry runs still process
     assert run(dry_run=True)[0] == ['SUCCESS', 'PROCESSED AND UPLOADED']
+
+
+def test_processed_with_the_process_blueprint_of_the_hardware(run):
+    state, device = run(dry_run=True)
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    assert device.blueprint == 'test_air'
+    assert device.used_blueprint == editing.find('blueprint', 'test_air').body
+
+
+def test_the_device_is_loaded_with_the_process_blueprint(run):
+    _, device = run(dry_run=True)
+
+    assert device.kwargs == {'blueprint_kind': 'process'}
+
+
+@pytest.mark.parametrize('hardware_name', ['NOT_IN_FLOWS', 'SCAS_TEST1'])
+def test_not_processed_without_a_process_blueprint_in_flows(run, hardware_name):
+    if hardware_name == 'SCAS_TEST1':
+        # A hardware with only a backup blueprint
+        body = editing.find('blueprint', 'test_air').body
+        editing.save_blueprint('test_backup', dict(body, meta={'kind': 'backup'}))
+        item = editing.find('hardware', 'SCAS_TEST1')
+        item.blueprints = [editing.find('blueprint', 'test_backup')]
+        db.session.commit()
+
+    state, device = run(hardware=hardware_name)
+
+    assert state == ['ABORTED', 'NO_PROCESS_BLUEPRINT']
+    assert device.used_blueprint is None and device.loaded is False and device.posted is None

@@ -4,8 +4,9 @@ import sys
 import asyncio
 from scflows.config import config, posting_enabled
 from scflows.custom_logger import logger
+from scflows.models import Blueprint
 from scflows.runlog import log_line
-from scflows.tasks.context import describe, device_context, iso, library_warnings
+from scflows.tasks.context import describe, device_context, device_hardware, iso, library_warnings
 from scflows.tools import refresh_metadata
 
 
@@ -72,15 +73,25 @@ async def process_device(device, dry_run, task_log, context):
     # Changes made in flows (calibrations, blueprints) apply without restarting the worker
     refresh_metadata()
 
-    d = sc.Device(params=sc.APIParams(id=device))
+    d = sc.Device(params=sc.APIParams(id=device), blueprint_kind=Blueprint.PROCESS)
     task_state = [None, None]
     health = None
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
-        context.update(device_context(d), blueprint=d.blueprint, blueprint_url=getattr(d.handler, 'blueprint_url', None))
+        hardware = device_hardware(d)
+        context.update(device_context(d, hardware))
         for line in describe(context):
             task_log.append(logger_handler(line))
+
+        # Only the process blueprint of the hardware in flows, as stored here
+        blueprint = hardware.blueprint_of(Blueprint.PROCESS) if hardware else None
+        if blueprint is None:
+            task_log.append(logger_handler(f'Device {device} has no process blueprint in its hardware', 'error'))
+            task_log.append(logger_handler(f'Concluded job for {device}'))
+            return task_log, ['ABORTED', 'NO_PROCESS_BLUEPRINT'], None
+        d.use_blueprint(blueprint.name, blueprint.body)
+        context['blueprint'] = d.blueprint
         task_log.append(logger_handler(f'Blueprint {d.blueprint}'))
 
         if d.handler.postprocessing['latest_postprocessing'] is not None:

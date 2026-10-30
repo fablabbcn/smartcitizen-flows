@@ -70,6 +70,7 @@ def test_hardware_name():
         'https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/hardware/SCAS220013.json') == 'SCAS220013'
     assert identity.hardware_name('https://flows.smartcitizen.me/api/v1/hardware/SCAS220013.json') == 'SCAS220013'
     assert identity.hardware_name('https://example.com/blueprints/sc_air.json') is None
+    assert identity.hardware_name('https://example.com/nothardware/SCAS220013.json') is None
     assert identity.hardware_name('not a name') is None
     assert identity.hardware_name(None) is None
 

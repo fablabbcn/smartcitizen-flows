@@ -1,237 +1,93 @@
 # Smart Citizen Flows
 
-Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows processes and backs up the data of devices in the Smart Citizen API periodically, with [scdata](https://github.com/fablabbcn/smartcitizen-data) and [smartcitizen-connector](https://github.com/fablabbcn/smartcitizen-connector), and serves the processing metadata (blueprints, hardware, calibrations). It is a [flask](https://flask.palletsprojects.com) application with [celery](https://docs.celeryq.dev) workers.
+Data processing for the [Smart Citizen](https://smartcitizen.me) platform. Flows processes and backs up the data of the devices of the Smart Citizen API, with [scdata](https://github.com/fablabbcn/smartcitizen-data) and [smartcitizen-connector](https://github.com/fablabbcn/smartcitizen-connector), and manages the processing metadata: hardware, blueprints, calibrations and sensor names. It is a [flask](https://flask.palletsprojects.com) application with [celery](https://docs.celeryq.dev) workers.
 
 ![](assets/flows.png)
 
-## Jobs
+## Processing
 
-Each device has a job per task: `process` (calculate channels from the blueprint and post them to the Smart Citizen API, every 3 hours) and `backup` (store the data in S3, every 6 hours). Jobs are stored in the database:
+A device is processed when its postprocessing in the Smart Citizen API has a `hardware_url` that names a hardware in flows (`SCAS210022`, or a url ending in `hardware/SCAS210022.json`). The hardware lists its blueprints by name, at most one of each kind (`meta.kind` of the blueprint, `process` when missing):
 
-- `celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour (or on request: "Sync now" in `/jobs/`, `POST /api/v1/jobs/sync`, `flask --app scflows jobs sync`; one sync at a time). Each sync is a run (task `sync`, no device) with its log and result, in the latest runs of `/jobs/`; the last one also shows in `GET /api/v1/jobs/sync`. Which jobs a device gets depends on the blueprints of its hardware (see Blueprint kinds): `process` if its hardware has a process blueprint and it has new readings; `backup` if its hardware has a long or a backup blueprint. Devices are read from the Smart Citizen API by their postprocessing (the API cannot search users by role). Jobs that do not qualify anymore are disabled, except when the API lists fewer devices than it counts (then nothing is disabled until a complete sync); jobs paused by admins stay paused. The sync log says why each device does not qualify (grouped by reason: no hardware, hardware not in flows or without that blueprint, no readings, already processed, invalid postprocessing) and which jobs were created, enabled or disabled, and why; the sync run keeps it per device (`context`), shown on its run page and on each device page ("Last sync")
-- `celery` workers run them. A device task never runs twice at the same time (lock in Redis)
-- Each run is recorded with its result and log
-
-Admins see the jobs and runs in `/jobs/`, or in the API (`/api/v1/jobs`, `/api/v1/runs/<id>`). The sync stores the name and hardware of each device. Each device has a page in `/jobs/devices/<id>` with its hardware, the calibrations of each version (flagging sensor ids without one), where its backups and long results are stored, its jobs and its runs. Each run keeps what it used (`context` in the API: device, hardware, blueprint, period, channels, storage) and its log includes the warnings and errors of scdata and of the Smart Citizen API client, which say why a load or a post failed. Hardware and calibration pages list the devices that use them, linked back. To pause or resume several jobs at once, tick them in `/jobs/` (the header box ticks the rows shown, e.g. after filtering by hardware) and press "Pause selected" or "Resume selected", or use `PATCH /api/v1/jobs` with `{"paused": true, "job_ids": [1, 2]}` or `{"paused": true, "device_ids": [123], "task": "process"}` (without `task`, all the jobs of those devices). From the command line:
-
-```
-flask --app scflows jobs sync                                     # sync with the Smart Citizen API now
-flask --app scflows jobs list [--task process|backup]
-flask --app scflows jobs run <device> process --dry-run [--inline] # run now (--inline: here, not in the workers)
-flask --app scflows jobs run <device> long --dry-run --inline     # long processing without storing the result
-```
-
-## Blueprint kinds
-
-Each blueprint has a kind (`meta.kind`, `process` when missing) and each hardware lists one or two blueprints, at most one of each kind:
-
-- `process`: processed every few hours on the latest readings from the Smart Citizen API (up to 1000), with its health checks, and posted back
-- `long`: processed on a long window of the device's backups (`window_days`, every `every_days`), with baselines that need months of data. Results stay in S3 and flows. The device is always backed up
-- `backup`: the device is only backed up (e.g. hardware of research projects)
-
-`long` and `backup` do not go together: long processing already backs up.
-
-### Long processing
-
-A `long` job (weekly by default, `every_days` of the blueprint) backs the device up, reads the last `window_days` (90 by default) of its backups from the first day of that month, processes them with the long blueprint filled with the hardware's sensors (per hardware version), runs its health checks and stores the result in `devices/<id>/processed/<blueprint>/month=YYYY-MM/` (Parquet, one partition per month, replaced by each run) next to the backups, with the window and the parameters used in `devices/<id>/processed/<blueprint>.json`. Nothing is posted to the Smart Citizen API: the results are in the device's health page (hourly charts, CSV) and in `GET /api/v1/devices/<id>/series`, for admins and the researchers who own the device. The health checks of long runs are kept apart from those of the process runs. `STORAGE_ROOT` overrides `s3://<S3_DATA_BUCKET>` (e.g. a local folder).
-
-The baseline parameters need tuning away from the defaults of the long blueprint, and the same values usually work for every sensor of a type. Parameter sets (`/metadata/` Parameters tab, `GET/PUT/DELETE /api/v1/parameters/<type>`) hold kwargs per channel for a sensor type: Alphasense types (`ASB4_NO2`, `ASA4_CO`..., read from the sensor id) apply to the channel whose sensor is of that type, in each hardware version; NDIR types (`SCD30`, `SCD4X`) when the blueprint reads that sensor. A hardware can override them for its devices (`parameters`: `{channel: kwargs}`), and `function` switches the algorithm of a channel (e.g. `{"O3": {"function": "alphasense_803_04"}}` keeps the 803 algorithm for O3). Each run stores the sets and parameters it used.
-
-Backups wait for their 20 day period to end, so that each one appends a whole period. Before reading the backups, a long job backs its device up to the last reading, so long processing works on recent data. The hardware served to smartcitizen-connector keeps a single `blueprint` and `blueprint_url` (the process blueprint, or the only one) and lists all of them in `blueprints`.
-
-## Device health
-
-Every processing run also runs the checks of the device's blueprint (`checks` in the blueprint: gaps, implausible values, flat values, outliers) on the data it processed, and flows stores the result. Each column gets a status: `ok` (nothing flagged), `warning` (part of the readings flagged, or of the time for gaps) or `problem` (20% or more, `PROBLEM_RATIO` in `scflows/health.py`); a check that cannot run (e.g. wrong settings) is an `error`. The device takes the worst status. Records are kept for 30 days (`KEEP_DAYS`), always keeping the latest of each device; `beat` deletes older ones every day at 03:30.
-
-Admins see every device in `/health/`, researchers the devices they own (read from their Smart Citizen account when they sign in). Each device page shows its recent runs and, per check, the columns flagged and when. The same in the API, with a Smart Citizen token of an admin or researcher:
-
-| Endpoint | Content |
-|---|---|
-| `GET /api/v1/devices/health` | Latest health of each device, with its worst issues |
-| `GET /api/v1/devices/<id>/health[?limit=50]` | Latest health of a device in full, and its history (process runs) |
-| `GET /api/v1/devices/<id>/series` | Results of long processing: `?channels=CO2,NO2`, `?from=` and `?to=` (dates), `?resample=` (`1h` by default, `raw` for none), `?format=csv`. Includes the window and parameters of the last run |
-
-## Processing metadata
-
-Flows serves the processing metadata (blueprints, hardware, calibrations and sensor names) that used to live as json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data). The paths follow the layout of that repository, so `https://<host>/api/v1/` can be used as the base url by `smartcitizen-connector` (`BASE_POSTPROCESSING_URL`) and `scdata`.
-
-| Endpoint | Content |
-|---|---|
-| `GET /api/v1/` | Links to the endpoints |
-| `GET /api/v1/blueprints` | List of blueprints |
-| `GET /api/v1/blueprints/<name>[.json]` | Blueprint |
-| `GET /api/v1/hardware` | List of hardware |
-| `GET /api/v1/hardware/<name>[.json]` | Hardware, as in `hardware/<name>.json`, plus `blueprint` (name). `blueprint_url` links to the blueprint in flows |
-| `GET /api/v1/calibrations` (or `/calibrations/calibrations.json`) | All calibrations. Filter with `?kind=alphasense_sensor` or `?kind=afe_board` |
-| `GET /api/v1/calibrations/<sensor_id>` | Calibration of a sensor or board |
-| `GET /api/v1/names` (or `/names/SCDevice.json`) | Sensor names, in order: the name scdata and the blueprints give each Smart Citizen sensor id |
-| `GET /api/v1/names/<name>` | One sensor name |
-| `GET /api/v1/health` | Health check |
-
-Links use `PUBLIC_URL` (e.g. `https://flows.smartcitizen.me`), or the request host when it is not set. The data is stored in PostgreSQL. Apply the database migrations with `flask --app scflows db upgrade` (the `web` container does it on start). Load the data from a smartcitizen-data checkout, and check that what is served matches it. The `postgres` host of `SQLALCHEMY_DATABASE_URI` is only reachable inside the compose network: run these commands in the `web` container (`docker compose exec web flask --app scflows ...`), or point the URI to a database reachable from where they run.
-
-```
-git clone --depth 1 https://github.com/fablabbcn/smartcitizen-data.git /tmp/smartcitizen-data
-flask --app scflows metadata import /tmp/smartcitizen-data
-flask --app scflows metadata verify /tmp/smartcitizen-data
-flask --app scflows metadata verify https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/
-```
-
-`import` keeps items that already exist, unless `--overwrite` is passed. `verify` compares hardware by blueprint name, as flows links its own blueprints instead of the GitHub urls. Every hardware must use a blueprint in flows: import blueprints first, hardware whose blueprint is not in flows is not imported.
-
-### Editing metadata
-
-Reading metadata is public (processing reads it without a token). Admins of the Smart Citizen platform create, update and delete it, using their Smart Citizen API token (`Authorization: Bearer <token>`). Flows checks the token with `GET {API_URL}me` (`API_URL` defaults to `https://api.smartcitizen.me/v0/`) and caches it for an hour. That call returns all the devices visible to the user: for admins it can take 30 seconds, so the first request with a token is slow.
-
-| Endpoint | Who | |
+| Kind | Job | Description |
 |---|---|---|
-| `PUT /api/v1/blueprints/<name>` | admin | Create or replace a blueprint (validated with `scdata`) |
-| `PUT /api/v1/hardware/<name>` | admin | Create or replace a hardware description, same structure as the hardware files. List its blueprints with `blueprints` (names of blueprints in flows), or give one with `blueprint` or `blueprint_url` |
-| `PUT /api/v1/calibrations/<sensor_id>` | admin | Create or replace a calibration (Alphasense sensor or AFE board). Optional `order_number` (string, `null` removes it): kept apart from the values, which processing reads as numbers. The response lists warnings for values that do not add up |
-| `PUT /api/v1/names/<name>` | admin | Create or replace a sensor name. New names go to the end of the list |
-| `DELETE /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>` | admin | Delete |
-| `GET /api/v1/hardware/<name>/attachments` | admin, researcher (their hardware) | Files attached to a hardware, with the url to download each |
-| `GET /api/v1/hardware/<name>/attachments/<id>` | admin, researcher (their hardware) | Download a file |
-| `POST /api/v1/hardware/<name>/attachments` | admin | Attach a file (multipart form: `file`, optional `description`): pdf, png, jpg, csv, xlsx or txt, up to 20 MB |
-| `DELETE /api/v1/hardware/<name>/attachments/<id>` | admin | Delete a file |
-| `POST /api/v1/hardware/<name>/check` | anyone | Check a hardware description without saving it |
-| `GET /api/v1/<blueprints\|hardware\|calibrations\|names>/<name>/revisions` | anyone | History of changes |
+| `process` | `process`, every 3 hours | Processes the latest readings (up to 1000) and posts the results to the Smart Citizen API |
+| `long` | `long`, weekly (`meta.every_days`) | Backs the device up, processes the last `meta.window_days` (90 by default) of its backups with algorithms that need months of data (baselines), and stores the results in S3. Nothing is posted |
+| `backup` | `backup`, every 6 hours | Backs the data up to S3, in periods of 20 days |
 
-In the web interface, admins edit the metadata and run the jobs. Researchers sign in to see, read only, the hardware used by their devices (from the `postprocessing` of their devices when they sign in) and the calibrations of its sensors.
+A hardware has a `process` blueprint, a `long` one, or both, and can add a `backup` one when it has no `long` one (long processing already backs up), or only have a `backup` one. Devices are only processed with the blueprints of their hardware: the `blueprint_url` of their postprocessing is not used.
 
-Hardware can have files attached (certificates, calibration reports), in the hardware page or the API. They are stored next to the backups (`attachments/hardware/<name>/` in `S3_DATA_BUCKET`, or `STORAGE_ROOT`), are not public, and stay if the hardware is deleted.
+`celery beat` queues the jobs that are due every minute, and syncs the jobs with the Smart Citizen API every hour, so devices get or lose jobs as their hardware changes. A job never runs twice at the same time for a device. Each run keeps its log, its result, and the hardware, blueprint, period and channels it used.
 
-Hardware is checked before saving. Errors reject it: invalid structure or dates, blueprint not in flows, unknown slots or Alphasense sensor codes, overlapping versions. Warnings are returned with the saved item: sensors without calibration, slots without channels in the blueprint, PT slots whose id does not look like an AFE board (`NN-NNNNNN`, e.g. 10-002911 or 17-000123), and mounted sensors whose calibration does not add up. Blueprints used by hardware cannot be deleted.
+Every run also runs the health checks of its blueprint (gaps, implausible, flat and outlier values), and keeps the result for 30 days: `ok`, `warning`, or `problem` when 20% or more of the readings are flagged.
 
-Alphasense calibrations are checked (warnings, they are still saved): sensitivities in mV/ppb must be within 1% of nA/ppb × the PCB gain, and total zeros within 2 mV of electronic + sensor zero. The form lists the values in the order of the Alphasense sheet, and keeps an optional order number (in the calibration list and the history, not served with the values). New calibrations for an AFE board id open the AFE board form.
+The parameters of long processing (e.g. of the baselines) can be tuned per sensor type (parameter sets) and per hardware (`parameters`: `{channel: kwargs}`), which can also switch the function of a channel (`{"O3": {"function": "alphasense_803_04"}}`).
+
+## Web interface
+
+Users sign in with their Smart Citizen account.
+
+- `/jobs/`: jobs and runs, per device. Admins run, pause and resume them, and sync them with the Smart Citizen API.
+- `/health/`: health of each device, and results of long processing. Admins see every device, researchers the ones they own.
+- `/metadata/`: hardware, blueprints, calibrations, parameter sets and sensor names, with their history. Admins edit them, researchers see the hardware of their devices. Hardware can have files attached (certificates, calibration reports), which are not public.
+
+## API
+
+Under `/api/v1/` (`GET /api/v1/` lists the endpoints). Reading the metadata is public, since processing reads it without a token. Writing requires the Smart Citizen API token of an admin (`Authorization: Bearer <token>`).
+
+| Endpoint | Content |
+|---|---|
+| `GET /blueprints`, `GET /blueprints/<name>[.json]` | Blueprints: the list (name, kind, url) and each one |
+| `GET /hardware`, `GET /hardware/<name>[.json]` | Hardware: the same object in the list and by name (see below) |
+| `GET /calibrations[?kind=alphasense_sensor\|afe_board]`, `GET /calibrations/<sensor_id>` | Calibrations of Alphasense sensors and AFE boards |
+| `GET /names`, `GET /names/<name>` | Names that scdata and the blueprints give each Smart Citizen sensor id |
+| `GET /parameters`, `GET /parameters/<type>` | Parameter sets of long processing |
+| `PUT`, `DELETE /<blueprints\|hardware\|calibrations\|names\|parameters>/<name>` | Create, replace or delete (admin) |
+| `GET /<kind>/<name>/revisions` | History of changes |
+| `POST /hardware/<name>/check` | Checks a hardware without saving it |
+| `GET /devices/health`, `GET /devices/<id>/health` | Health of the devices (admins, or researchers for their devices) |
+| `GET /devices/<id>/series` | Results of long processing (`?channels=`, `?from=`, `?to=`, `?resample=1h`, `?format=csv`) |
+| `GET /jobs`, `GET /runs/<id>`, `POST /jobs/sync` | Jobs and runs (admin) |
+
+A hardware is served with the same object in the list and by name: `name`, `blueprints`, `description`, `comment`, `forwarding`, `parameters`, `versions` (the sensors mounted in each period) and `url`. It can be sent back as served, and it is checked before it is saved: errors reject it, warnings are returned with it. See the [data processing guide](https://docs.smartcitizen.me/guides/data/custom-data-processing/#hardware) for its fields.
+
+The metadata used to be json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data), which can still be imported and compared:
 
 ```
-curl -X PUT https://flows.smartcitizen.me/api/v1/calibrations/212830246 \
-  -H "Authorization: Bearer $SC_TOKEN" -H "Content-Type: application/json" \
-  -d @calibration.json
+flask --app scflows metadata import <smartcitizen-data checkout> [--overwrite]
+flask --app scflows metadata verify <smartcitizen-data checkout or url>
 ```
 
-### Sensor names
+New sensors of the firmware and of the Smart Citizen API are added to the sensor names with `flask --app scflows names sync`.
 
-scdata renames the readings of each sensor id with the names in `names/SCDevice.json`, and the blueprints use those names. The Smart Citizen API does not know them (sensor 55 is "Sensirion SHT31 - Temperature" there, `TEMP` here), and the SCK firmware (`lib/Sensors/Sensors.h`) names some sensors differently from what the blueprints use, so flows keeps the list. To bring in new sensors:
-
-```
-flask --app scflows names sync --dry-run
-flask --app scflows names sync
-```
-
-It compares the names with the sensors of the Smart Citizen API and the firmware, and asks before each change: new names for firmware sensors with an id and no name, and the id of names that have none. It never renames nor changes units (scdata converts readings with them). Different names for the same id, ids not in the API and names without id are listed to review by hand, with the blueprints that use each name. `--yes` applies everything, `--firmware <path or url>` reads another `Sensors.h`. Changes are recorded in the history as `names sync`. Names can also be edited with `PUT /api/v1/names/<name>` (`{"id": 258, "description": "SCD4X CO2", "unit": "ppm"}`, admin) and `DELETE`.
-
-## Local deployment
-
-You can deploy via `docker` or by running the different components separately.
-
-### Installation
+## Development
 
 ```
 pip install -e ".[dev]"
-```
-
-### Environment variables
-
-Copy `env.example` to `.env` and fill it in. `.env` is never committed nor copied into the docker image: `compose.yml` loads it at runtime.
-
-```
-#TOKENS
-SC_BEARER=sc-bearer
-# CELERY (broker) and locks: redis service
-CELERY_BROKER=redis://redis:6379/0
-REDIS_URL=redis://redis:6379/1
-CELERY_TIMEZONE=Europe/Madrid
-# FLASK
-FLASK_APP=scflows
-FLASK_DEBUG=0
-# Keep the user, password and database in line with POSTGRES_* below
-SQLALCHEMY_DATABASE_URI=postgresql+psycopg://flows:change-me@postgres:5432/flows
-FLASK_SECRET_KEY=change-me
-PUBLIC_URL=https://flows.smartcitizen.me
-# POSTGRES
-POSTGRES_USER=flows
-POSTGRES_PASSWORD=change-me
-POSTGRES_DB=flows
-# BACKUPS
-S3_DATA_BUCKET=bucket-name
-AWS_ACCESS_KEY_ID=key-id
-AWS_SECRET_ACCESS_KEY=secret-key
-AWS_DEFAULT_REGION=eu-west-1
-```
-
-Generate `FLASK_SECRET_KEY` with `python -c "import secrets; print(secrets.token_hex(32))"`.
-
-### Tests
-
-```
+cp env.example .env     # and fill it in
 pytest
 ```
 
-### Flask app
-
-Run the app, either directly with flask:
-
-```
-flask run
-```
-
-Which will run the app in `localhost:5000`. Or with `gunicorn`:
-
-```
-gunicorn --workers 1 --timeout 120 --bind 0.0.0.0:5000 -m 007 'scflows:create_app()' --error-logfile - --access-logfile -
-```
-
-### Celery workers
+Run the app (`flask run`), the workers and the schedule:
 
 ```
 celery --app scflows.worker:app worker -l info
 celery --app scflows.worker:app beat -l info   # only one instance
 ```
 
-#### Flower
-
-[Flower](https://flower.readthedocs.io/en/latest/) monitors the celery workers. It runs behind the proxy under `/flower`, protected with basic auth. Create the credentials (the file is not committed):
+Or everything with docker (`postgres`, `redis`, `web`, `celery`, `beat`, `flower`, and `proxy`, the only service with ports):
 
 ```
-scflows/public/caddy/flower_auth.sh <user> <password>
-```
-
-![](assets/flower.png)
-
-### Running with Docker
-
-```
-docker compose build
-docker compose up -d
-```
-
-Services: `postgres`, `redis`, `web` (flask app and API), `celery` (workers), `beat` (schedule), `flower` and `proxy` (Caddy). Only the proxy publishes ports (80 and 443). For local use without the proxy, publish the web app in a `compose.override.yml`:
-
-```
-services:
-  web:
-    ports:
-      - "5000:5000"
-```
-
-Then load the metadata and create the jobs:
-
-```
+docker compose up -d --build
 docker compose exec web flask --app scflows metadata import <smartcitizen-data checkout>
 docker compose exec web flask --app scflows jobs sync
 ```
 
-### Deploying
-
-See [docs/deploy.md](docs/deploy.md): server setup, `.env`, first boot, loading the metadata, verifying, moving from the old deployment, updates, backups (`scripts/backup.sh`) and troubleshooting.
-
-The `proxy` service runs [Caddy](https://caddyserver.com/) with `scflows/public/caddy/Caddyfile`. It requests and renews the TLS certificates for `DOMAIN` (set in `.env`) automatically, redirects HTTP to HTTPS and protects `/flower` with basic auth. Ports 80 and 443 must be reachable and `DOMAIN` must point to the server.
+Jobs can be run by hand, also as dry runs, which neither post nor store the processed results (a long run still backs the device up first):
 
 ```
-scflows/public/caddy/flower_auth.sh <user> <password>
-docker compose up -d proxy
+flask --app scflows jobs list [--task process|backup|long]
+flask --app scflows jobs run <device> process --dry-run [--inline]
+flask --app scflows jobs run <device> long --dry-run --inline
 ```
 
-Certificates are stored in the `caddy_data` volume.
+See [docs/deploy.md](docs/deploy.md) to deploy, update and back up the server.

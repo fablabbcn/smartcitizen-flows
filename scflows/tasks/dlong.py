@@ -81,7 +81,7 @@ async def long_device(device_id, dry_run, task_log, context):
         task_log.append(logger_handler('The backup failed: not processing', 'error'))
         return done('ABORTED', 'BACKUP_FAILED')
 
-    device = sc.Device(params=sc.APIParams(id=device_id))
+    device = sc.Device(params=sc.APIParams(id=device_id), blueprint_kind=Blueprint.LONG)
     hardware = device_hardware(device)
     context.update(device_context(device, hardware))
     for line in describe(context):

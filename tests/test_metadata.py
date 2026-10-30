@@ -30,7 +30,7 @@ def test_import(app, source):
     assert report.errors == []
     assert report.created == {'blueprints': 1, 'hardware': 2, 'calibrations': 2, 'names': 7}
     hardware = db.session.execute(db.select(Hardware).filter_by(name='SCAS_TEST1')).scalar_one()
-    assert hardware.blueprint.name == 'test_air'
+    assert [blueprint.name for blueprint in hardware.blueprints] == ['test_air']
     assert hardware.versions[0].from_date.isoformat() == '2024-04-01'
     kinds = dict(db.session.execute(db.select(Calibration.sensor_id, Calibration.kind)).all())
     assert kinds == {'212830246': 'alphasense_sensor', '10-002911': 'afe_board'}
@@ -61,8 +61,7 @@ def test_import_overwrite(app, source):
 
 
 def test_import_rejects_blueprints_not_in_flows(app, source):
-    edit_json(source / 'hardware' / 'SCAS_TEST2.json', lambda data: data.update(
-        blueprint_url='https://raw.githubusercontent.com/fablabbcn/smartcitizen-data/master/blueprints/sck_21.json'))
+    edit_json(source / 'hardware' / 'SCAS_TEST2.json', lambda data: data.update(blueprints=['sck_21']))
 
     report = import_metadata(str(source))
 
@@ -84,7 +83,7 @@ def test_import_rejects_invalid_blueprint_kinds(app, source):
 
 def test_import_reports_invalid_files(app, source):
     (source / 'hardware' / 'SCAS_BAD_DATE.json').write_text(json.dumps(
-        {'blueprint_url': None, 'description': 'x', 'versions': [{'ids': {}, 'from': '2024-13-01', 'to': None}]}))
+        {'blueprints': [], 'description': 'x', 'versions': [{'ids': {}, 'from': '2024-13-01', 'to': None}]}))
     (source / 'blueprints' / 'bad.json').write_text(json.dumps({'channels': [{'name': 'missing function'}]}))
 
     report = import_metadata(str(source))

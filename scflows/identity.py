@@ -111,9 +111,12 @@ class TokenCache:
 cache = TokenCache()
 
 
-def verify_token(token):
-    ''' Returns the Identity of a token, or None if the Smart Citizen API rejects it '''
-    cached = cache.get(token)
+def verify_token(token, fresh=False):
+    '''
+    Returns the Identity of a token, or None if the Smart Citizen API rejects it.
+    fresh: ask the API even if the token is cached (and cache the answer)
+    '''
+    cached = None if fresh else cache.get(token)
     if cached is not None:
         return cached[0]
 
@@ -197,4 +200,6 @@ def sign_in(username, password):
     except (ValueError, TypeError, KeyError):
         # json.JSONDecodeError is a ValueError
         abort(503, 'Cannot sign in: the Smart Citizen API answered an unexpected body')
-    return verify_token(token)
+    # The API gives back the same token on every sign in: a cached identity could keep a
+    # role or devices changed since
+    return verify_token(token, fresh=True)

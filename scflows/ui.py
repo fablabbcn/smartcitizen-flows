@@ -155,7 +155,11 @@ def render_hardware(name, data, check=None, new=False):
     if 'blueprints' not in data:
         data = dict(data, blueprints=[data['blueprint']] if data.get('blueprint') else [])
     hardware = None if new else devices.hardware_by_name([name]).get(name)
+    # Sensor ids of the versions shown, and those with a calibration, to link them
+    ids = {str(sensor_id) for version in data.get('versions') or [] for sensor_id in (version.get('ids') or {}).values()}
+    calibrated = sorted(db.session.execute(db.select(Calibration.sensor_id).where(Calibration.sensor_id.in_(ids))).scalars())
     return render_template('metadata/hardware.html', name=name, data=data, check=check, new=new,
+                           slot_ids=sorted(ids), calibrated=calibrated,
                            blueprints=blueprints, readonly=not current_user.is_admin,
                            devices=[] if new else devices.devices(current_user.identity, [name]),
                            attachments=[] if new else attachments.attachments_of(name),

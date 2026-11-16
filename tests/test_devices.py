@@ -8,6 +8,7 @@ from flask import g
 
 import scflows.jobs as jobs
 from scflows import db
+from scflows.calibrations import sensor_type
 from scflows.metadata import import_metadata
 from scflows.models import Job, JobRun
 from scflows.runlog import STAMPED, unstamped
@@ -61,6 +62,8 @@ def test_device_page(client):
 
     assert 'Balcony' in text and 'href="/metadata/hardware/SCAS_TEST2"' in text
     assert 'href="/metadata/calibrations/212830246"' in text
+    # With the sensor type from the code of the id
+    assert f'>{sensor_type("212830246")[0]}</span>' in text
     # Without calibration: a link to add it
     assert 'href="/metadata/calibrations/new?sensor_id=202760040"' in text and 'no calibration' in text
     assert f'href="/jobs/runs/{run.id}"' in text and 'DATA_POSTING_FAILED' in text

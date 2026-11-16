@@ -2,7 +2,7 @@ import pytest
 
 import scflows.identity as identity
 
-from conftest import MeResponse
+from conftest import USERS, MeResponse
 
 PASSWORDS = {'admin': 'admin-token', 'researcher': 'researcher-token', 'citizen': 'citizen-token'}
 
@@ -60,6 +60,17 @@ def test_citizen_cannot_sign_in(client, sc_sessions):
     assert '/login' in response.headers['Location']
     assert client.get('/jobs/').status_code == 302
     assert 'Only Smart Citizen admins and researchers' in client.get('/login').get_data(as_text=True)
+
+
+def test_sign_in_sees_a_new_role(client, sc_sessions, sc_me, monkeypatch):
+    # The API gives back the same token on every sign in: the role in the token cache is outdated
+    assert '/login' in login(client, 'citizen').headers['Location']
+    monkeypatch.setitem(USERS, 'citizen-token', dict(USERS['citizen-token'], role='researcher'))
+
+    assert login(client, 'citizen').headers['Location'] == '/'
+    assert len(sc_me) == 2
+    # Tokens sent to the API use the identity of the last sign in
+    assert identity.verify_token('citizen-token').role == 'researcher'
 
 
 def test_wrong_password(client, sc_sessions):

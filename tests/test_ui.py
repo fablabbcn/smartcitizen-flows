@@ -1,3 +1,4 @@
+import json
 import re
 
 import pytest
@@ -67,6 +68,31 @@ def test_edit_hardware_form(client):
     assert 'AS_48_32=212830246' in page
     assert 'value="2024-04-01"' in page
     assert 'Delete' in page and 'value="save"' in page
+
+
+def slot_calibrations(page):
+    return json.loads(re.search(r'<script type="application/json" id="slot-calibrations">(.*?)</script>', page, re.S).group(1))
+
+
+def test_hardware_links_slots_to_calibrations(client):
+    sign_in(client, 'admin')
+    page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
+
+    links = slot_calibrations(page)
+    assert links['checked'] == links['calibrated'] == ['10-002911', '212830246']
+    assert links['edit'] == '/metadata/calibrations/SENSOR_ID'
+    assert links['new'] == '/metadata/calibrations/new?sensor_id=SENSOR_ID'
+    assert 'One slot per line' not in page
+
+    # Checking a form links the ids typed in it
+    page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(
+        action='check', version_0_ids='AS_48_32=212830246\nAS_48_01=164210264\n')).get_data(as_text=True)
+    links = slot_calibrations(page)
+    assert links['checked'] == ['164210264', '212830246'] and links['calibrated'] == ['212830246']
+
+    # Researchers cannot add calibrations
+    sign_in(client, 'researcher', ['SCAS_TEST1'])
+    assert slot_calibrations(client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True))['new'] is None
 
 
 def test_check_hardware(client):

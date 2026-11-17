@@ -8,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1 class="row">{% if new %}New calibration{% else %}Calibration <span class="mono">{{ sensor_id }}</span>{% endif %} <span class="badge plain">{{ kind_label(kind) }}</span>{% if not new %} {{ sensor_type(sensor_id) }}{% endif %}</h1>
-        <p class="subtitle">{{ 'Values from the Alphasense calibration sheet, in the same order.' if kind == 'alphasense_sensor' else 'Values from the AFE board calibration sheet.' }}{% if order_number and not new %} Order <span class="mono">{{ order_number }}</span>.{% endif %}</p>
+        {% if order_number and not new %}<p class="subtitle">Order <span class="mono">{{ order_number }}</span></p>{% endif %}
     </div>
     {% if not new %}
     <div class="actions">
@@ -61,7 +61,6 @@
             <div class="field">
                 <label for="order_number">Order number <span class="optional">(optional)</span></label>
                 <input class="input mono" id="order_number" name="order_number" value="{{ order_number or '' }}" maxlength="64">
-                <p class="hint">Alphasense order number of the sensor. Recorded in the history; not used by processing.</p>
             </div>
         </div>
     </div>
@@ -145,7 +144,7 @@
     <div class="card-body">
         <div>
             <h3>Delete calibration</h3>
-            <p class="hint">Hardware with sensor {{ sensor_id }} gets a warning in its check, and the channels that use the sensor are not processed. The history is kept.</p>
+            <p class="hint">Channels that use sensor {{ sensor_id }} are no longer processed. The history is kept.</p>
         </div>
         <form method="POST" action="{{ url_for('ui.delete', kind='calibration', key=sensor_id) }}" data-confirm="Delete calibration {{ sensor_id }}?">
             {{ csrf() }}

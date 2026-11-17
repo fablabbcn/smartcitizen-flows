@@ -94,12 +94,12 @@
 {%- if location %}{% set link = location | storage_link %}{% if link %}<a class="mono" href="{{ link }}" target="_blank" rel="noopener">{{ location }}</a>{% else %}<span class="mono">{{ location }}</span>{% endif %}{% endif -%}
 {%- endmacro %}
 
-{# Versions of a hardware with their sensor ids, linked to their calibrations ({sensor id: calibrated}) #}
+{# Versions of a hardware with their sensor ids and types, linked to their calibrations ({sensor id: calibrated}) #}
 {% macro versions_list(versions, calibrated) -%}
 <ul class="plain-list">
 {% for version in versions %}
     <li><span class="muted small">{{ version['from'] or '…' }} to {{ version['to'] or 'now' }}</span>
-        {% for slot, sensor_id in version['ids'].items() %}<span class="nowrap">{{ slot }}={{ calibration_link(sensor_id, calibrated.get(sensor_id, True)) }}</span>{% if not loop.last %}, {% endif %}{% else %}<span class="muted">no sensor ids</span>{% endfor %}</li>
+        {% for slot, sensor_id in version['ids'].items() %}{% set found = sensor_id | sensor_type %}<span class="nowrap">{{ slot }}={{ calibration_link(sensor_id, calibrated.get(sensor_id, True)) }}{% if found %} <span class="muted" title="{{ found[1] }}">{{ found[0] }}</span>{% endif %}</span>{% if not loop.last %}, {% endif %}{% else %}<span class="muted">no sensor ids</span>{% endfor %}</li>
 {% endfor %}
 </ul>
 {%- endmacro %}

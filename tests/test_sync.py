@@ -184,9 +184,3 @@ def test_summary_leaves_out_zeros():
     assert jobs.sync_summary({'process': {'created': 0, 'enabled': 2, 'disabled': 0},
                               'backup': {'created': 0, 'enabled': 0, 'disabled': 0}}) == 'process 2 enabled'
     assert jobs.sync_summary({'process': {'created': 0, 'enabled': 0, 'disabled': 0}}) == 'no changes'
-
-
-def test_jobs_page_states_the_schedules(app, client, redis):
-    sign_in(client, 'admin')
-    page = client.get('/jobs/').get_data(as_text=True)
-    assert 'processed every 3 h and backed up every 6 h' in page and 'runs every 7 days unless the long blueprint sets another interval' in page

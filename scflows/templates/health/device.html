@@ -76,7 +76,7 @@
 <div class="card">
     <div class="card-header">
         <h2>Runs</h2>
-        <span class="hint">Newest on the right. Each run checks the data it processed. History of {{ keep_days }} days.</span>
+        <span class="hint">Oldest first. Each run checks the data it processed. History of {{ keep_days }} days.</span>
     </div>
     <div class="card-body">
         <span class="dots large">{% for item in items | reverse %}<a class="dot {{ item.status }}{% if item.id == selected.id %} selected{% endif %}" href="{{ url_for('health_ui.device', device_id=device_id, record=item.id) }}" title="{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}: {{ item.status }}"></a>{% endfor %}</span>

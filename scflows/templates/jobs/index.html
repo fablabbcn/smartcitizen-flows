@@ -5,7 +5,6 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
-        <p class="subtitle">Devices are processed every {{ intervals.process }} h and backed up every {{ intervals.backup }} h, according to the blueprints of their hardware. Long processing (baselines over months of backups) runs every {{ (intervals.long / 24) | int }} days unless the long blueprint sets another interval. Jobs are synced with the Smart Citizen API every hour.</p>
         <p class="hint">
             {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
             {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}: {{ last_sync.report | sync_summary }}{% endif %}

@@ -5,7 +5,7 @@
 <div class="page-header">
     <div>
         <h1>Device health</h1>
-        <p class="subtitle">Results of the blueprint checks (gaps, implausible and flat values, outliers) for each processing run.{% if not current_user.is_admin %} Showing your devices only.{% endif %}</p>
+        {% if not current_user.is_admin %}<p class="subtitle">Your devices only.</p>{% endif %}
     </div>
 </div>
 

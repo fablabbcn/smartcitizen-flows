@@ -174,7 +174,21 @@
       if (kind) kind.addEventListener('change', update);
       update();
     });
-    // Hardware versions: the type of each slot, line by line
+    // Hardware versions: the type of each slot, line by line, with a link to its calibration
+    var calibrationsElement = document.getElementById('slot-calibrations');
+    var calibrations = null;
+    try { calibrations = calibrationsElement ? JSON.parse(calibrationsElement.textContent) : null; } catch (error) {}
+    var sensorLink = function (id) {
+      // Ids typed since the page loaded are not checked: plain text until saved or checked
+      var checked = calibrations && calibrations.checked.indexOf(id) !== -1;
+      var known = checked && calibrations.calibrated.indexOf(id) !== -1;
+      var url = !checked ? null : known ? calibrations.edit : calibrations['new'];
+      var element = document.createElement(url ? 'a' : 'span');
+      element.textContent = id;
+      if (url) element.href = url.replace('SENSOR_ID', encodeURIComponent(id));
+      if (url && !known) element.title = 'No calibration in flows. Add one';
+      return element;
+    };
     document.querySelectorAll('[data-slot-types]').forEach(function (list) {
       var area = document.getElementById(list.getAttribute('data-slot-types'));
       var update = function () {
@@ -187,7 +201,8 @@
           var item = document.createElement('li');
           // AS slots hold an Alphasense sensor or an AFE board (its PT1000), PT slots an AFE board
           var problem = found.warning || (slot.indexOf('PT') === 0 && !found.afe ? 'a PT slot needs an AFE board id' : null);
-          item.textContent = slot + ' ' + id + ': ' + (found.label || '') + (problem ? (found.label ? ' · ' : '') + problem : '');
+          var text = (found.label || '') + (problem ? (found.label ? ' · ' : '') + problem : '');
+          item.append(slot + ' ', sensorLink(id), text ? ': ' + text : '');
           if (found.title) item.title = found.title;
           if (problem) item.className = 'warning-text';
           list.appendChild(item);

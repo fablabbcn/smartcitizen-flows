@@ -7,7 +7,7 @@
 <div class="page-header">
     <div>
         <h1>Parameters of <span class="mono">{{ name }}</span></h1>
-        <p class="subtitle">Long processing of every device with a {{ name }} sensor uses these values over those of its long blueprint. {% if exists %}{% else %}None set: the blueprint values apply.{% endif %}</p>
+        {% if not exists %}<p class="subtitle">None set: the blueprint values apply.</p>{% endif %}
     </div>
     {% if exists %}
     <div class="actions">

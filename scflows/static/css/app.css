@@ -598,6 +598,7 @@ fieldset.plain:disabled .input { background: var(--color-surface-muted); color: 
 .dots .dot.warning { background: var(--color-warning); }
 .dots .dot.problem, .dots .dot.error { background: var(--color-danger); }
 .dots .dot.selected { outline: 2px solid var(--color-text); outline-offset: 1px; }
+.dots.large { display: flex; flex-wrap: wrap; gap: 4px; }
 .dots.large .dot { width: 14px; height: 14px; }
 
 .issues { margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }

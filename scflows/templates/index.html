@@ -4,8 +4,8 @@
 {% block content %}
 <section class="hero">
     <h1>Smart Citizen Flows</h1>
-    <p>Processing and backups of Smart Citizen devices, and the hardware, blueprints and calibrations they depend on.</p>
     {% if not current_user.is_authenticated %}
+    <p>Processing and backups of Smart Citizen devices.</p>
     <a class="btn primary" href="{{ url_for('auth.login') }}">Sign in</a>
     {% endif %}
 </section>
@@ -15,7 +15,7 @@
     {% if jobs is not none %}
     <a class="card section-card" href="{{ url_for('jobs_ui.index') }}">
         <h2>Jobs</h2>
-        <p>Scheduled processing and backups per device, with manual runs, pause and resume.</p>
+        <p>Processing and backups per device.</p>
         <div class="figures">
             {{ badge('active', jobs.active ~ ' active') }}
             {{ badge('paused', jobs.paused ~ ' paused') }}
@@ -25,7 +25,7 @@
     {% endif %}
     <a class="card section-card" href="{{ url_for('health_ui.index') }}">
         <h2>Health</h2>
-        <p>{% if current_user.is_admin %}Gaps, implausible and flat values and outliers found in the data of each device, run by run.{% else %}Gaps, implausible and flat values and outliers found in the data of your devices.{% endif %}</p>
+        <p>Data checks per device.</p>
         <div class="figures">
             {% if health.problem %}{{ badge('problem', health.problem ~ ' with problems') }}{% endif %}
             {% if health.warning %}{{ badge('warning', health.warning ~ ' with warnings') }}{% endif %}
@@ -35,7 +35,7 @@
     </a>
     <a class="card section-card" href="{{ url_for('ui.index') }}">
         <h2>Metadata</h2>
-        <p>{% if current_user.is_admin %}Hardware of each device, with its blueprint and the sensors mounted in each period, and sensor calibrations.{% else %}The hardware of your devices, with the sensors mounted in each period, and their calibrations (read only).{% endif %}</p>
+        <p>Hardware, blueprints and calibrations.</p>
         <div class="figures">
             <span class="badge plain">{{ metadata.hardware }} hardware</span>
             <span class="badge plain">{{ metadata.calibrations }} calibrations</span>
@@ -44,7 +44,7 @@
     </a>
     <a class="card section-card" href="{{ url_for('api.index') }}">
         <h2>API</h2>
-        <p>Read hardware, blueprints and calibrations as JSON. Changes require a Smart Citizen admin token.</p>
+        <p>Metadata as JSON.</p>
         <div class="figures"><code>/api/v1/</code></div>
     </a>
 </div>

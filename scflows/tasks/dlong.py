@@ -27,7 +27,7 @@ async def back_up(device_id, logger_handler, task_log, context=None):
     ''' Brings the backup up to date, unless a backup of the device is already running '''
     from scflows.tasks.dbackup import dbackup
 
-    # Backups are only written to S3: with a local storage (STORAGE_ROOT, e.g. tests) they are used as they are
+    # With a local storage (STORAGE_ROOT: tests, a local stack) the backups are used as the backup jobs left them
     if not root().startswith('s3://'):
         task_log.append(logger_handler(f'Local storage {root()}: using the backups as they are', 'warning'))
         return True

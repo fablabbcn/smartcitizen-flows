@@ -42,7 +42,8 @@ class FakeDevice:
         self.loaded = True
         return True
 
-    def backup_to_storage(self, mode):
+    def backup_to_storage(self, mode, root=None):
+        self.backed_up = (mode, root)
         return True
 
 
@@ -117,3 +118,28 @@ def test_backups_keep_the_readings_before_the_first_hardware_version(s3, monkeyp
 
     assert state == ['SUCCESS', 'BACKUP_DONE']
     assert FakeDevice.instance.versions == []
+
+
+def test_backups_to_a_local_storage(monkeypatch, tmp_path):
+    # A local stack without S3 (STORAGE_ROOT): request.json and the backups go to the folder
+    utc = datetime.timezone.utc
+    monkeypatch.setenv('STORAGE_ROOT', str(tmp_path))
+    monkeypatch.delenv('S3_DATA_BUCKET', raising=False)
+    monkeypatch.setattr(dbackup_module, 'refresh_metadata', lambda: None)
+    monkeypatch.setattr(dbackup_module.boto3, 'resource', lambda name: pytest.fail('S3 used'))
+    created, last = datetime.datetime(2026, 10, 1, tzinfo=utc), datetime.datetime(2026, 10, 5, tzinfo=utc)
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(created, last))
+
+    context = {}
+    _, state = asyncio.run(dbackup_module.dbackup(1, context=context))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    assert FakeDevice.instance.backed_up == ('overwrite', str(tmp_path))
+    assert context['storage'] == f'{tmp_path}/devices/1/'
+    stored = json.loads((tmp_path / 'devices' / '1' / 'request.json').read_text())
+    assert datetime.datetime.fromisoformat(stored['last_requested_data']) == last
+
+    # The next backup continues from there
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(created, last))
+    _, state = asyncio.run(dbackup_module.dbackup(1, up_to_date=True))
+    assert state == ['ABORTED', 'NO_NEW_DATA']

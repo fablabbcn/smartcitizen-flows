@@ -4,6 +4,7 @@ import sys
 import asyncio
 import io
 import os
+import tempfile
 import json
 import boto3
 import awswrangler as wr
@@ -35,9 +36,17 @@ class LocalObject:
             return {'Body': io.BytesIO(file.read())}
 
     def put(self, Body):
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        with open(self.path, 'wb') as file:
-            file.write(Body)
+        # Written aside and then replaced: a failed write keeps the previous request.json
+        folder = os.path.dirname(self.path)
+        os.makedirs(folder, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(dir=folder, suffix='.tmp')
+        try:
+            with os.fdopen(descriptor, 'wb') as file:
+                file.write(Body)
+            os.replace(temporary, self.path)
+        except BaseException:
+            os.remove(temporary)
+            raise
 
 
 def request_object(device_id):

@@ -143,3 +143,18 @@ def test_backups_to_a_local_storage(monkeypatch, tmp_path):
     monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(created, last))
     _, state = asyncio.run(dbackup_module.dbackup(1, up_to_date=True))
     assert state == ['ABORTED', 'NO_NEW_DATA']
+
+
+def test_a_failed_write_keeps_the_previous_request(tmp_path, monkeypatch):
+    path = tmp_path / 'devices' / '1' / 'request.json'
+    dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-10-05T00:00:00+00:00"}')
+
+    def broken(descriptor, mode):
+        raise OSError('disk full')
+
+    monkeypatch.setattr(dbackup_module.os, 'fdopen', broken)
+    with pytest.raises(OSError):
+        dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-11-01T00:00:00+00:00"}')
+
+    assert json.loads(path.read_text())['last_requested_data'] == '2026-10-05T00:00:00+00:00'
+    assert [item.name for item in path.parent.iterdir()] == ['request.json']

@@ -279,6 +279,7 @@ python3 -c "import secrets; print(secrets.token_hex(24))"   # POSTGRES_PASSWORD
 | `SC_BEARER` | The API token of a Smart Citizen **admin** | Processing posts the processed data with it, and the hourly sync searches devices and users with it. Without it, processing runs are aborted with `NO_TOKEN` (dry runs still process), and `/jobs/` shows that posting is disabled. |
 | `FLASK_DEBUG` | `0` | Flask 3 applies `1` under gunicorn too: debug mode in production. |
 | `S3_DATA_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` | The backup bucket and its credentials | Backups write raw device data there. boto3 reads `AWS_DEFAULT_REGION`: an old `AWS_REGION` alone is not enough. |
+| `STORAGE_ROOT` | (unset) | A local folder used instead of S3 for backups, long processing results and attachments (local stack, tests). Not an `s3://` url: S3 is set with `S3_DATA_BUCKET`. |
 
 The following values need to be kept as they are:
 

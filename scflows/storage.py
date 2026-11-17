@@ -12,6 +12,8 @@ from os import environ
 
 import pandas as pd
 
+from .custom_logger import logger
+
 
 def root():
     ''' s3://<S3_DATA_BUCKET>, or STORAGE_ROOT (e.g. a local folder) '''
@@ -20,12 +22,33 @@ def root():
     return f"s3://{environ['S3_DATA_BUCKET']}"
 
 
+# {bucket: region}, only for regions S3 answered
+REGIONS = {}
+
+
+def bucket_region(bucket):
+    '''
+    Region of a bucket, asked to S3. Requests sent to another region fail (IllegalLocationConstraintException),
+    so AWS_REGION or AWS_DEFAULT_REGION are only used if S3 cannot be asked
+    '''
+    from pyarrow import fs
+    if bucket not in REGIONS:
+        try:
+            REGIONS[bucket] = fs.resolve_s3_region(bucket)
+        except OSError as error:
+            region = environ.get('AWS_REGION') or environ.get('AWS_DEFAULT_REGION')
+            logger.warning(f'Cannot find the region of bucket {bucket} ({error}), using {region or "the default"}')
+            return region
+    return REGIONS[bucket]
+
+
 def filesystem(location):
     ''' pyarrow filesystem and path of a location (s3://bucket/path or a local folder) '''
     from pyarrow import fs
     if location.startswith('s3://'):
-        region = environ.get('AWS_REGION') or environ.get('AWS_DEFAULT_REGION')
-        return (fs.S3FileSystem(region=region) if region else fs.S3FileSystem()), location[len('s3://'):]
+        path = location[len('s3://'):]
+        region = bucket_region(path.split('/', 1)[0])
+        return (fs.S3FileSystem(region=region) if region else fs.S3FileSystem()), path
     return fs.LocalFileSystem(), location
 
 

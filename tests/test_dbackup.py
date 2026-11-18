@@ -177,12 +177,21 @@ def test_a_failed_write_keeps_the_previous_request(tmp_path, monkeypatch):
     dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-10-05T00:00:00+00:00"}')
 
     descriptors = []
-    def broken(descriptor, mode):
+    mkstemp = dbackup_module.tempfile.mkstemp
+    def created(**kwargs):
+        descriptor, temporary = mkstemp(**kwargs)
         descriptors.append(descriptor)
-        raise OSError('disk full')
+        return descriptor, temporary
 
-    monkeypatch.setattr(dbackup_module.os, 'fdopen', broken)
-    with pytest.raises(OSError):
+    class Full:
+        def __init__(self, path, mode): self.file = open(path, mode)
+        def __enter__(self): return self
+        def __exit__(self, *args): self.file.close()
+        def write(self, data): raise OSError('disk full')
+
+    monkeypatch.setattr(dbackup_module.tempfile, 'mkstemp', created)
+    monkeypatch.setattr(dbackup_module, 'open', Full, raising=False)
+    with pytest.raises(OSError, match='disk full'):
         dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-11-01T00:00:00+00:00"}')
 
     assert json.loads(path.read_text())['last_requested_data'] == '2026-10-05T00:00:00+00:00'

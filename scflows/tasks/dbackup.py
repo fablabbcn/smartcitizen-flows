@@ -2,7 +2,9 @@ import scdata as sc
 
 import sys
 import asyncio
+import io
 import os
+import tempfile
 import json
 import boto3
 import awswrangler as wr
@@ -12,13 +14,48 @@ import botocore
 from scflows.config import config
 from scflows.custom_logger import logger
 from scflows.runlog import log_line
+from scflows.storage import root
 from scflows.tasks.context import describe, device_context, iso, library_warnings
 from scflows.tools import refresh_metadata
 
 
 def backup_location(device_id):
     ''' Where the backups of a device are: parquet files in data/, the last date backed up in request.json '''
-    return f"s3://{os.environ.get('S3_DATA_BUCKET', '')}/devices/{device_id}/"
+    return f"{root()}/devices/{device_id}/"
+
+
+class LocalObject:
+    ''' A file under STORAGE_ROOT, read and written as boto3's s3.Object '''
+    def __init__(self, path):
+        self.path = path
+
+    def get(self):
+        if not os.path.exists(self.path):
+            raise botocore.exceptions.ClientError({'Error': {'Code': 'NoSuchKey'}}, 'GetObject')
+        with open(self.path, 'rb') as file:
+            return {'Body': io.BytesIO(file.read())}
+
+    def put(self, Body):
+        # Written aside and then replaced: a failed write keeps the previous request.json
+        folder = os.path.dirname(self.path)
+        os.makedirs(folder, exist_ok=True)
+        descriptor, temporary = tempfile.mkstemp(dir=folder, suffix='.tmp')
+        try:
+            # Only its name is kept: the file is opened again, and closed, by open
+            os.close(descriptor)
+            with open(temporary, 'wb') as file:
+                file.write(Body)
+            os.replace(temporary, self.path)
+        except BaseException:
+            os.remove(temporary)
+            raise
+
+
+def request_object(device_id):
+    ''' request.json of a device: in S3, or under STORAGE_ROOT (e.g. a local stack without S3) '''
+    if root().startswith('s3://'):
+        return boto3.resource('s3').Object(os.environ['S3_DATA_BUCKET'], f'devices/{device_id}/request.json')
+    return LocalObject(os.path.join(root(), 'devices', str(device_id), 'request.json'))
 
 
 async def dbackup(device, up_to_date=False, context=None):
@@ -64,7 +101,6 @@ async def back_up_device(device, up_to_date, task_log, context):
     # Also the readings before the first hardware version, which scdata does not load for processing:
     # each backup stores the end of its period, so readings left out would never be requested again
     d.versions = []
-    s3 = boto3.resource('s3')
     task_state = [None, None]
 
     if d:
@@ -77,7 +113,7 @@ async def back_up_device(device, up_to_date, task_log, context):
         error = False
 
         try:
-            metadata = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json").get()
+            metadata = request_object(d.id).get()
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == "NoSuchKey":
                 # The object does not exist.
@@ -129,10 +165,11 @@ async def back_up_device(device, up_to_date, task_log, context):
                     context['rows'] = len(d.data)
 
                     # Back it up it
-                    if d.backup_to_storage(mode=mode):
+                    # S3 as before, or a local folder (scdata 1.8.0)
+                    local = {} if root().startswith('s3://') else {'root': root()}
+                    if d.backup_to_storage(mode=mode, **local):
 
-                        s3object = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json")
-                        s3object.put(
+                        request_object(d.id).put(
                             Body=(bytes(json.dumps({"last_requested_data": d.options.max_date.isoformat()}).encode('UTF-8')))
                         )
                         task_state = ['SUCCESS', 'BACKUP_DONE']
@@ -147,8 +184,7 @@ async def back_up_device(device, up_to_date, task_log, context):
                     if d.data.empty:
                         task_log.append(logger_handler(f'Device {device} data is empty. Nothing to do', 'warning'))
                         # Even if there is no data, we still store the key
-                        s3object = s3.Object(f"{os.environ['S3_DATA_BUCKET']}", f"devices/{d.id}/request.json")
-                        s3object.put(
+                        request_object(d.id).put(
                             Body=(bytes(json.dumps({"last_requested_data": d.options.max_date.isoformat()}).encode('UTF-8')))
                         )
                         task_state = ['ABORTED', 'EMPTY_DATA']

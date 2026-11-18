@@ -80,9 +80,11 @@ def device_hardware_name(device_id):
 
 
 def backup_location(device_id):
-    ''' Where the backups of a device are (dbackup writes them to S3) '''
-    bucket = os.environ.get('S3_DATA_BUCKET')
-    return f's3://{bucket}/devices/{device_id}/' if bucket else None
+    ''' Where the backups of a device are (S3, or STORAGE_ROOT), or None without storage '''
+    from .storage import root
+    if not (os.environ.get('STORAGE_ROOT') or os.environ.get('S3_DATA_BUCKET')):
+        return None
+    return f'{root()}/devices/{device_id}/'
 
 
 def storage_link(location):

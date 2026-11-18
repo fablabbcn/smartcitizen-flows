@@ -42,7 +42,8 @@ class FakeDevice:
         self.loaded = True
         return True
 
-    def backup_to_storage(self, mode):
+    def backup_to_storage(self, mode, root=None):
+        self.backed_up = (mode, root)
         return True
 
 
@@ -50,6 +51,7 @@ class FakeDevice:
 def s3(monkeypatch):
     store = {}
     monkeypatch.setenv('S3_DATA_BUCKET', 'bucket')
+    monkeypatch.delenv('STORAGE_ROOT', raising=False)
     monkeypatch.setattr(dbackup_module, 'refresh_metadata', lambda: None)
     monkeypatch.setattr(dbackup_module.boto3, 'resource',
                         lambda name: SimpleNamespace(Object=lambda bucket, key: FakeObject(store, key)))
@@ -117,3 +119,91 @@ def test_backups_keep_the_readings_before_the_first_hardware_version(s3, monkeyp
 
     assert state == ['SUCCESS', 'BACKUP_DONE']
     assert FakeDevice.instance.versions == []
+
+
+def test_backups_to_a_local_storage(monkeypatch, tmp_path):
+    # A local stack without S3 (STORAGE_ROOT): request.json and the backups go to the folder
+    utc = datetime.timezone.utc
+    monkeypatch.setenv('STORAGE_ROOT', str(tmp_path))
+    monkeypatch.delenv('S3_DATA_BUCKET', raising=False)
+    monkeypatch.setattr(dbackup_module, 'refresh_metadata', lambda: None)
+    monkeypatch.setattr(dbackup_module.boto3, 'resource', lambda name: pytest.fail('S3 used'))
+    created, last = datetime.datetime(2026, 10, 1, tzinfo=utc), datetime.datetime(2026, 10, 5, tzinfo=utc)
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(created, last))
+
+    context = {}
+    _, state = asyncio.run(dbackup_module.dbackup(1, context=context))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    assert FakeDevice.instance.backed_up == ('overwrite', str(tmp_path))
+    assert context['storage'] == f'{tmp_path}/devices/1/'
+    stored = json.loads((tmp_path / 'devices' / '1' / 'request.json').read_text())
+    assert datetime.datetime.fromisoformat(stored['last_requested_data']) == last
+
+    # The next backup continues from there
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: FakeDevice(created, last))
+    _, state = asyncio.run(dbackup_module.dbackup(1, up_to_date=True))
+    assert state == ['ABORTED', 'NO_NEW_DATA']
+
+
+def test_backups_to_a_local_storage_with_scdata(monkeypatch, tmp_path):
+    # The backup of scdata itself, read back as from S3
+    from scdata.device.device import Device, read_storage
+
+    class ScdataDevice(FakeDevice):
+        def backup_to_storage(self, mode, root=None):
+            self.handler.json.model_dump_json = lambda: '{"id": 1}'
+            self._backup_to_folder = lambda *args: Device._backup_to_folder(self, *args)
+            return Device.backup_to_storage(self, mode=mode, root=root)
+
+    utc = datetime.timezone.utc
+    monkeypatch.setenv('STORAGE_ROOT', str(tmp_path))
+    monkeypatch.delenv('S3_DATA_BUCKET', raising=False)
+    monkeypatch.setattr(dbackup_module, 'refresh_metadata', lambda: None)
+    monkeypatch.setattr(dbackup_module.boto3, 'resource', lambda name: pytest.fail('S3 used'))
+    created, last = datetime.datetime(2026, 10, 1, tzinfo=utc), datetime.datetime(2026, 10, 5, tzinfo=utc)
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: ScdataDevice(created, last))
+
+    _, state = asyncio.run(dbackup_module.dbackup(1))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    data = read_storage(str(tmp_path / 'devices' / '1' / 'data'))
+    assert list(data.columns) == ['TEMP'] and data.index[0] == last
+    assert (tmp_path / 'devices' / '1' / 'metadata.json').read_text() == '{"id": 1}'
+
+
+def test_a_failed_write_keeps_the_previous_request(tmp_path, monkeypatch):
+    path = tmp_path / 'devices' / '1' / 'request.json'
+    dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-10-05T00:00:00+00:00"}')
+
+    descriptors = []
+    mkstemp = dbackup_module.tempfile.mkstemp
+    def created(**kwargs):
+        descriptor, temporary = mkstemp(**kwargs)
+        descriptors.append(descriptor)
+        return descriptor, temporary
+
+    class Full:
+        def __init__(self, path, mode): self.file = open(path, mode)
+        def __enter__(self): return self
+        def __exit__(self, *args): self.file.close()
+        def write(self, data): raise OSError('disk full')
+
+    monkeypatch.setattr(dbackup_module.tempfile, 'mkstemp', created)
+    monkeypatch.setattr(dbackup_module, 'open', Full, raising=False)
+    with pytest.raises(OSError, match='disk full'):
+        dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-11-01T00:00:00+00:00"}')
+
+    assert json.loads(path.read_text())['last_requested_data'] == '2026-10-05T00:00:00+00:00'
+    assert [item.name for item in path.parent.iterdir()] == ['request.json']
+    # Nor its descriptor open
+    with pytest.raises(OSError):
+        dbackup_module.os.fstat(descriptors[0])
+
+
+def test_storage_root_of_the_whole_disk(monkeypatch):
+    from scflows.storage import root
+    monkeypatch.setenv('STORAGE_ROOT', '/')
+    assert root() == '/'
+    monkeypatch.setenv('STORAGE_ROOT', '/storage/')
+    assert root() == '/storage'

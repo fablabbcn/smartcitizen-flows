@@ -18,7 +18,8 @@ from .custom_logger import logger
 def root():
     ''' s3://<S3_DATA_BUCKET>, or STORAGE_ROOT (e.g. a local folder) '''
     if environ.get('STORAGE_ROOT'):
-        return environ['STORAGE_ROOT'].rstrip('/')
+        # STORAGE_ROOT=/ stays /, not a relative ''
+        return environ['STORAGE_ROOT'].rstrip('/') or '/'
     return f"s3://{environ['S3_DATA_BUCKET']}"
 
 

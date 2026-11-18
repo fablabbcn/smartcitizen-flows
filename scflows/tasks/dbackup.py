@@ -41,7 +41,12 @@ class LocalObject:
         os.makedirs(folder, exist_ok=True)
         descriptor, temporary = tempfile.mkstemp(dir=folder, suffix='.tmp')
         try:
-            with os.fdopen(descriptor, 'wb') as file:
+            try:
+                file = os.fdopen(descriptor, 'wb')
+            except BaseException:
+                os.close(descriptor)
+                raise
+            with file:
                 file.write(Body)
             os.replace(temporary, self.path)
         except BaseException:

@@ -51,6 +51,7 @@ class FakeDevice:
 def s3(monkeypatch):
     store = {}
     monkeypatch.setenv('S3_DATA_BUCKET', 'bucket')
+    monkeypatch.delenv('STORAGE_ROOT', raising=False)
     monkeypatch.setattr(dbackup_module, 'refresh_metadata', lambda: None)
     monkeypatch.setattr(dbackup_module.boto3, 'resource',
                         lambda name: SimpleNamespace(Object=lambda bucket, key: FakeObject(store, key)))
@@ -175,7 +176,9 @@ def test_a_failed_write_keeps_the_previous_request(tmp_path, monkeypatch):
     path = tmp_path / 'devices' / '1' / 'request.json'
     dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-10-05T00:00:00+00:00"}')
 
+    descriptors = []
     def broken(descriptor, mode):
+        descriptors.append(descriptor)
         raise OSError('disk full')
 
     monkeypatch.setattr(dbackup_module.os, 'fdopen', broken)
@@ -184,3 +187,14 @@ def test_a_failed_write_keeps_the_previous_request(tmp_path, monkeypatch):
 
     assert json.loads(path.read_text())['last_requested_data'] == '2026-10-05T00:00:00+00:00'
     assert [item.name for item in path.parent.iterdir()] == ['request.json']
+    # Nor its descriptor open
+    with pytest.raises(OSError):
+        dbackup_module.os.fstat(descriptors[0])
+
+
+def test_storage_root_of_the_whole_disk(monkeypatch):
+    from scflows.storage import root
+    monkeypatch.setenv('STORAGE_ROOT', '/')
+    assert root() == '/'
+    monkeypatch.setenv('STORAGE_ROOT', '/storage/')
+    assert root() == '/storage'

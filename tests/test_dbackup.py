@@ -145,6 +145,32 @@ def test_backups_to_a_local_storage(monkeypatch, tmp_path):
     assert state == ['ABORTED', 'NO_NEW_DATA']
 
 
+def test_backups_to_a_local_storage_with_scdata(monkeypatch, tmp_path):
+    # The backup of scdata itself, read back as from S3
+    from scdata.device.device import Device, read_storage
+
+    class ScdataDevice(FakeDevice):
+        def backup_to_storage(self, mode, root=None):
+            self.handler.json.model_dump_json = lambda: '{"id": 1}'
+            self._backup_to_folder = lambda *args: Device._backup_to_folder(self, *args)
+            return Device.backup_to_storage(self, mode=mode, root=root)
+
+    utc = datetime.timezone.utc
+    monkeypatch.setenv('STORAGE_ROOT', str(tmp_path))
+    monkeypatch.delenv('S3_DATA_BUCKET', raising=False)
+    monkeypatch.setattr(dbackup_module, 'refresh_metadata', lambda: None)
+    monkeypatch.setattr(dbackup_module.boto3, 'resource', lambda name: pytest.fail('S3 used'))
+    created, last = datetime.datetime(2026, 10, 1, tzinfo=utc), datetime.datetime(2026, 10, 5, tzinfo=utc)
+    monkeypatch.setattr(dbackup_module.sc, 'Device', lambda **kwargs: ScdataDevice(created, last))
+
+    _, state = asyncio.run(dbackup_module.dbackup(1))
+
+    assert state == ['SUCCESS', 'BACKUP_DONE']
+    data = read_storage(str(tmp_path / 'devices' / '1' / 'data'))
+    assert list(data.columns) == ['TEMP'] and data.index[0] == last
+    assert (tmp_path / 'devices' / '1' / 'metadata.json').read_text() == '{"id": 1}'
+
+
 def test_a_failed_write_keeps_the_previous_request(tmp_path, monkeypatch):
     path = tmp_path / 'devices' / '1' / 'request.json'
     dbackup_module.LocalObject(str(path)).put(b'{"last_requested_data": "2026-10-05T00:00:00+00:00"}')

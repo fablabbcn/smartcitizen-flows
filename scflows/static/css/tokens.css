@@ -1,15 +1,17 @@
 /* Design tokens: colours, type, spacing and shapes used by app.css.
    Change values here to tweak the look of the whole interface.
-   The theme (light or dark) is set on <html data-theme>: the header switch, or the system setting by default */
+   The theme (light or dark) is set on <html data-theme>: the header switch, or the system setting by default.
+   Colours and fonts of smartcitizen.me and docs.smartcitizen.me */
 
 :root {
   color-scheme: light;
 
   /* Brand */
-  --color-accent: #1f6feb;
-  --color-accent-hover: #1a5fcc;
-  --color-accent-soft: #e7f0fe;
+  --color-accent: #0019ff;
+  --color-accent-hover: #0014cc;
+  --color-accent-soft: #e6e8ff;
   --color-on-accent: #ffffff;
+  --color-highlight: #ffc100;
 
   /* Surfaces and text */
   --color-bg: #f5f6f8;
@@ -17,9 +19,9 @@
   --color-surface-muted: #f0f2f5;
   --color-border: #dfe3e8;
   --color-border-strong: #c3c9d1;
-  --color-text: #1c2128;
+  --color-text: #1c1c1c;
   --color-text-muted: #5b6573;
-  --color-header-bg: #111418;
+  --color-header-bg: #1c1c1c;
   --color-header-text: #e6e9ed;
   --color-header-muted: #9aa3ad;
 
@@ -46,8 +48,10 @@
   --color-log-error: #ff7b72;
 
   /* Type */
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display: "Kanit", "Roboto Condensed", system-ui, sans-serif;
+  --font-sans: "Roboto", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-figures: "Space Mono", var(--font-mono);
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
   --text-md: 0.9375rem;
@@ -72,22 +76,22 @@
   --gutter: var(--space-5);
 
   /* Shapes */
-  --radius-sm: 4px;
-  --radius: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 2px;
+  --radius: 3px;
+  --radius-lg: 4px;
   --radius-pill: 999px;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.12);
-  --focus-ring: 0 0 0 3px rgba(31, 111, 235, 0.35);
+  --focus-ring: 0 0 0 3px rgba(0, 25, 255, 0.6);
 }
 
 /* Dark theme */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --color-accent: #4493f8;
-  --color-accent-hover: #6aa8fa;
-  --color-accent-soft: #15253d;
+  --color-accent: #6b78ff;
+  --color-accent-hover: #8f99ff;
+  --color-accent-soft: #181c3d;
   --color-on-accent: #0b0f14;
 
   --color-bg: #0d1117;
@@ -116,4 +120,5 @@
 
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 3px rgba(107, 120, 255, 0.45);
 }

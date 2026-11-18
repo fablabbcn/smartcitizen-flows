@@ -22,6 +22,9 @@ a { color: var(--color-accent); text-decoration: none; }
 a:hover { color: var(--color-accent-hover); text-decoration: underline; }
 
 h1, h2, h3, h4 { margin: 0; line-height: 1.25; font-weight: 600; }
+/* Titles as smartcitizen.me: Kanit, uppercase */
+h1, h2 { font-family: var(--font-display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.01em; }
+h1 { font-weight: 900; }
 h1 { font-size: var(--text-xl); }
 h2 { font-size: var(--text-lg); }
 h3 { font-size: var(--text-md); }
@@ -81,7 +84,10 @@ pre code { padding: 0; background: none; font-size: inherit; white-space: pre; }
   align-items: center;
   gap: var(--space-3);
   color: var(--color-header-text);
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 900;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .brand:hover { color: #fff; text-decoration: none; }
@@ -99,11 +105,14 @@ pre code { padding: 0; background: none; font-size: inherit; white-space: pre; }
   padding: 0 var(--space-4);
   border-bottom: 3px solid transparent;
   color: var(--color-header-muted);
+  font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 .tabs a:hover { color: #fff; background: rgba(255, 255, 255, 0.06); text-decoration: none; }
-.tabs a[aria-current="page"] { color: #fff; border-bottom-color: var(--color-accent); }
+.tabs a[aria-current="page"] { color: #fff; border-bottom-color: var(--color-highlight); }
 
 .topbar-end {
   display: flex;
@@ -133,7 +142,7 @@ pre code { padding: 0; background: none; font-size: inherit; white-space: pre; }
 
 /* Error pages */
 .error-page { padding: var(--space-7) 0; text-align: center; }
-.error-page .code { color: var(--color-text-muted); font-size: var(--text-xxl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.error-page .code { color: var(--color-text-muted); font-family: var(--font-display); font-size: var(--text-xxl); font-weight: 900; }
 .error-page h1 { margin: var(--space-2) 0 var(--space-3); }
 .error-page p { color: var(--color-text-muted); }
 .error-page .row { justify-content: center; margin-top: var(--space-5); }
@@ -215,13 +224,13 @@ a.card { display: block; color: inherit; transition: border-color 0.15s, box-sha
 a.card:hover { border-color: var(--color-accent); box-shadow: var(--shadow-lg); text-decoration: none; }
 
 .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
-.grid.wide { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.grid.wide { grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr)); }
 
 /* Stats */
 
 .stat { padding: var(--space-4); }
 .stat .label { color: var(--color-text-muted); font-size: var(--text-sm); }
-.stat .value { margin-top: var(--space-1); font-size: var(--text-xxl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .value { margin-top: var(--space-1); font-family: var(--font-figures); font-size: var(--text-xxl); font-weight: 700; }
 .stat .value.success { color: var(--color-success); }
 .stat .value.warning { color: var(--color-warning); }
 .stat .value.danger { color: var(--color-danger); }

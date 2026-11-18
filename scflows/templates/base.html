@@ -15,6 +15,9 @@
     {% block head %}{% endblock %}
     <title>{% block title %}{% endblock %}{% if self.title() %} · {% endif %}Smart Citizen Flows</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@500;800;900&family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;600&family=Space+Mono:wght@700&display=swap">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
     <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>

@@ -163,7 +163,7 @@ async def back_up_device(device, up_to_date, task_log, context):
                     context['rows'] = len(d.data)
 
                     # Back it up it
-                    # S3 as before; a local folder needs an scdata whose backup_to_storage takes a root
+                    # S3 as before, or a local folder (scdata 1.8.0)
                     local = {} if root().startswith('s3://') else {'root': root()}
                     if d.backup_to_storage(mode=mode, **local):
 

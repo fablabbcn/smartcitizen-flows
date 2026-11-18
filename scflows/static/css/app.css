@@ -224,7 +224,7 @@ a.card { display: block; color: inherit; transition: border-color 0.15s, box-sha
 a.card:hover { border-color: var(--color-accent); box-shadow: var(--shadow-lg); text-decoration: none; }
 
 .grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); }
-.grid.wide { grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); }
+.grid.wide { grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr)); }
 
 /* Stats */
 

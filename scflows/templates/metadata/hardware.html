@@ -54,6 +54,11 @@
                 <span class="hint">Overrides the parameters of its sensor types (Parameters tab) for the devices of this hardware. <code>function</code> selects the algorithm of a channel.</span>
             </div>
             <div class="field full">
+                <label for="process_parameters">Processing parameters <span class="optional">(optional, JSON)</span></label>
+                <textarea class="input" id="process_parameters" name="process_parameters" rows="3" spellcheck="false" placeholder='{"NO2": {"function": "alphasense_803_04"}}'>{% if data.process_parameters is string %}{{ data.process_parameters }}{% elif data.process_parameters %}{{ data.process_parameters | tojson(indent=2) }}{% endif %}</textarea>
+                <span class="hint">Overrides the kwargs of the channels of its process blueprint for the devices of this hardware. <code>function</code> selects the algorithm of a channel.</span>
+            </div>
+            <div class="field full">
                 <label for="forwarding">Forwarding <span class="optional">(optional)</span></label>
                 <input class="input" id="forwarding" name="forwarding" value="{{ data.forwarding or '' }}">
             </div>

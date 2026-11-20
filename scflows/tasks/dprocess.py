@@ -5,6 +5,7 @@ import asyncio
 from scflows.config import config, posting_enabled
 from scflows.custom_logger import logger
 from scflows.models import Blueprint
+from scflows.parameters import apply_parameters
 from scflows.runlog import log_line
 from scflows.tasks.context import describe, device_context, device_hardware, iso, library_warnings
 from scflows.tools import refresh_metadata
@@ -91,8 +92,12 @@ async def process_device(device, dry_run, task_log, context):
             task_log.append(logger_handler(f'Concluded job for {device}'))
             return task_log, ['ABORTED', 'NO_PROCESS_BLUEPRINT'], None
         d.use_blueprint(blueprint.name, blueprint.body)
+        # Process parameters of its hardware
+        apply_parameters(d, hardware, Blueprint.PROCESS)
         context['blueprint'] = d.blueprint
-        task_log.append(logger_handler(f'Blueprint {d.blueprint}'))
+        context['process_parameters'] = hardware.process_parameters or {}
+        task_log.append(logger_handler(f'Blueprint {d.blueprint}'
+                                       f'{", parameters of hardware " + hardware.name if hardware.process_parameters else ""}'))
 
         if d.handler.postprocessing['latest_postprocessing'] is not None:
             d.options.min_date = d.handler.postprocessing['latest_postprocessing']

@@ -131,3 +131,21 @@ def test_only_the_list_of_blueprints(hardware, key):
     hardware[key] = 'test_air'
 
     assert check_hardware(hardware).errors == [f'{key}: Extra inputs are not permitted']
+
+
+def test_parameters_of_channels_and_functions_that_exist(hardware):
+    hardware['process_parameters'] = {'NO2': {'function': 'alphasense_803_04', 'clip_negative_conc': True}}
+
+    assert check_hardware(hardware).warnings == check_hardware(HARDWARE).warnings
+
+
+def test_parameters_of_unknown_channels_and_functions(hardware):
+    # test_air is the only blueprint of SCAS_TEST1, of kind process
+    hardware['process_parameters'] = {'NO3': {'clip_negative_conc': True}, 'NO2': {'function': 'alphasense_803_4'}}
+    hardware['parameters'] = {'NO2': {'lam': 1e9}}
+
+    warnings = check_hardware(hardware).warnings
+
+    assert 'parameters: not used, the hardware has no long blueprint' in warnings
+    assert 'process_parameters.NO3: not a channel of blueprint test_air' in warnings
+    assert 'process_parameters.NO2: function alphasense_803_4 not found in scdata.device.process' in warnings

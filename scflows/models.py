@@ -62,6 +62,8 @@ class Hardware(TimestampMixin, db.Model):
     forwarding = db.Column(db.String(64))
     # Long processing parameters for the devices of this hardware: {channel: kwargs}
     parameters = db.Column(JSONType)
+    # Process parameters for the devices of this hardware: {channel: kwargs}
+    process_parameters = db.Column(JSONType)
     # One or two blueprints in flows, of different kinds (see Blueprint)
     links = db.relationship('HardwareBlueprint', cascade='all, delete-orphan', order_by='HardwareBlueprint.position')
     versions = db.relationship('HardwareVersion', back_populates='hardware', cascade='all, delete-orphan',
@@ -101,6 +103,7 @@ class Hardware(TimestampMixin, db.Model):
                 'comment': self.comment,
                 'forwarding': self.forwarding,
                 'parameters': self.parameters or {},
+                'process_parameters': self.process_parameters or {},
                 'versions': [version.to_json() for version in self.versions]}
 
 

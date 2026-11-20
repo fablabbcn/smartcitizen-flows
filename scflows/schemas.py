@@ -36,6 +36,8 @@ class HardwareIn(BaseModel):
     forwarding: Optional[str] = None
     # Long processing parameters for its devices: {channel: kwargs} (see parameters.py)
     parameters: Optional[Dict[str, Dict[str, Any]]] = None
+    # Process parameters for its devices: {channel: kwargs}, as above
+    process_parameters: Optional[Dict[str, Dict[str, Any]]] = None
     versions: List[HardwareVersionIn] = []
 
     @property

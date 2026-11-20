@@ -133,6 +133,7 @@ def hardware_from_form(form):
                          'to': form.get(f'version_{index}_to') or None})
     return {'blueprints': [name for name in form.getlist('blueprints') if name],
             'parameters': json_field(form.get('parameters')),
+            'process_parameters': json_field(form.get('process_parameters')),
             'description': form.get('description') or None,
             'comment': form.get('comment') or None,
             'forwarding': form.get('forwarding') or None,

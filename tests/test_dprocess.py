@@ -30,6 +30,7 @@ class FakeDevice:
         self.kwargs = kwargs
         self.blueprint = 'sc_air'
         self.used_blueprint = None
+        self.channels, self.versions = [], []
         self.checks = FakeDevice.options.get('checks', ['GAPS'])
         self.health = {}
         self.options = SimpleNamespace(min_date=None, channels=[], limit=None)
@@ -45,6 +46,8 @@ class FakeDevice:
     def use_blueprint(self, name, blueprint):
         self.blueprint = name
         self.used_blueprint = blueprint
+        self.channels = [SimpleNamespace(name=channel['name'], function=channel['function'],
+                                         kwargs=dict(channel.get('kwargs') or {})) for channel in blueprint['channels']]
         return True
 
     async def load(self):
@@ -264,6 +267,20 @@ def test_the_device_is_loaded_with_the_process_blueprint(run):
     _, device = run(dry_run=True)
 
     assert device.kwargs == {'blueprint_kind': 'process'}
+
+
+def test_processed_with_the_process_parameters_of_the_hardware(run):
+    hardware = editing.find('hardware', 'SCAS_TEST1')
+    channel = editing.find('blueprint', 'test_air').body['channels'][0]['name']
+    hardware.process_parameters = {channel: {'function': 'poly_ts', 'coefficients': [2]}}
+    # Long processing parameters are not for processing
+    hardware.parameters = {channel: {'lam': 1e9}}
+    db.session.commit()
+
+    _, device = run(dry_run=True)
+
+    assert device.channels[0].function == 'poly_ts'
+    assert device.channels[0].kwargs['coefficients'] == [2] and 'lam' not in device.channels[0].kwargs
 
 
 @pytest.mark.parametrize('hardware_name', ['NOT_IN_FLOWS', 'SCAS_TEST1'])

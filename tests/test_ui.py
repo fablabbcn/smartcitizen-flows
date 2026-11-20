@@ -396,6 +396,11 @@ def test_hardware_parameters_field(client):
     assert response.status_code == 302
     assert hardware('SCAS_TEST1').parameters == {'O3': {'function': 'alphasense_803_04'}}
 
+    response = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(
+        process_parameters='{"NO2": {"function": "alphasense_803_04"}}'))
+    assert response.status_code == 302
+    assert hardware('SCAS_TEST1').process_parameters == {'NO2': {'function': 'alphasense_803_04'}}
+
     page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(parameters='{bad')).get_data(as_text=True)
     assert 'parameters: Input should be a valid dictionary' in page
 

@@ -11,12 +11,13 @@ long blueprint, e.g. ASB4_NO2: {"NO2": {"lam": 1e8, "p": 0.01}}:
   with the type (SCD30_CO2)
 
 A hardware can override them for its devices (parameters of the hardware: {channel: kwargs}).
+Processing (the process blueprint) only takes those of the hardware (process_parameters), as kwargs.
 Order: blueprint, then parameter sets, then hardware. A "function" key switches the algorithm of the
 channel, e.g. {"O3": {"function": "alphasense_803_04"}} keeps the 803 algorithm for the O3 of a
 hardware whose NO2 uses the baseline (as chosen per device and gas for TwinAir).
 '''
 from . import db
-from .models import ParameterSet
+from .models import Blueprint, ParameterSet
 
 
 def alphasense_types():
@@ -52,15 +53,18 @@ def overrides_for(channel_name, kwargs, sensors, sets, codes):
     return merged, used
 
 
-def apply_parameters(device, hardware=None):
+def apply_parameters(device, hardware=None, kind=Blueprint.LONG):
     '''
     Applies the parameter sets and the hardware's parameters to the channels of a device (scdata
-    Device after use_blueprint), also in each hardware version. Returns the names of the sets used
+    Device after use_blueprint), also in each hardware version. Returns the names of the sets used.
+    For processing (kind process), only the hardware's process_parameters: the sets are of long processing
     '''
-    sets = db.session.execute(db.select(ParameterSet)).scalars().all()
+    long = kind == Blueprint.LONG
+    sets = db.session.execute(db.select(ParameterSet)).scalars().all() if long else []
     codes = alphasense_types()
     sensors = list(device.required_sensors)
-    hardware_parameters = (hardware.parameters or {}) if hardware is not None else {}
+    hardware_parameters = (getattr(hardware, 'parameters' if long else 'process_parameters', None) or {}) \
+        if hardware is not None else {}
     used = set()
 
     def update(name, kwargs):

@@ -43,6 +43,42 @@ def slot_channels(slot, sensor_id):
     return [name for item in channels for name in item]
 
 
+def function_exists(module, function):
+    ''' Whether processing finds a channel function, as scdata looks it up: the module is all before the last dot '''
+    from importlib import import_module
+    module_name, name = f'{module}.{function}'.rsplit('.', 1)
+    try:
+        return callable(getattr(import_module(module_name), name, None))
+    except Exception:
+        return False
+
+
+def parameter_warnings(hardware, blueprints):
+    '''
+    Warnings of the parameters of a hardware (long processing) and of its process parameters: channels that are
+    not in the blueprint of that kind, and functions processing cannot find. Argument names are not checked
+    '''
+    warnings = []
+    by_kind = {blueprint.kind: blueprint for blueprint in blueprints}
+    for key, kind in (('parameters', Blueprint.LONG), ('process_parameters', Blueprint.PROCESS)):
+        parameters = getattr(hardware, key) or {}
+        if not parameters:
+            continue
+        blueprint = by_kind.get(kind)
+        if blueprint is None:
+            warnings.append(f'{key}: not used, the hardware has no {kind} blueprint')
+            continue
+        channels = {channel['name']: channel for channel in blueprint.body.get('channels', [])}
+        for name, kwargs in parameters.items():
+            if name not in channels:
+                warnings.append(f'{key}.{name}: not a channel of blueprint {blueprint.name}')
+            elif 'function' in kwargs:
+                module = channels[name].get('module') or 'scdata.device.process'
+                if not isinstance(kwargs['function'], str) or not function_exists(module, kwargs['function']):
+                    warnings.append(f'{key}.{name}: function {kwargs["function"]} not found in {module}')
+    return warnings
+
+
 def blueprint_kind_errors(blueprints):
     ''' Errors of the kinds of the blueprints of a hardware: one of each kind, not long and backup together '''
     errors = []
@@ -121,6 +157,8 @@ def check_hardware(body):
                 missing = [channel for channel in slot_channels(slot, sensor_id) if channel not in blueprint_channels]
                 if missing:
                     check.warnings.append(f'{where}: channels not in blueprint {blueprint.name}: {", ".join(missing)}')
+
+    check.warnings += parameter_warnings(hardware, [found[name] for name in names if name in found])
 
     versions = sorted(hardware.versions, key=lambda version: version.from_date or date.min)
     for previous, current in zip(versions, versions[1:]):

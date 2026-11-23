@@ -47,11 +47,11 @@ def test_admin_signs_in(client, sc_sessions):
     assert 'href="/jobs/"' in page
 
 
-def test_researcher_cannot_see_jobs(client, sc_sessions):
+def test_researcher_sees_jobs(client, sc_sessions):
     assert login(client, 'researcher').headers['Location'] == '/'
 
-    assert client.get('/jobs/').status_code == 403
-    assert 'href="/jobs/"' not in client.get('/').get_data(as_text=True)
+    assert client.get('/jobs/').status_code == 200
+    assert 'href="/jobs/"' in client.get('/').get_data(as_text=True)
 
 
 def test_citizen_cannot_sign_in(client, sc_sessions):
@@ -119,7 +119,7 @@ def test_error_pages(client, sc_sessions):
     assert page.status_code == 404 and 'This page does not exist' in page.get_data(as_text=True)
 
     login(client, 'researcher')
-    page = client.get('/jobs/')
+    page = client.get('/metadata/hardware/new')
     assert page.status_code == 403 and 'admins only' in page.get_data(as_text=True)
 
 

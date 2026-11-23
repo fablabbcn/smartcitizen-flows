@@ -510,12 +510,12 @@ def sign_in(client, role):
         session['_user_id'] = str(user['id'])
 
 
-def test_jobs_page_requires_admin(app, client):
+def test_jobs_page_of_admins(app, client):
     jobs.sync_jobs(to_process={1}, to_back_up={2})
     run = make_run(job=job('process', 1), state='success', message='PROCESSED AND UPLOADED', log=['info: done'])
 
     sign_in(client, 'researcher')
-    assert client.get('/jobs/').status_code == 403
+    assert '/jobs/devices/1' not in client.get('/jobs/').get_data(as_text=True)
 
     sign_in(client, 'admin')
     page = client.get('/jobs/').get_data(as_text=True)

@@ -12,7 +12,7 @@
     <div class="actions">
         {% if run.device_id %}<a class="btn" href="{{ url_for('jobs_ui.device', device_id=run.device_id) }}">Device in flows</a>
         <a class="btn" href="https://smartcitizen.me/kits/{{ run.device_id }}" target="_blank" rel="noopener">Device page</a>{% endif %}
-        <a class="btn" href="{{ url_for('api.get_run', run_id=run.id) }}">JSON</a>
+        {% if current_user.is_admin %}<a class="btn" href="{{ url_for('api.get_run', run_id=run.id) }}">JSON</a>{% endif %}
     </div>
 </div>
 

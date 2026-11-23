@@ -1,4 +1,5 @@
 ''' Web interface for device jobs, for admins '''
+from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
@@ -7,7 +8,7 @@ from flask_login import current_user
 from . import db, devices
 from .auth import admin_required
 from .forms import protect
-from .jobs import (add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
+from .jobs import (OLD_READINGS, request_reprocess, stale_channels, add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
                    sync_running, sync_summary)
 from .config import posting_enabled
 from .models import DeviceHealth, Job, JobRun
@@ -83,6 +84,7 @@ def device(device_id):
                          and run.context.get('results')), None)
     decisions, sync_run = device_sync(device_id)
     return render_template('jobs/device.html', device_id=device_id, name=devices.device_name(device_id), jobs=jobs,
+                           stale=stale_channels(device_id, hardware), old_readings=OLD_READINGS,
                            decisions=decisions, sync_run=sync_run,
                            runs=runs, latest=latest_runs([job.id for job in jobs]), hardware_name=hardware_name,
                            hardware=hardware, calibrated=calibrated, health=health,
@@ -185,6 +187,26 @@ def pause_job(job_id):
 def resume_job(job_id):
     job = set_paused(get_job(job_id), False)
     flash(f'Resumed {job.task} for device {job.device_id}')
+    return back()
+
+
+@jobs_ui.post('/<int:job_id>/reprocess')
+@admin_required
+def reprocess_job(job_id):
+    ''' Processes the device again, from a date or from its first hardware version '''
+    job = get_job(job_id)
+    if job.task != Job.PROCESS:
+        abort(400, 'Only process jobs are reprocessed')
+    start = request.form.get('from') or None
+    try:
+        start = datetime.fromisoformat(start).replace(tzinfo=timezone.utc) if start else None
+    except ValueError:
+        flash(f'Not a date: {start}', 'error')
+        return back()
+    request_reprocess(job, start)
+    db.session.commit()
+    flash(f'Device {job.device_id} will be processed again from {start.date() if start else "its first hardware version"}, '
+          f'run after run until its last reading. {OLD_READINGS}.', 'warning')
     return back()
 
 

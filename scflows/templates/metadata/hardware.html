@@ -57,6 +57,7 @@
                 <label for="process_parameters">Processing parameters <span class="optional">(optional, JSON)</span></label>
                 <textarea class="input" id="process_parameters" name="process_parameters" rows="3" spellcheck="false" placeholder='{"NO2": {"function": "alphasense_803_04"}}'>{% if data.process_parameters is string %}{{ data.process_parameters }}{% elif data.process_parameters %}{{ data.process_parameters | tojson(indent=2) }}{% endif %}</textarea>
                 <span class="hint">Per channel, over the process blueprint. <code>function</code>: algorithm, <code>lookback_hours</code>: hours loaded before the new readings.</span>
+                {% if not readonly %}<label class="check small"><input type="checkbox" name="reprocess"> Reprocess the devices posted with other processing (otherwise, they are listed when saving)</label>{% endif %}
             </div>
             <div class="field full">
                 <label for="forwarding">Forwarding <span class="optional">(optional)</span></label>

@@ -11,6 +11,8 @@ class Config(object):
     _timestamp = True
     _avoid_negative_conc = True
     _max_load_amount = 1000
+    # New readings of a run while reprocessing: catching up a device takes fewer runs
+    _reprocess_load_amount = 10000
     _max_http_retries = 3
 
 config = Config()

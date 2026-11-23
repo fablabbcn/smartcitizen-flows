@@ -18,6 +18,7 @@ from .auth import admin_required, requires_ui_role
 from .forms import protect
 from .identity import EDITORS
 from .models import Blueprint as BlueprintModel, Calibration, ParameterSet, SensorName
+from .jobs import after_hardware_change
 from .parameters import sensor_types
 from .names import used_by_blueprints
 from . import attachments, calibrations, runlog
@@ -200,9 +201,14 @@ def save_hardware_form(name, new=False):
     if action != 'save' or not check.valid:
         return render_hardware(name, data, check, new=new)
 
-    editing.save_hardware(name, check.hardware, identity=current_user.identity)
+    item, _ = editing.save_hardware(name, check.hardware, identity=current_user.identity)
     db.session.commit()
     flash(f'Hardware {name} saved' + (f' with {len(check.warnings)} warnings' if check.warnings else ''))
+    # Devices posted with the previous processing
+    message, _ = after_hardware_change(item, reprocess=bool(request.form.get('reprocess')) and current_user.is_admin)
+    if message:
+        db.session.commit()
+        flash(message, 'warning')
     return redirect(url_for('ui.edit_hardware', name=name))
 
 

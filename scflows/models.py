@@ -247,6 +247,9 @@ class Job(TimestampMixin, db.Model):
     AUTO = 'auto'
     MANUAL = 'manual'
 
+    REPROCESS_PENDING = 'pending'
+    REPROCESS_RUNNING = 'running'
+
     id = db.Column(db.Integer, primary_key=True)
     device_id = db.Column(db.Integer, nullable=False)
     # From the Smart Citizen API, updated by the sync: name and hardware (its postprocessing hardware_url)
@@ -260,6 +263,10 @@ class Job(TimestampMixin, db.Model):
     interval_hours = db.Column(db.Integer, nullable=False)
     next_run_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     last_queued_at = db.Column(db.DateTime(timezone=True))
+    # Reprocessing (process jobs), asked by an admin: pending, the next run starts again from reprocess_from (or the
+    # first hardware version); running, runs follow each other until they reach the last reading
+    reprocess = db.Column(db.String(16))
+    reprocess_from = db.Column(db.DateTime(timezone=True))
     runs = db.relationship('JobRun', back_populates='job', order_by='JobRun.id.desc()', lazy='dynamic')
 
     __table_args__ = (db.UniqueConstraint('device_id', 'task', name='uq_job_device_task'),)
@@ -276,6 +283,8 @@ class Job(TimestampMixin, db.Model):
             'enabled': self.enabled, 'paused': self.paused, 'interval_hours': self.interval_hours,
             'next_run_at': self.next_run_at.isoformat() if self.next_run_at else None,
             'last_queued_at': self.last_queued_at.isoformat() if self.last_queued_at else None,
+            'reprocess': self.reprocess,
+            'reprocess_from': self.reprocess_from.isoformat() if self.reprocess_from else None,
         }
 
 

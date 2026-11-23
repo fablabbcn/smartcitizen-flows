@@ -32,6 +32,7 @@
 {% macro job_status(job) %}
 {%- if job.paused %}{{ badge('paused') }}{% elif job.enabled %}{{ badge('active') }}{% else %}{{ badge('disabled') }}{% endif %}
 {%- if job.source == 'manual' %} <span class="badge plain">manual</span>{% endif %}
+{%- if job.reprocess %} <span class="badge plain" title="{{ 'Next run processes again from ' ~ (job.reprocess_from.date() if job.reprocess_from else 'the first hardware version') if job.reprocess == 'pending' else 'Runs follow each other until the last reading' }}">reprocessing ({{ job.reprocess }})</span>{% endif %}
 {%- endmacro %}
 
 {# Without the year, the full date on hover: for tight tables #}

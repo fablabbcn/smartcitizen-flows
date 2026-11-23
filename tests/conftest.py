@@ -81,7 +81,8 @@ def served_hardware(source, name='SCAS_TEST1', base='http://localhost'):
     ''' A hardware file as flows serves it, in the list and by name: all the keys, with its name and url '''
     return {'name': name, 'blueprints': source['blueprints'], 'description': source.get('description'),
             'comment': source.get('comment'), 'forwarding': source.get('forwarding'),
-            'parameters': source.get('parameters') or {}, 'versions': source['versions'],
+            'parameters': source.get('parameters') or {}, 'process_parameters': source.get('process_parameters') or {},
+            'versions': source['versions'],
             'url': f'{base}/api/v1/hardware/{name}.json'}
 
 

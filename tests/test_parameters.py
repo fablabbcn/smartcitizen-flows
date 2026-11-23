@@ -64,6 +64,15 @@ def test_hardware_parameters_win_and_switch_the_algorithm(sets):
     assert item.versions[0]['channels'][0]['function'] == 'alphasense_803_04'
 
 
+def test_processing_takes_only_the_process_parameters_of_the_hardware(sets):
+    hardware = SimpleNamespace(parameters={'NO2': {'p': 0.1}}, process_parameters={'NO2': {'function': 'alphasense_803_04'}})
+    item = device([channel('NO2', alphasense_id='202760040')])
+
+    assert apply_parameters(item, hardware, 'process') == []
+    assert item.channels[0].function == 'alphasense_803_04'
+    assert item.channels[0].kwargs == {'alphasense_id': '202760040'}
+
+
 # API
 
 @pytest.fixture

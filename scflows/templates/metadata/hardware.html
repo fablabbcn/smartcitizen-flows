@@ -51,7 +51,12 @@
             <div class="field full">
                 <label for="parameters">Long processing parameters <span class="optional">(optional, JSON)</span></label>
                 <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false" placeholder='{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}'>{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
-                <span class="hint">Overrides the parameters of its sensor types (Parameters tab) for the devices of this hardware. <code>function</code> selects the algorithm of a channel.</span>
+                <span class="hint">Per channel, over its sensor types. <code>function</code>: algorithm.</span>
+            </div>
+            <div class="field full">
+                <label for="process_parameters">Processing parameters <span class="optional">(optional, JSON)</span></label>
+                <textarea class="input" id="process_parameters" name="process_parameters" rows="3" spellcheck="false" placeholder='{"NO2": {"function": "alphasense_803_04"}}'>{% if data.process_parameters is string %}{{ data.process_parameters }}{% elif data.process_parameters %}{{ data.process_parameters | tojson(indent=2) }}{% endif %}</textarea>
+                <span class="hint">Per channel, over the process blueprint. <code>function</code>: algorithm.</span>
             </div>
             <div class="field full">
                 <label for="forwarding">Forwarding <span class="optional">(optional)</span></label>

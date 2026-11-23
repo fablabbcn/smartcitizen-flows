@@ -91,6 +91,7 @@ def save_hardware(name, hardware, identity=None, action=None):
     item.comment = hardware.comment
     item.forwarding = hardware.forwarding
     item.parameters = hardware.parameters or None
+    item.process_parameters = hardware.process_parameters or None
     item.versions = [HardwareVersion(ids=version.ids, from_date=version.from_date, to_date=version.to_date)
                      for version in sorted(hardware.versions, key=lambda version: version.from_date or date.min)]
     record('hardware', name, action or (Revision.UPDATE if before else Revision.CREATE), before, item.to_json(),

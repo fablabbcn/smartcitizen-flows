@@ -456,6 +456,13 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 .table .row-actions { display: inline-grid; grid-template-columns: auto auto 5.5rem; align-items: center; gap: var(--space-2); }
 .table .row-actions form { display: contents; }
 .table .clip { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Columns resized by dragging the edge of their header: fixed widths, the cells clip what does not fit */
+.table .col-resize { position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; z-index: 1; touch-action: none; }
+.table .col-resize::after { content: ''; position: absolute; top: 25%; bottom: 25%; left: 3px; width: 2px; border-radius: 1px; background: var(--color-border-strong); opacity: 0; transition: opacity 0.15s; }
+.table thead th:hover .col-resize::after, .table .col-resize:active::after { opacity: 1; }
+.table.resized { table-layout: fixed; }
+.table.resized td { overflow: hidden; text-overflow: ellipsis; }
+.table.resized .clip { max-width: none; }
 .table .clip.narrow { max-width: 16rem; }
 .table.compact th, .table.compact td { padding-left: var(--space-3); padding-right: var(--space-3); }
 .table.compact .clip.narrow { max-width: 13rem; }

@@ -33,7 +33,7 @@
         <div class="table-wrap scroll">
             <table class="table">
                 <thead><tr>
-                    <th data-sort>Device</th><th data-sort>Status</th><th>Worst issues</th><th>Recent runs</th>
+                    <th data-sort>Device</th><th data-sort>User</th><th data-sort>Status</th><th>Worst issues</th><th>Recent runs</th>
                     <th data-sort>Data checked</th><th data-sort>Checked</th>
                 </tr></thead>
                 <tbody>
@@ -41,6 +41,7 @@
                     {% set found, more = issues[item.id] %}
                     <tr>
                         <td><a href="{{ url_for('health_ui.device', device_id=item.device_id) }}">{{ item.device_name or 'Device' }}</a> <span class="muted small">#{{ item.device_id }}</span></td>
+                        <td class="clip narrow" title="{{ owners.get(item.device_id, '') }}">{{ owners.get(item.device_id, '') }}</td>
                         <td data-value="{{ 3 - ['ok', 'warning', 'problem', 'error'].index(item.status) }}">{{ badge(item.status) }}</td>
                         <td>
                             {% if found %}
@@ -60,12 +61,13 @@
                 {% for device_id in unchecked %}
                     <tr>
                         <td><a href="https://smartcitizen.me/kits/{{ device_id }}" target="_blank" rel="noopener">Device</a> <span class="muted small">#{{ device_id }}</span></td>
+                        <td class="clip narrow">{{ owners.get(device_id, '') }}</td>
                         <td data-value="-1"><span class="badge plain">not checked</span></td>
                         <td colspan="4" class="muted small">Not checked yet. Checks run when the device is processed, which requires its hardware in flows.</td>
                     </tr>
                 {% endfor %}
                 {% if not items and not unchecked %}
-                    <tr><td colspan="6" class="empty">{{ 'No devices with this status' if status else 'No health checks yet. Checks run with every processing run.' }}</td></tr>
+                    <tr><td colspan="7" class="empty">{{ 'No devices with this status' if status else 'No health checks yet. Checks run with every processing run.' }}</td></tr>
                 {% endif %}
                 </tbody>
             </table>

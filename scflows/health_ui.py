@@ -32,6 +32,7 @@ def index():
                            counts=counts, total=len(items), status=status,
                            issues={item.id: health.issues(item) for item in shown},
                            timeline=health.recent_statuses([item.device_id for item in shown]),
+                           owners=devices.device_owners([item.device_id for item in shown] + list(unchecked)),
                            problem_ratio=health.PROBLEM_RATIO, keep_days=health.KEEP_DAYS)
 
 

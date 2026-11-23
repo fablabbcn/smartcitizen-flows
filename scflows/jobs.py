@@ -200,6 +200,14 @@ def device_names(devices):
     return {int(device_id): name[:255] for device_id, name in devices['name'].items() if isinstance(name, str) and name}
 
 
+def device_owners(devices):
+    ''' {device id: username of its owner} of the devices of the Smart Citizen API '''
+    if devices is None or 'owner' not in devices.columns:
+        return {}
+    return {int(device_id): owner['username'][:255] for device_id, owner in devices['owner'].items()
+            if isinstance(owner, dict) and isinstance(owner.get('username'), str) and owner['username']}
+
+
 def listing_complete(devices):
     '''
     The search returned every device the Smart Citizen API counts (smartcitizen-connector keeps its total in
@@ -275,7 +283,7 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None, details=None):
     # A partial sync without the long devices leaves the long jobs as they are
     if long_every is not None:
         wanted[Job.LONG] = set(long_every)
-    names, hardware = device_names(devices), device_hardware(devices)
+    names, hardware, owners = device_names(devices), device_hardware(devices), device_owners(devices)
     # Names for the log: of the jobs too (devices the search did not list)
     job_names = {**dict(db.session.execute(db.select(Job.device_id, Job.device_name)
                                            .where(Job.device_name.is_not(None))).all()), **names}
@@ -291,7 +299,8 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None, details=None):
             if job is None:
                 interval = long_every[device_id] if task == Job.LONG else INTERVALS[task]
                 # Spread the first runs over the interval
-                db.session.add(Job(device_id=device_id, device_name=names.get(device_id), hardware=hardware.get(device_id), task=task,
+                db.session.add(Job(device_id=device_id, device_name=names.get(device_id), device_owner=owners.get(device_id),
+                                   hardware=hardware.get(device_id), task=task,
                                    interval_hours=interval, enabled=True,
                                    next_run_at=now() + timedelta(minutes=random.randint(0, interval * 60 - 1))))
                 changed['created'].append(device_id)
@@ -308,6 +317,8 @@ def sync_jobs(to_process=None, to_back_up=None, for_long=None, details=None):
             # Devices can be renamed
             if names.get(device_id) and job.device_name != names[device_id]:
                 job.device_name = names[device_id]
+            if owners.get(device_id) and job.device_owner != owners[device_id]:
+                job.device_owner = owners[device_id]
             # Or change hardware: only devices in the search (a partial sync keeps what it has)
             if devices is not None and device_id in devices.index and job.hardware != hardware.get(device_id):
                 job.hardware = hardware.get(device_id)

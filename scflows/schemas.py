@@ -33,7 +33,6 @@ class HardwareIn(BaseModel):
     blueprints: List[str] = []
     description: Optional[str] = None
     comment: Optional[str] = None
-    forwarding: Optional[str] = None
     # Long processing parameters for its devices: {channel: kwargs} (see parameters.py)
     parameters: Optional[Dict[str, Dict[str, Any]]] = None
     # Process parameters for its devices: {channel: kwargs}, as above

@@ -89,7 +89,6 @@ def save_hardware(name, hardware, identity=None, action=None):
     item.blueprints = blueprints
     item.description = hardware.description
     item.comment = hardware.comment
-    item.forwarding = hardware.forwarding
     item.parameters = hardware.parameters or None
     item.process_parameters = hardware.process_parameters or None
     item.versions = [HardwareVersion(ids=version.ids, from_date=version.from_date, to_date=version.to_date)

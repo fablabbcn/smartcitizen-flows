@@ -59,7 +59,6 @@ class Hardware(TimestampMixin, db.Model):
     name = db.Column(db.String(64), unique=True, nullable=False)
     description = db.Column(db.Text)
     comment = db.Column(db.Text)
-    forwarding = db.Column(db.String(64))
     # Long processing parameters for the devices of this hardware: {channel: kwargs}
     parameters = db.Column(JSONType)
     # Process parameters for the devices of this hardware: {channel: kwargs}
@@ -101,7 +100,6 @@ class Hardware(TimestampMixin, db.Model):
         return {'blueprints': [blueprint.name for blueprint in self.blueprints],
                 'description': self.description,
                 'comment': self.comment,
-                'forwarding': self.forwarding,
                 'parameters': self.parameters or {},
                 'process_parameters': self.process_parameters or {},
                 'versions': [version.to_json() for version in self.versions]}

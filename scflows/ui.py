@@ -137,7 +137,6 @@ def hardware_from_form(form):
             'process_parameters': json_field(form.get('process_parameters')),
             'description': form.get('description') or None,
             'comment': form.get('comment') or None,
-            'forwarding': form.get('forwarding') or None,
             'versions': versions}
 
 

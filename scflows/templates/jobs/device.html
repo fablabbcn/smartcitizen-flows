@@ -104,7 +104,7 @@
         {% if process_job %}
         <div class="card-body">
             {% if stale and not process_job.reprocess %}
-            <div class="alert warning">The data posted by this device was processed with other parameters than its hardware has now, for: {{ stale | join(', ') }}. Its new readings are processed with the current ones; reprocess it to process the previous ones again.</div>
+            <div class="alert warning">Posted with other parameters than its hardware has now, for: {{ stale | join(', ') }}.</div>
             {% endif %}
             <form class="inline-form" method="POST" action="{{ url_for('jobs_ui.reprocess_job', job_id=process_job.id) }}" data-confirm="Process device {{ device_id }} again? {{ old_readings }}.">
                 {{ csrf() }}
@@ -114,7 +114,7 @@
                 <input class="input" type="date" id="reprocess-from" name="from" title="Empty: from the first hardware version">
                 <button class="btn warning" type="submit">Reprocess</button>
             </form>
-            <p class="hint">Processes and posts the readings again from that date (empty: the first hardware version), run after run until the last reading. {{ old_readings }}.</p>
+            <p class="hint">From that date (empty: the first hardware version) to the last reading. {{ old_readings }}.</p>
         </div>
         {% endif %}
     </div>

@@ -205,8 +205,8 @@ def reprocess_job(job_id):
         return back()
     request_reprocess(job, start)
     db.session.commit()
-    flash(f'Device {job.device_id} will be processed again from {start.date() if start else "its first hardware version"}, '
-          f'run after run until its last reading. {OLD_READINGS}.', 'warning')
+    flash(f'Device {job.device_id} will be reprocessed from {start.date() if start else "its first hardware version"}. '
+          f'{OLD_READINGS}.', 'warning')
     return back()
 
 

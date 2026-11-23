@@ -27,7 +27,7 @@ The parameters of long processing (e.g. of the baselines) can be tuned per senso
 Users sign in with their Smart Citizen account.
 
 - `/jobs/`: jobs and runs, per device. Admins run, pause and resume them, and sync them with the Smart Citizen API.
-- Reprocessing: from the page of a device (from a date, or its first hardware version), or when saving a hardware whose processing changed. The next run starts again instead of continuing from the latest postprocessing, and the following ones run a minute apart until the last reading. Readings that the new processing leaves empty keep their previous values: the Smart Citizen API cannot delete readings. Devices posted with other processing than their hardware has now are listed when it is saved, and warned about on their page.
+- Reprocessing: from the page of a device, or when saving a hardware whose processing changed. Runs follow each other a minute apart from a date (or the first hardware version) to the last reading. Readings left empty keep their old values: the Smart Citizen API cannot delete readings.
 - `/health/`: health of each device, and results of long processing. Admins see every device, researchers the ones they own.
 - `/metadata/`: hardware, blueprints, calibrations, parameter sets and sensor names, with their history. Admins edit them, researchers see the hardware of their devices. Hardware can have files attached (certificates, calibration reports), which are not public.
 

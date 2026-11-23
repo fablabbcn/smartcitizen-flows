@@ -130,7 +130,7 @@ def test_device_page_warns_and_reprocesses(client):
     sign_in(client, 'admin')
 
     text = page(client, '/jobs/devices/1')
-    assert 'processed with other parameters than its hardware has now, for: NO2' in text
+    assert 'Posted with other parameters than its hardware has now, for: NO2' in text
     assert 'cannot delete readings' in text
 
     job = jobs.find_job(1, 'process')

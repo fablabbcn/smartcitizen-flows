@@ -416,8 +416,7 @@ def request_reprocess(job, start=None):
 
 
 # The Smart Citizen API cannot delete readings: what a new processing leaves empty keeps its previous values
-OLD_READINGS = ('Readings that the new processing leaves empty (e.g. the hours after a gap with alphasense_als) keep '
-                'their previous values: the Smart Citizen API cannot delete readings')
+OLD_READINGS = 'Readings it leaves empty keep their old values (the API cannot delete readings)'
 
 
 def changed_channels(before, after):
@@ -469,10 +468,8 @@ def after_hardware_change(hardware, reprocess=False):
     if reprocess:
         for job in stale:
             request_reprocess(job)
-        return (f'Devices {", ".join(map(str, ids))} will be processed again from their first hardware version, with '
-                f'the new processing of: {", ".join(channels)}. {OLD_READINGS}', ids)
-    return (f'Devices {", ".join(map(str, ids))} have data posted with other processing of: {", ".join(channels)}. '
-            f'Only their new readings use these parameters: reprocess them to process the previous ones again', [])
+        return f'Devices {", ".join(map(str, ids))} will be reprocessed for: {", ".join(channels)}. {OLD_READINGS}', ids
+    return f'Devices {", ".join(map(str, ids))} have data posted with other processing of: {", ".join(channels)}', []
 
 
 def reprocess_done(job, run, context):

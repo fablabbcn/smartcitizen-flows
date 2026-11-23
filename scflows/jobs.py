@@ -19,7 +19,7 @@ from flask.cli import AppGroup
 from . import db, health, locks
 from .config import config
 from .custom_logger import logger
-from .models import Job, JobRun
+from .models import Blueprint, Job, JobRun
 from .runlog import log_line, unstamped
 
 jobs_cli = AppGroup('jobs', help='Device jobs (processing and backups)')
@@ -404,6 +404,86 @@ def add_manual_job(device_id, task):
     return job, True
 
 
+def request_reprocess(job, start=None):
+    '''
+    Processes a device again from start (None: the first hardware version): its next run, as soon as possible, does
+    not continue from the latest postprocessing. Following runs catch up, one after another
+    '''
+    job.reprocess, job.reprocess_from = Job.REPROCESS_PENDING, start
+    job.next_run_at = now()
+    logger.info(f'Reprocessing of device {job.device_id} requested from {start or "the first hardware version"}')
+    return job
+
+
+# The Smart Citizen API cannot delete readings: what a new processing leaves empty keeps its previous values
+OLD_READINGS = 'Readings it leaves empty keep their old values (the API cannot delete readings)'
+
+
+def changed_channels(before, after):
+    ''' Channels whose process parameters differ '''
+    before, after = before or {}, after or {}
+    return sorted(name for name in set(before) | set(after) if before.get(name) != after.get(name))
+
+
+def last_posted(device_id):
+    ''' The last process run that posted the data of a device, or None '''
+    return db.session.execute(db.select(JobRun).where(
+        JobRun.device_id == device_id, JobRun.task == Job.PROCESS, JobRun.dry_run.is_(False),
+        JobRun.state == JobRun.SUCCESS).order_by(JobRun.id.desc()).limit(1)).scalar()
+
+
+def stale_channels(device_id, hardware):
+    '''
+    What the device has posted with other processing than its hardware has now: the channels whose process parameters
+    changed, or the process blueprint. Empty if it was not posted yet
+    '''
+    run = last_posted(device_id)
+    if run is None or hardware is None:
+        return []
+    context = run.context or {}
+    blueprint = hardware.blueprint_of(Blueprint.PROCESS)
+    if blueprint is not None and context.get('blueprint') and context['blueprint'] != blueprint.name:
+        return [f'all (blueprint {context["blueprint"]})']
+    return changed_channels(context.get('process_parameters'), hardware.process_parameters)
+
+
+def stale_devices(hardware):
+    ''' {job: stale channels} of the process jobs of the devices of a hardware posted with other processing '''
+    jobs = db.session.execute(db.select(Job).where(Job.hardware == hardware.name, Job.task == Job.PROCESS)
+                              .order_by(Job.device_id)).scalars().all()
+    stale = {job: stale_channels(job.device_id, hardware) for job in jobs}
+    return {job: channels for job, channels in stale.items() if channels}
+
+
+def after_hardware_change(hardware, reprocess=False):
+    '''
+    After saving a hardware: its devices posted with other processing are reprocessed (reprocess), or listed.
+    Returns (message, reprocessed device ids), message None if there are none
+    '''
+    stale = stale_devices(hardware)
+    if not stale:
+        return None, []
+    ids = [job.device_id for job in stale]
+    channels = sorted({channel for names in stale.values() for channel in names})
+    if reprocess:
+        for job in stale:
+            request_reprocess(job)
+        return f'Devices {", ".join(map(str, ids))} will be reprocessed for: {", ".join(channels)}. {OLD_READINGS}', ids
+    return f'Devices {", ".join(map(str, ids))} have data posted with other processing of: {", ".join(channels)}', []
+
+
+def reprocess_done(job, run, context):
+    ''' After a run of a reprocessing job: the next one soon while it is behind the last reading, or done '''
+    if job is None or not job.reprocess or run.dry_run or run.state != JobRun.SUCCESS:
+        return
+    if context.get('behind'):
+        job.reprocess = Job.REPROCESS_RUNNING
+        job.next_run_at = now() + timedelta(minutes=1)
+    else:
+        job.reprocess, job.reprocess_from = None, None
+        logger.info(f'Reprocessing of device {job.device_id} done')
+
+
 def set_paused(job, paused):
     job.paused = paused
     db.session.commit()
@@ -502,6 +582,9 @@ def execute_run(run_id):
         db.session.commit()
         # The task fills the context with what it used (device, hardware, blueprint, storage)
         context = {}
+        if run.task == Job.PROCESS and run.job is not None and run.job.reprocess:
+            context.update(reprocess=run.job.reprocess,
+                           reprocess_from=aware(run.job.reprocess_from).isoformat() if run.job.reprocess_from else None)
         # dprocess also returns the health checks of the data it processed
         log, state, *extra = asyncio.run(task_function(run.task)(run.device_id, run.dry_run, context))
         run.log = log
@@ -510,6 +593,7 @@ def execute_run(run_id):
         run.message = state[1]
         if extra and extra[0]:
             health.record(run.device_id, extra[0], run=run)
+        reprocess_done(run.job, run, context)
     except Exception as error:
         logger.exception(f'Run {run.id} failed')
         db.session.rollback()

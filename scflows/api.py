@@ -5,6 +5,7 @@ Paths follow the layout of the smartcitizen-data repository, so that
 {base}/calibrations/calibrations.json work with base = <host>/api/v1/
 '''
 
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 
 from flask import Blueprint, abort, current_app, jsonify, request, url_for
@@ -297,7 +298,11 @@ def put_hardware(name):
         # The blueprint was deleted after the check
         unprocessable([f'blueprint: {error}'])
     db.session.commit()
-    return saved(hardware_json(item), created, check.warnings)
+    # Devices posted with the previous processing: listed in the warnings, or reprocessed with ?reprocess=true
+    from .jobs import after_hardware_change
+    message, reprocessed = after_hardware_change(item, reprocess=request.args.get('reprocess') == 'true')
+    db.session.commit()
+    return saved(hardware_json(item), created, check.warnings + ([message] if message else []), reprocess=reprocessed)
 
 
 @api.post('/hardware/<name>/check')
@@ -577,6 +582,24 @@ def patch_job(job_id):
     if not isinstance(body.get('paused'), bool):
         abort(400, 'Send {"paused": true} or {"paused": false}')
     return jsonify(set_paused(job, body['paused']).to_json())
+
+
+@api.post('/jobs/<int:job_id>/reprocess')
+@requires_role(ADMIN)
+def reprocess_job(job_id):
+    ''' Processes the device of a process job again: {"from": "2026-01-01"} (optional, else its first hardware version) '''
+    from .jobs import OLD_READINGS, request_reprocess
+    job = db.session.get(Job, job_id) or abort(404)
+    if job.task != Job.PROCESS:
+        abort(400, 'Only process jobs are reprocessed')
+    start = (request.get_json(silent=True) or {}).get('from')
+    try:
+        start = datetime.fromisoformat(start).replace(tzinfo=timezone.utc) if start else None
+    except (TypeError, ValueError):
+        abort(400, 'Send {"from": "<date>"} or nothing')
+    request_reprocess(job, start)
+    db.session.commit()
+    return jsonify(dict(job.to_json(), warnings=[OLD_READINGS]))
 
 
 @api.patch('/jobs')

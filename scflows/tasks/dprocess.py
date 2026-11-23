@@ -6,7 +6,7 @@ import sys
 import asyncio
 from scflows.config import config, posting_enabled
 from scflows.custom_logger import logger
-from scflows.models import Blueprint
+from scflows.models import Blueprint, Job
 from scflows.parameters import apply_parameters, lookback_hours
 from scflows.runlog import log_line
 from scflows.tasks.context import describe, device_context, device_hardware, iso, library_warnings
@@ -101,7 +101,12 @@ async def process_device(device, dry_run, task_log, context):
         task_log.append(logger_handler(f'Blueprint {d.blueprint}'
                                        f'{", parameters of hardware " + hardware.name if hardware.process_parameters else ""}'))
 
-        previous = d.handler.postprocessing['latest_postprocessing']
+        # Reprocessing: the first run starts again (from a date, or the first hardware version), not from the latest
+        # postprocessing, and posts the new one
+        restart = context.get('reprocess') == Job.REPROCESS_PENDING
+        previous = context.get('reprocess_from') if restart else d.handler.postprocessing['latest_postprocessing']
+        if restart:
+            task_log.append(logger_handler(f'Reprocessing from {previous or "the first hardware version"}'))
         since = localise_date(previous, 'UTC') if previous is not None else None
         # Readings before the new ones that channels need (e.g. a baseline): processed, not posted again
         lookback = lookback_hours(hardware.process_parameters) if since is not None else 0
@@ -116,7 +121,8 @@ async def process_device(device, dry_run, task_log, context):
         task_log.append(logger_handler(f'Sensors to load: {d.options.channels}'))
 
         # The readings of the lookback (one a minute) do not count against the limit of new ones
-        d.options.limit = config._max_load_amount + int(lookback * 60)
+        new_readings = config._reprocess_load_amount if context.get('reprocess') else config._max_load_amount
+        d.options.limit = new_readings + int(lookback * 60)
         context.update(min_date=iso(d.options.min_date), sensors=list(d.options.channels or []), limit=d.options.limit)
 
         if not d.options.channels:
@@ -158,6 +164,10 @@ async def process_device(device, dry_run, task_log, context):
                     d.update_postprocessing_date()
                     latest = iso(getattr(d.handler, 'latest_postprocessing', None))
                     context['new_latest_postprocessing'] = latest
+                    # More readings to process than a run loads (e.g. reprocessing)
+                    last_reading = getattr(d.handler.json, 'last_reading_at', None)
+                    context['behind'] = bool(latest and last_reading and localise_date(latest, 'UTC')
+                                             < localise_date(last_reading, 'UTC') - Timedelta(hours=1))
                     task_log.append(logger_handler(f'Latest postprocessing: {context.get("latest_postprocessing")} -> {latest}'))
 
                     # Post results

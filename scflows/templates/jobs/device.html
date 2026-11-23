@@ -100,6 +100,23 @@
                 <button class="btn primary" type="submit">Run</button>
             </form>
         </div>
+        {% set process_job = jobs | selectattr('task', 'equalto', 'process') | first %}
+        {% if process_job %}
+        <div class="card-body">
+            {% if stale and not process_job.reprocess %}
+            <div class="alert warning">Posted with other parameters than its hardware has now, for: {{ stale | join(', ') }}.</div>
+            {% endif %}
+            <form class="inline-form" method="POST" action="{{ url_for('jobs_ui.reprocess_job', job_id=process_job.id) }}" data-confirm="Process device {{ device_id }} again? {{ old_readings }}.">
+                {{ csrf() }}
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <span class="title">Reprocess</span>
+                <label class="check" for="reprocess-from">From</label>
+                <input class="input" type="date" id="reprocess-from" name="from" title="Empty: from the first hardware version">
+                <button class="btn warning" type="submit">Reprocess</button>
+            </form>
+            <p class="hint">From that date (empty: the first hardware version) to the last reading. {{ old_readings }}.</p>
+        </div>
+        {% endif %}
     </div>
 </section>
 

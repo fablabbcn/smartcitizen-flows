@@ -15,6 +15,14 @@ def uncalibrated(hardware_list):
             for hardware in hardware_list}
 
 
+def device_owners(device_ids=None):
+    ''' {device id: username of its owner}, from the jobs (the sync keeps them) '''
+    query = db.select(Job.device_id, Job.device_owner).where(Job.device_owner.is_not(None))
+    if device_ids is not None:
+        query = query.where(Job.device_id.in_(list(device_ids)))
+    return dict(db.session.execute(query).all())
+
+
 def hardware_by_name(names):
     names = {name for name in names if name}
     if not names:

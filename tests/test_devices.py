@@ -23,6 +23,7 @@ def client(app):
     jobs.sync_jobs(to_process={1, 2}, to_back_up={1})
     for job in db.session.execute(db.select(Job)).scalars():
         job.device_name = {1: 'Rooftop', 2: 'Balcony'}[job.device_id]
+        job.device_owner = {1: 'maaberge', 2: 'nilu'}[job.device_id]
         job.hardware = {1: 'SCAS_TEST1', 2: 'SCAS_TEST2'}[job.device_id]
     db.session.commit()
     return app.test_client()
@@ -221,3 +222,15 @@ def test_sync_run_keeps_what_it_saw(app, monkeypatch):
 
     run = db.session.execute(db.select(JobRun).filter_by(task='sync')).scalar_one()
     assert run.context == {'listing': {'devices': 1}}
+
+
+def test_jobs_and_health_tables_show_the_owner(client):
+    from scflows import health
+    health.record(1, {'start': None, 'end': None, 'rows': 1, 'device_name': 'Rooftop',
+                      'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]})
+    db.session.commit()
+    sign_in(client, 'admin')
+
+    for path in ('/jobs/', '/health/'):
+        text = page(client, path)
+        assert '<th data-sort>User</th>' in text and '>maaberge</td>' in text, path

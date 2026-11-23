@@ -254,6 +254,8 @@ class Job(TimestampMixin, db.Model):
     device_id = db.Column(db.Integer, nullable=False)
     # From the Smart Citizen API, updated by the sync: name and hardware (its postprocessing hardware_url)
     device_name = db.Column(db.String(255))
+    # Username of the owner of the device in the Smart Citizen API
+    device_owner = db.Column(db.String(255))
     hardware = db.Column(db.String(64))
     task = db.Column(db.String(16), nullable=False)
     source = db.Column(db.String(16), nullable=False, default=AUTO)
@@ -277,7 +279,8 @@ class Job(TimestampMixin, db.Model):
 
     def to_json(self):
         return {
-            'id': self.id, 'device_id': self.device_id, 'device_name': self.device_name, 'hardware': self.hardware,
+            'id': self.id, 'device_id': self.device_id, 'device_name': self.device_name, 'device_owner': self.device_owner,
+            'hardware': self.hardware,
             'task': self.task,
             'source': self.source,
             'enabled': self.enabled, 'paused': self.paused, 'interval_hours': self.interval_hours,

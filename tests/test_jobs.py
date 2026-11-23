@@ -583,3 +583,14 @@ def test_sync_stores_device_names(app, monkeypatch):
     # A partial sync does not search the API, and keeps the names
     jobs.sync_jobs(to_process={1}, to_back_up=set())
     assert job('process', 1).device_name == 'Balcony'
+
+
+def test_sync_stores_device_owners(app, api):
+    api.devices = listing(dict(device_row(1, 'SHORT'), owner={'id': 7, 'username': 'maaberge'}), device_row(2, 'SHORT'))
+    jobs.sync_jobs()
+    assert job('process', 1).device_owner == 'maaberge' and job('process', 2).device_owner is None
+
+    # Transferred to another user
+    api.devices = listing(dict(device_row(1, 'SHORT'), owner={'id': 8, 'username': 'nilu'}), device_row(2, 'SHORT'))
+    jobs.sync_jobs()
+    assert job('process', 1).device_owner == 'nilu'

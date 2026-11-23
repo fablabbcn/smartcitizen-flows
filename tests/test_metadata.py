@@ -25,6 +25,7 @@ def edit_json(path, change):
 
 
 def test_import(app, source):
+    # SCAS_TEST2 has forwarding, no longer in flows
     report = import_metadata(str(source))
 
     assert report.errors == []

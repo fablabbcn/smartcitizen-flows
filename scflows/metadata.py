@@ -48,6 +48,14 @@ def load_or_report(path, report):
         return None
 
 
+# Keys of hardware files in smartcitizen-data that flows no longer uses
+LEGACY_HARDWARE_KEYS = ('forwarding',)
+
+
+def without_legacy_keys(hardware):
+    return {key: value for key, value in hardware.items() if key not in LEGACY_HARDWARE_KEYS}
+
+
 def import_metadata(path, overwrite=False):
     '''
     Imports blueprints, hardware, calibrations and sensor names from a smartcitizen-data checkout.
@@ -79,6 +87,8 @@ def import_metadata(path, overwrite=False):
     for hardware_path in sorted(glob(join(path, 'hardware', '*.json'))):
         body = load_or_report(hardware_path, report)
         if body is not None:
+            if isinstance(body, dict):
+                body = without_legacy_keys(body)
             run('hardware', 'hardware', name_of(hardware_path), editing.save_hardware, body, hardware_path)
 
     calibrations_path = join(path, 'calibrations', 'calibrations.json')
@@ -148,7 +158,8 @@ def verify_metadata(source):
 
     def hardware_description(data):
         ''' Flows serves the hardware with its name and url, and all the keys: compare the ones with a value '''
-        return {key: value for key, value in data.items() if key not in ('name', 'url') and value not in (None, {})}
+        return {key: value for key, value in without_legacy_keys(data).items()
+                if key not in ('name', 'url') and value not in (None, {})}
 
     for blueprint in db.session.execute(db.select(Blueprint)).scalars():
         compare(f'blueprints/{blueprint.name}.json', f'blueprints/{blueprint.name}.json')

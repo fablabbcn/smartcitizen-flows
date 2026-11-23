@@ -59,10 +59,6 @@
                 <span class="hint">Per channel, over the process blueprint. <code>function</code>: algorithm, <code>lookback_hours</code>: hours loaded before the new readings.</span>
                 {% if not readonly %}<label class="check small"><input type="checkbox" name="reprocess"> Reprocess devices posted with other parameters</label>{% endif %}
             </div>
-            <div class="field full">
-                <label for="forwarding">Forwarding <span class="optional">(optional)</span></label>
-                <input class="input" id="forwarding" name="forwarding" value="{{ data.forwarding or '' }}">
-            </div>
         </div>
     </div>
 

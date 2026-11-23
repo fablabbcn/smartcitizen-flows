@@ -50,7 +50,7 @@ Under `/api/v1/` (`GET /api/v1/` lists the endpoints). Reading the metadata is p
 | `GET /jobs`, `GET /runs/<id>`, `POST /jobs/sync` | Jobs and runs (admin) |
 | `POST /jobs/<id>/reprocess`, `PUT /hardware/<name>?reprocess=true` | Reprocess a device (`{"from": "<date>"}`, optional), or the devices of a hardware posted with other processing (admin) |
 
-A hardware is served with the same object in the list and by name: `name`, `blueprints`, `description`, `comment`, `forwarding`, `parameters`, `process_parameters`, `versions` (the sensors mounted in each period) and `url`. It can be sent back as served, and it is checked before it is saved: errors reject it, warnings are returned with it. See the [data processing guide](https://docs.smartcitizen.me/guides/data/custom-data-processing/#hardware) for its fields.
+A hardware is served with the same object in the list and by name: `name`, `blueprints`, `description`, `comment`, `parameters`, `process_parameters`, `versions` (the sensors mounted in each period) and `url`. It can be sent back as served, and it is checked before it is saved: errors reject it, warnings are returned with it. See the [data processing guide](https://docs.smartcitizen.me/guides/data/custom-data-processing/#hardware) for its fields.
 
 The metadata used to be json files in [smartcitizen-data](https://github.com/fablabbcn/smartcitizen-data), which can still be imported and compared:
 

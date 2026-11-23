@@ -32,7 +32,7 @@ def form(**values):
 
 
 def hardware_form(**values):
-    data = {'blueprints': 'test_air', 'description': '1SEN55-2ELEC-AFE', 'comment': 'Test kit', 'forwarding': '',
+    data = {'blueprints': 'test_air', 'description': '1SEN55-2ELEC-AFE', 'comment': 'Test kit',
             'version_count': '1', 'version_0_from': '2024-04-01', 'version_0_to': '',
             'version_0_ids': 'AS_48_32=212830246\nPT_49_23=10-002911\n', 'action': 'save'}
     return form(**dict(data, **values))

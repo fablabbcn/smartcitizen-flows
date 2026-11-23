@@ -149,3 +149,14 @@ def test_parameters_of_unknown_channels_and_functions(hardware):
     assert 'parameters: not used, the hardware has no long blueprint' in warnings
     assert 'process_parameters.NO3: not a channel of blueprint test_air' in warnings
     assert 'process_parameters.NO2: function alphasense_803_4 not found in scdata.device.process' in warnings
+
+
+def test_lookback_is_hours_of_processing(hardware):
+    hardware['process_parameters'] = {'NO2': {'lookback_hours': 'a week'}}
+    hardware['parameters'] = {'NO2': {'lookback_hours': 24}}
+
+    warnings = check_hardware(hardware).warnings
+
+    assert "process_parameters.NO2: lookback_hours must be a number of hours above 0, not 'a week'" in warnings
+    hardware['process_parameters'] = {'NO2': {'lookback_hours': 168}}
+    assert not [warning for warning in check_hardware(hardware).warnings if 'process_parameters' in warning]

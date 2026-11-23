@@ -53,7 +53,7 @@ class FakeDevice:
     async def load(self):
         self.loaded = FakeDevice.options.get('load', True)
         if self.loaded:
-            self.data = pd.DataFrame({'TEMP': [20.0]})
+            self.data = FakeDevice.options.get('data', pd.DataFrame({'TEMP': [20.0]}))
         return self.loaded
 
     def process(self):
@@ -281,6 +281,33 @@ def test_processed_with_the_process_parameters_of_the_hardware(run):
 
     assert device.channels[0].function == 'poly_ts'
     assert device.channels[0].kwargs['coefficients'] == [2] and 'lam' not in device.channels[0].kwargs
+
+
+def lookback_of(hours):
+    hardware = editing.find('hardware', 'SCAS_TEST1')
+    hardware.process_parameters = {editing.find('blueprint', 'test_air').body['channels'][0]['name']: {'lookback_hours': hours}}
+    db.session.commit()
+
+
+def test_the_lookback_is_processed_and_only_the_new_readings_are_posted(run):
+    lookback_of(24)
+    index = pd.date_range(LATEST - pd.Timedelta(hours=24), periods=30, freq='1h')
+
+    state, device = run(dry_run=True, data=pd.DataFrame({'TEMP': 20.0}, index=index))
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    assert pd.Timestamp(device.options.min_date) == LATEST - pd.Timedelta(hours=24)
+    assert device.options.limit == config._max_load_amount + 24 * 60
+    assert len(device.data) == 5 and device.data.index.min() > LATEST
+
+
+def test_only_the_lookback_is_no_new_data(run):
+    lookback_of(24)
+    index = pd.date_range(LATEST - pd.Timedelta(hours=24), LATEST, freq='1h')
+
+    state, device = run(dry_run=True, data=pd.DataFrame({'TEMP': 20.0}, index=index))
+
+    assert state == ['ABORTED', 'NO_NEW_DATA'] and device.posted is None
 
 
 @pytest.mark.parametrize('hardware_name', ['NOT_IN_FLOWS', 'SCAS_TEST1'])

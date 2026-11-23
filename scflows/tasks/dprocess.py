@@ -1,11 +1,13 @@
 import scdata as sc
+from pandas import Timedelta
+from scdata.tools.date import localise_date
 
 import sys
 import asyncio
 from scflows.config import config, posting_enabled
 from scflows.custom_logger import logger
 from scflows.models import Blueprint
-from scflows.parameters import apply_parameters
+from scflows.parameters import apply_parameters, lookback_hours
 from scflows.runlog import log_line
 from scflows.tasks.context import describe, device_context, device_hardware, iso, library_warnings
 from scflows.tools import refresh_metadata
@@ -99,15 +101,22 @@ async def process_device(device, dry_run, task_log, context):
         task_log.append(logger_handler(f'Blueprint {d.blueprint}'
                                        f'{", parameters of hardware " + hardware.name if hardware.process_parameters else ""}'))
 
-        if d.handler.postprocessing['latest_postprocessing'] is not None:
-            d.options.min_date = d.handler.postprocessing['latest_postprocessing']
-            task_log.append(logger_handler(f'Setting min_date as: {d.options.min_date }'))
+        previous = d.handler.postprocessing['latest_postprocessing']
+        since = localise_date(previous, 'UTC') if previous is not None else None
+        # Readings before the new ones that channels need (e.g. a baseline): processed, not posted again
+        lookback = lookback_hours(hardware.process_parameters) if since is not None else 0
+        if since is not None:
+            d.options.min_date = (since - Timedelta(hours=lookback)).isoformat() if lookback else previous
+            task_log.append(logger_handler(f'Setting min_date as: {d.options.min_date}'
+                                           f'{f" ({lookback} hours before the latest postprocessing)" if lookback else ""}'))
+        context['lookback_hours'] = lookback
 
         # Only load the sensors that the blueprint channels need
         d.options.channels = d.required_sensors
         task_log.append(logger_handler(f'Sensors to load: {d.options.channels}'))
 
-        d.options.limit = config._max_load_amount
+        # The readings of the lookback (one a minute) do not count against the limit of new ones
+        d.options.limit = config._max_load_amount + int(lookback * 60)
         context.update(min_date=iso(d.options.min_date), sensors=list(d.options.channels or []), limit=d.options.limit)
 
         if not d.options.channels:
@@ -132,7 +141,14 @@ async def process_device(device, dry_run, task_log, context):
                     processed = False
                 # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
                 health = health_checks(d, logger_handler, task_log)
-                if processed:
+                if processed and lookback:
+                    # The readings of the lookback were posted by earlier runs
+                    d.data = d.data[d.data.index > since]
+                    task_log.append(logger_handler(f'New readings after the lookback: {period(d.data)}'))
+                if processed and d.data.empty:
+                    task_log.append(logger_handler(f'Device {device} has no readings after {iso(since)}', 'warning'))
+                    task_state = ['ABORTED', 'NO_NEW_DATA']
+                elif processed:
                     channels = [channel.name for channel in getattr(d, 'channels', []) if channel.name in d.data.columns]
                     context['channels'] = channels
                     task_log.append(logger_handler(f'Device was processed: {len(channels)} channels ({", ".join(channels)})'))

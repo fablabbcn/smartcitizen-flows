@@ -12,6 +12,8 @@ long blueprint, e.g. ASB4_NO2: {"NO2": {"lam": 1e8, "p": 0.01}}:
 
 A hardware can override them for its devices (parameters of the hardware: {channel: kwargs}).
 Processing (the process blueprint) only takes those of the hardware (process_parameters), as kwargs.
+A "lookback_hours" key loads that many hours of readings before the new ones, for channels that need
+them (e.g. the baseline of alphasense_als): only the new readings are posted.
 Order: blueprint, then parameter sets, then hardware. A "function" key switches the algorithm of the
 channel, e.g. {"O3": {"function": "alphasense_803_04"}} keeps the 803 algorithm for the O3 of a
 hardware whose NO2 uses the baseline (as chosen per device and gas for TwinAir).
@@ -53,6 +55,15 @@ def overrides_for(channel_name, kwargs, sensors, sets, codes):
     return merged, used
 
 
+LOOKBACK = 'lookback_hours'
+
+
+def lookback_hours(parameters):
+    ''' Hours of readings before the new ones that processing loads: the longest of the channels (0: none) '''
+    hours = [kwargs.get(LOOKBACK) for kwargs in (parameters or {}).values() if isinstance(kwargs, dict)]
+    return max([value for value in hours if isinstance(value, (int, float)) and value > 0], default=0)
+
+
 def apply_parameters(device, hardware=None, kind=Blueprint.LONG):
     '''
     Applies the parameter sets and the hardware's parameters to the channels of a device (scdata
@@ -73,6 +84,8 @@ def apply_parameters(device, hardware=None, kind=Blueprint.LONG):
         used.update(names)
         merged.update(hardware_parameters.get(name, {}))
         function = merged.pop('function', None)
+        # For the run, not for the channel
+        merged.pop(LOOKBACK, None)
         return function, dict(kwargs or {}, **merged)
 
     for channel in device.channels:

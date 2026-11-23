@@ -160,3 +160,14 @@ def test_lookback_is_hours_of_processing(hardware):
     assert "process_parameters.NO2: lookback_hours must be a number of hours above 0, not 'a week'" in warnings
     hardware['process_parameters'] = {'NO2': {'lookback_hours': 168}}
     assert not [warning for warning in check_hardware(hardware).warnings if 'process_parameters' in warning]
+
+
+def test_lookback_and_function_are_both_checked(hardware):
+    hardware['process_parameters'] = {'NO2': {'lookback_hours': 'a week', 'function': 'missing'},
+                                      'NO3': {'function': 'alphasense_803_04'}}
+
+    warnings = check_hardware(hardware).warnings
+
+    assert "process_parameters.NO2: lookback_hours must be a number of hours above 0, not 'a week'" in warnings
+    assert 'process_parameters.NO2: function missing not found in scdata.device.process' in warnings
+    assert 'process_parameters.NO3: not a channel of blueprint test_air' in warnings

@@ -84,6 +84,64 @@
     });
   });
 
+  // Tables: columns resized by dragging the edge of their header, remembered per page and table. A double click on
+  // the edge goes back to the automatic widths
+  document.querySelectorAll('table.table').forEach(function (table, index) {
+    var headers = table.tHead ? Array.prototype.slice.call(table.tHead.rows[0].cells) : [];
+    if (!headers.length) return;
+    var key = 'columns:' + location.pathname + ':' + index;
+    var widths = function () { return headers.map(function (header) { return header.getBoundingClientRect().width; }); };
+    var apply = function (values) {
+      headers.forEach(function (header, column) { header.style.width = values[column] + 'px'; });
+      table.style.width = values.reduce(function (total, value) { return total + value; }, 0) + 'px';
+      table.classList.add('resized');
+    };
+    var save = function () {
+      try { localStorage.setItem(key, JSON.stringify(widths())); } catch (error) {}
+    };
+    try {
+      var saved = JSON.parse(localStorage.getItem(key) || 'null');
+      if (saved && saved.length === headers.length) apply(saved);
+    } catch (error) {}
+
+    headers.forEach(function (header, column) {
+      if (column === headers.length - 1) return;
+      var handle = document.createElement('span');
+      handle.className = 'col-resize';
+      handle.setAttribute('aria-hidden', 'true');
+      header.appendChild(handle);
+      // Not a click on the header (sorting)
+      handle.addEventListener('click', function (event) { event.stopPropagation(); });
+      handle.addEventListener('dblclick', function (event) {
+        event.stopPropagation();
+        headers.forEach(function (other) { other.style.width = ''; });
+        table.style.width = '';
+        table.classList.remove('resized');
+        try { localStorage.removeItem(key); } catch (error) {}
+      });
+      handle.addEventListener('pointerdown', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var start = widths();
+        apply(start);
+        var x = event.clientX;
+        handle.setPointerCapture(event.pointerId);
+        var move = function (moved) {
+          var values = start.slice();
+          values[column] = Math.max(40, start[column] + moved.clientX - x);
+          apply(values);
+        };
+        var up = function () {
+          handle.removeEventListener('pointermove', move);
+          handle.removeEventListener('pointerup', up);
+          save();
+        };
+        handle.addEventListener('pointermove', move);
+        handle.addEventListener('pointerup', up);
+      });
+    });
+  });
+
   // Selection in tables: the header box ticks the rows shown (after filtering); the count says how many
   document.querySelectorAll('[data-select-all]').forEach(function (all) {
     var table = all.closest('table');

@@ -70,6 +70,12 @@ def parameter_warnings(hardware, blueprints):
             continue
         channels = {channel['name']: channel for channel in blueprint.body.get('channels', [])}
         for name, kwargs in parameters.items():
+            lookback = kwargs.get('lookback_hours')
+            if lookback is not None and kind != Blueprint.PROCESS:
+                warnings.append(f'{key}.{name}: lookback_hours is only used by processing (process_parameters)')
+            elif lookback is not None and (isinstance(lookback, bool) or not isinstance(lookback, (int, float))
+                                           or lookback <= 0):
+                warnings.append(f'{key}.{name}: lookback_hours must be a number of hours above 0, not {lookback!r}')
             if name not in channels:
                 warnings.append(f'{key}.{name}: not a channel of blueprint {blueprint.name}')
             elif 'function' in kwargs:

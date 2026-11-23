@@ -4,7 +4,7 @@ import pytest
 
 from scflows import db, editing
 from scflows.metadata import import_metadata
-from scflows.parameters import apply_parameters, sensor_types
+from scflows.parameters import apply_parameters, lookback_hours, sensor_types
 
 from conftest import DATA, auth
 
@@ -71,6 +71,16 @@ def test_processing_takes_only_the_process_parameters_of_the_hardware(sets):
     assert apply_parameters(item, hardware, 'process') == []
     assert item.channels[0].function == 'alphasense_803_04'
     assert item.channels[0].kwargs == {'alphasense_id': '202760040'}
+
+
+def test_the_lookback_is_the_longest_of_the_channels_and_not_a_kwarg(sets):
+    parameters = {'SO2': {'lookback_hours': 168, 'lam': 100}, 'NO2': {'lookback_hours': 24}, 'O3': {}}
+    item = device([channel('SO2', alphasense_id='164100628')])
+
+    apply_parameters(item, SimpleNamespace(process_parameters=parameters), 'process')
+
+    assert lookback_hours(parameters) == 168 and lookback_hours({'SO2': {'lookback_hours': 'a week'}}) == 0
+    assert item.channels[0].kwargs == {'alphasense_id': '164100628', 'lam': 100}
 
 
 # API

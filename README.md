@@ -20,7 +20,7 @@ A hardware has a `process` blueprint, a `long` one, or both, and can add a `back
 
 Every run also runs the health checks of its blueprint (gaps, implausible, flat and outlier values), and keeps the result for 30 days: `ok`, `warning`, or `problem` when 20% or more of the readings are flagged.
 
-The parameters of long processing (e.g. of the baselines) can be tuned per sensor type (parameter sets) and per hardware (`parameters`: `{channel: kwargs}`), which can also switch the function of a channel (`{"O3": {"function": "alphasense_803_04"}}`). Processing takes the kwargs of its process blueprint, and those of the hardware's `process_parameters` (same format).
+The parameters of long processing (e.g. of the baselines) can be tuned per sensor type (parameter sets) and per hardware (`parameters`: `{channel: kwargs}`), which can also switch the function of a channel (`{"O3": {"function": "alphasense_803_04"}}`). Processing takes the kwargs of its process blueprint, and those of the hardware's `process_parameters` (same format). There, `lookback_hours` loads hours of readings before the new ones (e.g. for `alphasense_als`); only the new ones are posted.
 
 ## Web interface
 

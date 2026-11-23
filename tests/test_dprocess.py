@@ -298,12 +298,13 @@ def test_the_lookback_is_processed_and_only_the_new_readings_are_posted(run):
     assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
     assert pd.Timestamp(device.options.min_date) == LATEST - pd.Timedelta(hours=24)
     assert device.options.limit == config._max_load_amount + 24 * 60
-    assert len(device.data) == 5 and device.data.index.min() > LATEST
+    # The reading at the latest postprocessing is new
+    assert len(device.data) == 6 and device.data.index.min() == LATEST
 
 
 def test_only_the_lookback_is_no_new_data(run):
     lookback_of(24)
-    index = pd.date_range(LATEST - pd.Timedelta(hours=24), LATEST, freq='1h')
+    index = pd.date_range(LATEST - pd.Timedelta(hours=24), LATEST - pd.Timedelta(hours=1), freq='1h')
 
     state, device = run(dry_run=True, data=pd.DataFrame({'TEMP': 20.0}, index=index))
 

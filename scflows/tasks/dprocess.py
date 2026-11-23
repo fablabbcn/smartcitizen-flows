@@ -142,11 +142,12 @@ async def process_device(device, dry_run, task_log, context):
                 # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
                 health = health_checks(d, logger_handler, task_log)
                 if processed and lookback:
-                    # The readings of the lookback were posted by earlier runs
-                    d.data = d.data[d.data.index > since]
+                    # The readings of the lookback were posted by earlier runs. The latest postprocessing is the
+                    # last posted reading plus the frequency: a reading then is new
+                    d.data = d.data[d.data.index >= since]
                     task_log.append(logger_handler(f'New readings after the lookback: {period(d.data)}'))
                 if processed and d.data.empty:
-                    task_log.append(logger_handler(f'Device {device} has no readings after {iso(since)}', 'warning'))
+                    task_log.append(logger_handler(f'Device {device} has no readings from {iso(since)}', 'warning'))
                     task_state = ['ABORTED', 'NO_NEW_DATA']
                 elif processed:
                     channels = [channel.name for channel in getattr(d, 'channels', []) if channel.name in d.data.columns]

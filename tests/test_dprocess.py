@@ -79,6 +79,7 @@ class FakeDevice:
     def health_checks(self):
         if FakeDevice.options.get('checks_fail'):
             raise ValueError('bad check')
+        self.checked = getattr(self, 'checked', []) + [(self.data.index.min(), self.data.index.max(), len(self.data))]
         self.health = {'start': None, 'end': None, 'rows': len(self.data),
                        'checks': [{'name': 'GAPS', 'status': 'ok',
                                    'columns': {column: {'status': 'ok', 'rows': len(self.data)} for column in self.data}}]}
@@ -428,3 +429,13 @@ def test_sensors_without_readings_in_a_short_period_are_not_gaps(run):
     _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data)
 
     assert set(device.returned_health['checks'][0]['columns']) == {'TEMP'}
+
+
+def test_the_sensors_of_the_checks_are_checked_over_all_the_new_readings(run):
+    # The PM sensor stops two hours before the run's last reading: those two hours are a gap
+    data = readings(LATEST, 5)
+    check_data = readings(LATEST, 3, **{'SEN5X_PM_25': 3.0, 'NOISE_A': 50.0, 'ADC_48_3': 1.0})
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
+
+    assert device.checked[1] == (data.index.min(), data.index.max(), 4)

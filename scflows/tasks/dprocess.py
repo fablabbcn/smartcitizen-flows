@@ -321,6 +321,10 @@ async def with_check_sensors(d, health, sensors, checked, limit, logger_handler,
         full_gaps(d, health, without_readings(d, extra, sensors), start, end, logger_handler, task_log)
         return health
     task_log.append(logger_handler(f'Sensors for the checks loaded: {period(extra)}'))
+    # Over all the period checked: gaps at its ends count (the API only returns the times with readings)
+    bounds = [bound.tz_convert(extra.index.tz) if extra.index.tz is not None and bound.tzinfo is not None else bound
+              for bound in (start, end)]
+    d.data = extra.reindex(extra.index.union(bounds))
     try:
         extra_health = health_checks(d, logger_handler, task_log)
     finally:

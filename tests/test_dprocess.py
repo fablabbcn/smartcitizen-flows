@@ -420,3 +420,11 @@ def test_without_any_reading_of_the_sensors_of_the_checks_all_are_gaps(run):
     columns = device.returned_health['checks'][0]['columns']
     assert {column for column, summary in columns.items() if summary.get('ratio') == 1.0} == \
         {'ADC_48_3', 'NOISE_A', 'SEN5X_PM_25'}
+
+
+def test_sensors_without_readings_in_a_short_period_are_not_gaps(run):
+    data = pd.DataFrame({'TEMP': 20.0}, index=pd.date_range(LATEST, periods=3, freq='1min'))
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data)
+
+    assert set(device.returned_health['checks'][0]['columns']) == {'TEMP'}

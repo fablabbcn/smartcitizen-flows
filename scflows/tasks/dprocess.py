@@ -263,6 +263,10 @@ def check_sensors(d, hardware=None):
     return sorted({sensor_map[name] for name in names if name in sensor_map})
 
 
+# Shorter periods can miss the readings of slower sensors (e.g. PM every 5 minutes) without being gaps
+FULL_GAP_MIN_MINUTES = 60
+
+
 def without_readings(d, data, sensors):
     ''' Columns (as the checks name them) of the sensors requested that have no readings in the data '''
     rename = getattr(d, '_rename', None) or {}
@@ -273,14 +277,16 @@ def without_readings(d, data, sensors):
 def full_gaps(d, health, columns, start, end, logger_handler, task_log):
     '''
     Sensors without readings are a gap over all the period checked in the gaps check of the blueprint (if it has
-    one), instead of missing from the health
+    one), instead of missing from the health. Not in periods shorter than FULL_GAP_MIN_MINUTES
     '''
     gaps = next((check.name for check in d.checks or [] if getattr(check, 'function', None) == 'find_gaps'), None)
     check = next((item for item in health['checks'] if item['name'] == gaps), None)
     if check is None or not columns:
         return
-    task_log.append(logger_handler(f'Sensors without readings: {", ".join(columns)}', 'warning'))
     minutes = round((end - start).total_seconds() / 60, 1)
+    if minutes < FULL_GAP_MIN_MINUTES:
+        return
+    task_log.append(logger_handler(f'Sensors without readings: {", ".join(columns)}', 'warning'))
     for column in columns:
         check['columns'].setdefault(column, {'flagged': 0, 'checked': 0, 'minutes': minutes, 'ratio': 1.0,
                                              'intervals': [[start.isoformat(), end.isoformat()]], 'more_intervals': 0})

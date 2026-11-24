@@ -55,6 +55,10 @@ class FakeDevice:
     def __sensor_map__(self):
         return FakeDevice.options.get('sensor_map', {})
 
+    @property
+    def _rename(self):
+        return {source: name for name, source in self.__sensor_map__().items() if name != source}
+
     async def load(self):
         self.loads.append({name: getattr(self.options, name, None) for name in ('channels', 'min_date', 'max_date', 'limit')})
         self.calls.append('load')
@@ -342,18 +346,20 @@ def test_not_processed_without_a_process_blueprint_in_flows(run, hardware_name):
 # Sensors that only the checks name
 
 CHECKS = [SimpleNamespace(name='FLAT', kwargs={'columns': ['SEN5X_PM_25', 'TEMP', 'NO2', 'ADC_48_3', 'ADC_49_0']}),
-          SimpleNamespace(name='GAPS', kwargs={'gap_sizes': [{'columns': ['NOISE_A'], 'gap_size_minutes': 10}]})]
+          SimpleNamespace(name='GAPS', function='find_gaps',
+                          kwargs={'gap_sizes': [{'columns': ['NOISE_A'], 'gap_size_minutes': 10}]})]
 SENSOR_MAP = {'SEN5X_PM_25': 'SEN5X PM2.5', 'NOISE_A': 'ICS43432 Noise', 'TEMP': 'TEMP', 'NO2': 'Alphasense NO2',
               'ADC_48_3': 'ADC_48_3', 'ADC_49_0': 'ADC_49_0'}
 
 
 def readings(start, hours, **columns):
-    return pd.DataFrame(columns or {'TEMP': 20.0}, index=pd.date_range(start, periods=hours, freq='1h'))
+    ''' Hourly readings, by default of the sensors that the run loads '''
+    return pd.DataFrame(columns or {'ADC_48_2': 1.0, 'TEMP': 20.0}, index=pd.date_range(start, periods=hours, freq='1h'))
 
 
 def test_the_sensors_of_the_checks_are_loaded_after_posting_for_the_new_readings(run):
     data = readings(LATEST, 5)
-    check_data = readings(LATEST, 5, **{'SEN5X_PM_25': 3.0, 'NOISE_A': 50.0})
+    check_data = readings(LATEST, 5, **{'SEN5X_PM_25': 3.0, 'NOISE_A': 50.0, 'ADC_48_3': 1.0})
 
     state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
 
@@ -363,9 +369,9 @@ def test_the_sensors_of_the_checks_are_loaded_after_posting_for_the_new_readings
     assert device.loads[1] == {'channels': ['ADC_48_3', 'ICS43432 Noise', 'SEN5X PM2.5'], 'min_date': data.index.min().isoformat(),
                                'max_date': data.index.max().isoformat(), 'limit': config._max_load_amount}
     assert device.calls == ['load', 'post', 'load']
-    assert set(device.returned_health['checks'][0]['columns']) == {'TEMP', 'SEN5X_PM_25', 'NOISE_A'}
+    assert set(device.returned_health['checks'][0]['columns']) == {'ADC_48_2', 'TEMP', 'ADC_48_3', 'SEN5X_PM_25', 'NOISE_A'}
     # The run keeps its data and options
-    assert list(device.data.columns) == ['TEMP'] and device.options.channels == ['ADC_48_2', 'TEMP']
+    assert list(device.data.columns) == ['ADC_48_2', 'TEMP'] and device.options.channels == ['ADC_48_2', 'TEMP']
 
 
 def test_with_a_lookback_the_sensors_of_the_checks_are_loaded_from_the_new_readings(run):
@@ -390,4 +396,27 @@ def test_the_health_is_kept_if_the_sensors_of_the_checks_are_not_loaded(run):
     state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=readings(LATEST, 5), check_load=False)
 
     assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
-    assert set(device.returned_health['checks'][0]['columns']) == {'TEMP'}
+    assert set(device.returned_health['checks'][0]['columns']) == {'ADC_48_2', 'TEMP'}
+
+
+def test_sensors_without_readings_are_a_gap_over_all_the_period(run):
+    # NOISE_A has no readings in the new period, and the run's ADC_48_2 none at all: they are not columns of the
+    # data (a column without readings is a gap for find_gaps already)
+    data = readings(LATEST, 5, TEMP=20.0)
+    check_data = readings(LATEST, 5, **{'SEN5X_PM_25': 3.0, 'ADC_48_3': 1.0})
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
+
+    columns = device.returned_health['checks'][0]['columns']
+    for column in ('NOISE_A', 'ADC_48_2'):
+        assert columns[column]['ratio'] == 1.0 and columns[column]['minutes'] == 240.0
+        assert columns[column]['intervals'] == [[data.index.min().isoformat(), data.index.max().isoformat()]]
+    assert columns['SEN5X_PM_25'] == {'status': 'ok', 'rows': 5}
+
+
+def test_without_any_reading_of_the_sensors_of_the_checks_all_are_gaps(run):
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=readings(LATEST, 5))
+
+    columns = device.returned_health['checks'][0]['columns']
+    assert {column for column, summary in columns.items() if summary.get('ratio') == 1.0} == \
+        {'ADC_48_3', 'NOISE_A', 'SEN5X_PM_25'}

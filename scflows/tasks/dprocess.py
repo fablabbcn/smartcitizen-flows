@@ -156,6 +156,9 @@ async def process_device(device, dry_run, task_log, context):
                     processed = False
                 # Checks of the blueprint (gaps, implausible, flat values, outliers), stored by flows
                 health = health_checks(d, logger_handler, task_log)
+                if health is not None and not d.data.empty:
+                    full_gaps(d, health, without_readings(d, d.data, d.options.channels),
+                              d.data.index.min(), d.data.index.max(), logger_handler, task_log)
                 if processed and lookback:
                     # The readings of the lookback were posted by earlier runs. The latest postprocessing is the
                     # last posted reading plus the frequency: a reading then is new
@@ -260,6 +263,29 @@ def check_sensors(d, hardware=None):
     return sorted({sensor_map[name] for name in names if name in sensor_map})
 
 
+def without_readings(d, data, sensors):
+    ''' Columns (as the checks name them) of the sensors requested that have no readings in the data '''
+    rename = getattr(d, '_rename', None) or {}
+    columns = [rename.get(sensor, sensor) for sensor in sensors]
+    return [column for column in columns if column not in data.columns or data[column].isna().all()]
+
+
+def full_gaps(d, health, columns, start, end, logger_handler, task_log):
+    '''
+    Sensors without readings are a gap over all the period checked in the gaps check of the blueprint (if it has
+    one), instead of missing from the health
+    '''
+    gaps = next((check.name for check in d.checks or [] if getattr(check, 'function', None) == 'find_gaps'), None)
+    check = next((item for item in health['checks'] if item['name'] == gaps), None)
+    if check is None or not columns:
+        return
+    task_log.append(logger_handler(f'Sensors without readings: {", ".join(columns)}', 'warning'))
+    minutes = round((end - start).total_seconds() / 60, 1)
+    for column in columns:
+        check['columns'].setdefault(column, {'flagged': 0, 'checked': 0, 'minutes': minutes, 'ratio': 1.0,
+                                             'intervals': [[start.isoformat(), end.isoformat()]], 'more_intervals': 0})
+
+
 async def with_check_sensors(d, health, sensors, checked, limit, logger_handler, task_log):
     '''
     Loads the sensors that only the checks need, for the new readings (checked: their first and last time), runs
@@ -279,9 +305,14 @@ async def with_check_sensors(d, health, sensors, checked, limit, logger_handler,
     finally:
         for name, value in saved.items():
             setattr(options, name, value)
-    if extra is None or extra.empty:
+    if extra is None:
+        # Not loaded (e.g. an error of the API): nothing is known of these sensors
         d.data = data
-        task_log.append(logger_handler('No readings of the sensors for the checks', 'warning'))
+        task_log.append(logger_handler('The sensors for the checks were not loaded', 'warning'))
+        return health
+    if extra.empty:
+        d.data = data
+        full_gaps(d, health, without_readings(d, extra, sensors), start, end, logger_handler, task_log)
         return health
     task_log.append(logger_handler(f'Sensors for the checks loaded: {period(extra)}'))
     try:
@@ -290,6 +321,7 @@ async def with_check_sensors(d, health, sensors, checked, limit, logger_handler,
         d.data = data
     if extra_health is None:
         return health
+    full_gaps(d, extra_health, without_readings(d, extra, sensors), start, end, logger_handler, task_log)
     # The columns of each check, by its name
     checks = {check['name']: check for check in health['checks']}
     for check in extra_health['checks']:

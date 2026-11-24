@@ -41,6 +41,8 @@ class FakeDevice:
         self.processed = False
         self.postprocessing_updated = False
         self.posted = None
+        # What each load asked for, and the order of loads and posts
+        self.loads, self.calls = [], []
         FakeDevice.instance = self
 
     def use_blueprint(self, name, blueprint):
@@ -50,10 +52,22 @@ class FakeDevice:
                                          kwargs=dict(channel.get('kwargs') or {})) for channel in blueprint['channels']]
         return True
 
+    def __sensor_map__(self):
+        return FakeDevice.options.get('sensor_map', {})
+
+    @property
+    def _rename(self):
+        return {source: name for name, source in self.__sensor_map__().items() if name != source}
+
     async def load(self):
-        self.loaded = FakeDevice.options.get('load', True)
+        self.loads.append({name: getattr(self.options, name, None) for name in ('channels', 'min_date', 'max_date', 'limit')})
+        self.calls.append('load')
+        # The first load is the run's; a second one, the sensors of the checks
+        first = len(self.loads) == 1
+        self.loaded = FakeDevice.options.get('load', True) if first else FakeDevice.options.get('check_load', True)
         if self.loaded:
-            self.data = FakeDevice.options.get('data', pd.DataFrame({'TEMP': [20.0]}))
+            self.data = FakeDevice.options.get('data', pd.DataFrame({'TEMP': [20.0]})) if first \
+                else FakeDevice.options.get('check_data', pd.DataFrame())
         return self.loaded
 
     def process(self):
@@ -65,14 +79,17 @@ class FakeDevice:
     def health_checks(self):
         if FakeDevice.options.get('checks_fail'):
             raise ValueError('bad check')
+        self.checked = getattr(self, 'checked', []) + [(self.data.index.min(), self.data.index.max(), len(self.data))]
         self.health = {'start': None, 'end': None, 'rows': len(self.data),
-                       'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
+                       'checks': [{'name': 'GAPS', 'status': 'ok',
+                                   'columns': {column: {'status': 'ok', 'rows': len(self.data)} for column in self.data}}]}
 
     def update_postprocessing_date(self):
         self.postprocessing_updated = FakeDevice.options.get('postprocessing_updated', True)
 
     async def post(self, **kwargs):
         self.posted = kwargs
+        self.calls.append('post')
         # What the Smart Citizen API client records
         self.handler.posted = {'SO2': {'id': 123, 'readings': 1000}}
         self.handler.not_posted = {'SO2_WE': 'no sensor id', 'SO2_AE': 'no sensor id'}
@@ -187,7 +204,7 @@ def test_health_checks_are_returned(run):
     _, device = run()
 
     assert device.returned_health == {'start': None, 'end': None, 'rows': 1, 'device_name': 'Kit 1',
-                                      'blueprint': 'test_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
+                                      'blueprint': 'test_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {'TEMP': {'status': 'ok', 'rows': 1}}}]}
 
 
 def test_health_checks_also_when_processing_fails(run):
@@ -325,3 +342,100 @@ def test_not_processed_without_a_process_blueprint_in_flows(run, hardware_name):
 
     assert state == ['ABORTED', 'NO_PROCESS_BLUEPRINT']
     assert device.used_blueprint is None and device.loaded is False and device.posted is None
+
+
+# Sensors that only the checks name
+
+CHECKS = [SimpleNamespace(name='FLAT', kwargs={'columns': ['SEN5X_PM_25', 'TEMP', 'NO2', 'ADC_48_3', 'ADC_49_0']}),
+          SimpleNamespace(name='GAPS', function='find_gaps',
+                          kwargs={'gap_sizes': [{'columns': ['NOISE_A'], 'gap_size_minutes': 10}]})]
+SENSOR_MAP = {'SEN5X_PM_25': 'SEN5X PM2.5', 'NOISE_A': 'ICS43432 Noise', 'TEMP': 'TEMP', 'NO2': 'Alphasense NO2',
+              'ADC_48_3': 'ADC_48_3', 'ADC_49_0': 'ADC_49_0'}
+
+
+def readings(start, hours, **columns):
+    ''' Hourly readings, by default of the sensors that the run loads '''
+    return pd.DataFrame(columns or {'ADC_48_2': 1.0, 'TEMP': 20.0}, index=pd.date_range(start, periods=hours, freq='1h'))
+
+
+def test_the_sensors_of_the_checks_are_loaded_after_posting_for_the_new_readings(run):
+    data = readings(LATEST, 5)
+    check_data = readings(LATEST, 5, **{'SEN5X_PM_25': 3.0, 'NOISE_A': 50.0, 'ADC_48_3': 1.0})
+
+    state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    # TEMP is loaded for processing, NO2 is a channel of the blueprint (as posted, not a sensor to check), and
+    # SCAS_TEST1 has sensors on ADC_48_3, ADC_48_2 (AS_48_32), ADC_49_2 and ADC_49_3 (PT_49_23), not on ADC_49_0
+    assert device.loads[1] == {'channels': ['ADC_48_3', 'ICS43432 Noise', 'SEN5X PM2.5'], 'min_date': data.index.min().isoformat(),
+                               'max_date': data.index.max().isoformat(), 'limit': config._max_load_amount}
+    assert device.calls == ['load', 'post', 'load']
+    assert set(device.returned_health['checks'][0]['columns']) == {'ADC_48_2', 'TEMP', 'ADC_48_3', 'SEN5X_PM_25', 'NOISE_A'}
+    # The run keeps its data and options
+    assert list(device.data.columns) == ['ADC_48_2', 'TEMP'] and device.options.channels == ['ADC_48_2', 'TEMP']
+
+
+def test_with_a_lookback_the_sensors_of_the_checks_are_loaded_from_the_new_readings(run):
+    lookback_of(24)
+    data = readings(LATEST - pd.Timedelta(hours=24), 30)
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data,
+                    check_data=readings(LATEST, 6, **{'SEN5X_PM_25': 3.0}))
+
+    assert pd.Timestamp(device.loads[1]['min_date']) == LATEST
+    assert pd.Timestamp(device.loads[1]['max_date']) == data.index.max()
+    assert device.loads[1]['limit'] == config._max_load_amount
+
+
+def test_without_sensors_only_for_the_checks_there_is_one_load(run):
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map={'TEMP': 'TEMP'})
+
+    assert len(device.loads) == 1
+
+
+def test_the_health_is_kept_if_the_sensors_of_the_checks_are_not_loaded(run):
+    state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=readings(LATEST, 5), check_load=False)
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    assert set(device.returned_health['checks'][0]['columns']) == {'ADC_48_2', 'TEMP'}
+
+
+def test_sensors_without_readings_are_a_gap_over_all_the_period(run):
+    # NOISE_A has no readings in the new period, and the run's ADC_48_2 none at all: they are not columns of the
+    # data (a column without readings is a gap for find_gaps already)
+    data = readings(LATEST, 5, TEMP=20.0)
+    check_data = readings(LATEST, 5, **{'SEN5X_PM_25': 3.0, 'ADC_48_3': 1.0})
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
+
+    columns = device.returned_health['checks'][0]['columns']
+    for column in ('NOISE_A', 'ADC_48_2'):
+        assert columns[column]['ratio'] == 1.0 and columns[column]['minutes'] == 240.0
+        assert columns[column]['intervals'] == [[data.index.min().isoformat(), data.index.max().isoformat()]]
+    assert columns['SEN5X_PM_25'] == {'status': 'ok', 'rows': 5}
+
+
+def test_without_any_reading_of_the_sensors_of_the_checks_all_are_gaps(run):
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=readings(LATEST, 5))
+
+    columns = device.returned_health['checks'][0]['columns']
+    assert {column for column, summary in columns.items() if summary.get('ratio') == 1.0} == \
+        {'ADC_48_3', 'NOISE_A', 'SEN5X_PM_25'}
+
+
+def test_sensors_without_readings_in_a_short_period_are_not_gaps(run):
+    data = pd.DataFrame({'TEMP': 20.0}, index=pd.date_range(LATEST, periods=3, freq='1min'))
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data)
+
+    assert set(device.returned_health['checks'][0]['columns']) == {'TEMP'}
+
+
+def test_the_sensors_of_the_checks_are_checked_over_all_the_new_readings(run):
+    # The PM sensor stops two hours before the run's last reading: those two hours are a gap
+    data = readings(LATEST, 5)
+    check_data = readings(LATEST, 3, **{'SEN5X_PM_25': 3.0, 'NOISE_A': 50.0, 'ADC_48_3': 1.0})
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
+
+    assert device.checked[1] == (data.index.min(), data.index.max(), 4)

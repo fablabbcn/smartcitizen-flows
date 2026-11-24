@@ -341,9 +341,10 @@ def test_not_processed_without_a_process_blueprint_in_flows(run, hardware_name):
 
 # Sensors that only the checks name
 
-CHECKS = [SimpleNamespace(name='FLAT', kwargs={'columns': ['SEN5X_PM_25', 'TEMP', 'NO2']}),
+CHECKS = [SimpleNamespace(name='FLAT', kwargs={'columns': ['SEN5X_PM_25', 'TEMP', 'NO2', 'ADC_48_3', 'ADC_49_0']}),
           SimpleNamespace(name='GAPS', kwargs={'gap_sizes': [{'columns': ['NOISE_A'], 'gap_size_minutes': 10}]})]
-SENSOR_MAP = {'SEN5X_PM_25': 'SEN5X PM2.5', 'NOISE_A': 'ICS43432 Noise', 'TEMP': 'TEMP', 'NO2': 'Alphasense NO2'}
+SENSOR_MAP = {'SEN5X_PM_25': 'SEN5X PM2.5', 'NOISE_A': 'ICS43432 Noise', 'TEMP': 'TEMP', 'NO2': 'Alphasense NO2',
+              'ADC_48_3': 'ADC_48_3', 'ADC_49_0': 'ADC_49_0'}
 
 
 def readings(start, hours, **columns):
@@ -357,8 +358,9 @@ def test_the_sensors_of_the_checks_are_loaded_after_posting_for_the_new_readings
     state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
 
     assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
-    # TEMP is loaded for processing, NO2 is a channel of the blueprint (as posted, not a sensor to check)
-    assert device.loads[1] == {'channels': ['ICS43432 Noise', 'SEN5X PM2.5'], 'min_date': data.index.min().isoformat(),
+    # TEMP is loaded for processing, NO2 is a channel of the blueprint (as posted, not a sensor to check), and
+    # SCAS_TEST1 has sensors on ADC_48_3, ADC_48_2 (AS_48_32), ADC_49_2 and ADC_49_3 (PT_49_23), not on ADC_49_0
+    assert device.loads[1] == {'channels': ['ADC_48_3', 'ICS43432 Noise', 'SEN5X PM2.5'], 'min_date': data.index.min().isoformat(),
                                'max_date': data.index.max().isoformat(), 'limit': config._max_load_amount}
     assert device.calls == ['load', 'post', 'load']
     assert set(device.returned_health['checks'][0]['columns']) == {'TEMP', 'SEN5X_PM_25', 'NOISE_A'}

@@ -122,7 +122,7 @@ async def process_device(device, dry_run, task_log, context):
         d.options.channels = d.required_sensors
         task_log.append(logger_handler(f'Sensors to load: {d.options.channels}'))
         # The sensors that only the checks name are loaded after posting, for the new readings
-        check_only = [sensor for sensor in check_sensors(d) if sensor not in d.options.channels]
+        check_only = [sensor for sensor in check_sensors(d, hardware) if sensor not in d.options.channels]
         context['check_sensors'] = check_only
         if check_only:
             task_log.append(logger_handler(f'Sensors for the checks only: {check_only}'))
@@ -221,10 +221,22 @@ async def process_device(device, dry_run, task_log, context):
     return task_log, task_state, health
 
 
-def check_sensors(d):
+def used_adcs(hardware):
+    ''' ADC channels with a sensor in a version of the hardware: slot AS_48_01 uses ADC_48_0 and ADC_48_1 '''
+    adcs = set()
+    for version in getattr(hardware, 'versions', None) or []:
+        for slot in version.ids or {}:
+            parts = slot.split('_')
+            if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit():
+                adcs.update(f'ADC_{parts[1]}_{channel}' for channel in parts[2])
+    return adcs
+
+
+def check_sensors(d, hardware=None):
     '''
     Sensors (source names) of the device that the checks of its blueprint name: in their kwargs or args, also
-    nested (e.g. the columns of gap_sizes). Not the channels of the blueprint, which processing calculates
+    nested (e.g. the columns of gap_sizes). Not the channels of the blueprint, which processing calculates, nor
+    the ADC channels without a sensor in the hardware
     '''
     names = set()
 
@@ -243,7 +255,9 @@ def check_sensors(d):
         collect(getattr(check, 'args', None))
     sensor_map = d.__sensor_map__()
     channels = {channel.name for channel in getattr(d, 'channels', [])}
-    return sorted({sensor_map[name] for name in names - channels if name in sensor_map})
+    adcs = used_adcs(hardware)
+    names = {name for name in names - channels if not name.startswith('ADC_') or name in adcs}
+    return sorted({sensor_map[name] for name in names if name in sensor_map})
 
 
 async def with_check_sensors(d, health, sensors, checked, limit, logger_handler, task_log):

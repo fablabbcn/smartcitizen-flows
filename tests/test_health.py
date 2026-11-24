@@ -143,7 +143,7 @@ def test_health_pages(app, client):
     page = client.get('/health/1').get_data(as_text=True)
     assert 'NO2' in page and f'record={latest.id}' in page and 'selected' in page
     older = client.get(f'/health/1?record={latest.id - 1}').get_data(as_text=True)
-    assert 'Older result' in older
+    assert '(older result)' in older
 
 
 def test_researcher_health_pages(app, client):

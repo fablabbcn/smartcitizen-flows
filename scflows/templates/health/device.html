@@ -6,12 +6,11 @@
     <div class="card check-card">
         <div class="card-header">
             <h2>{{ check.name | capitalize }} {{ badge(check.rating) }}</h2>
-            <span class="hint">{{ check.description }}</span>
         </div>
         {% if check.rating == 'error' %}
         <div class="card-body"><div class="alert error">The check could not run: {{ check.status }}. Check its settings in the blueprint.</div></div>
         {% elif not check.columns %}
-        <div class="card-body muted small">No columns checked{% if check.status != 'ok' %} ({{ check.status }}){% endif %}.</div>
+        <div class="card-body muted small">No columns were checked{% if check.status != 'ok' %} ({{ check.status }}){% endif %}.</div>
         {% else %}
         {% set gaps = check.columns.values() | selectattr('minutes', 'defined') | list %}
         {% set flagged = check.columns.items() | rejectattr('1.status', 'equalto', 'ok') | sort(attribute='1.ratio', reverse=true) | list %}
@@ -43,7 +42,7 @@
         </div>
         {% endif %}
         {% if clean %}
-        <div class="card-body small"><span class="muted">Nothing flagged in {{ clean | length }} column{{ 's' if clean | length > 1 }}:</span> <span class="mono">{{ clean | join(', ') }}</span></div>
+        <div class="card-body small"><span class="muted">Columns without flagged values ({{ clean | length }}):</span> <span class="mono">{{ clean | join(', ') }}</span></div>
         {% endif %}
         {% endif %}
     </div>
@@ -57,12 +56,11 @@
 <div class="page-header">
     <div>
         <h1 class="row">{{ latest.device_name or 'Device' }} <span class="muted">#{{ device_id }}</span> {{ badge(selected.status) }}</h1>
-        <p class="subtitle">
-            {% if selected.id != latest.id %}Older result, from {{ datetime(selected.created_at) }}. <a href="{{ url_for('health_ui.device', device_id=device_id) }}">See the latest</a>.
-            {% else %}Checked {{ datetime(selected.created_at) }}{% endif %}
-            · {{ selected.rows }} rows{% if selected.start and selected.end %} from {{ datetime(selected.start) }} to {{ datetime(selected.end) }}{% endif %}
-            {% if selected.blueprint %} · blueprint {{ blueprint_link(selected.blueprint) }}{% endif %}
-            {% if hardware_name %} · hardware {{ hardware_link(hardware_name) if can_see_hardware else hardware_name }}{% endif %}
+        <p class="subtitle health-facts">
+            {% if selected.id != latest.id %}<span>Checked: {{ datetime(selected.created_at) }} (older result). <a href="{{ url_for('health_ui.device', device_id=device_id) }}">See the latest</a>.</span>
+            {% else %}<span>Last checked: {{ datetime(selected.created_at) }}.</span>{% endif %}
+            {% if selected.blueprint %}<span>Blueprint: {{ blueprint_link(selected.blueprint) }}</span>{% endif %}
+            {% if hardware_name %}<span>Hardware: {{ hardware_link(hardware_name) if can_see_hardware else hardware_name }}</span>{% endif %}
         </p>
     </div>
     <div class="actions">
@@ -76,7 +74,6 @@
 <div class="card">
     <div class="card-header">
         <h2>Runs</h2>
-        <span class="hint">Oldest first. Each run checks the data it processed. History of {{ keep_days }} days.</span>
     </div>
     <div class="card-body">
         <span class="dots large">{% for item in items | reverse %}<a class="dot {{ item.status }}{% if item.id == selected.id %} selected{% endif %}" href="{{ url_for('health_ui.device', device_id=device_id, record=item.id) }}" title="{{ item.created_at.strftime('%Y-%m-%d %H:%M') }}: {{ item.status }}"></a>{% endfor %}</span>
@@ -93,7 +90,7 @@
     <div class="section-header">
         <div>
             <h2 class="row">Long processing {{ badge(long_latest.status) }}</h2>
-            <p class="hint">Blueprint <span class="mono">{{ long_latest.blueprint }}</span>, over months of backups (baselines). Last run {{ datetime(long_latest.created_at) }}{% if long_run %}: {{ long_run.start[:10] }} to {{ long_run.end[:10] }}, {{ long_run.rows }} rows{% endif %}. Not posted to the Smart Citizen API.</p>
+            <p class="subtitle health-facts"><span>Last checked: {{ datetime(long_latest.created_at) }}.</span><span>Blueprint: {{ blueprint_link(long_latest.blueprint) }}</span></p>
         </div>
         <div class="actions">
             <a class="btn" href="{{ url_for('api.get_device_series', device_id=device_id, blueprint=long_latest.blueprint, format='csv') }}">CSV (hourly)</a>

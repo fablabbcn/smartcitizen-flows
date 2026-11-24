@@ -354,6 +354,8 @@ textarea.input { min-height: 96px; resize: vertical; font-family: var(--font-mon
 .alert.info { background: var(--color-info-soft); border-color: var(--color-info); }
 .alert.warning { background: var(--color-warning-soft); border-color: var(--color-warning); }
 .alert.error { background: var(--color-danger-soft); border-color: var(--color-danger); }
+.alert.reprocess { margin-top: var(--space-2); }
+.alert.reprocess p { margin: var(--space-2) 0 0; color: var(--color-text-muted); }
 
 /* Badges */
 

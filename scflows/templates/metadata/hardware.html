@@ -53,13 +53,18 @@
             <div class="field full" data-shown-with="long" {% if not (data.blueprints | select('in', long_names) | list) and not data.parameters %}hidden{% endif %}>
                 <label for="parameters">Long processing parameters <span class="optional">(optional, JSON)</span></label>
                 <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false">{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
-                <span class="hint"><code>{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}</code></span>
+                <span class="hint">Example: <code>{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}</code></span>
             </div>
             <div class="field full" data-shown-with="process" {% if not (data.blueprints | select('in', process_names) | list) and not data.process_parameters %}hidden{% endif %}>
                 <label for="process_parameters">Processing parameters <span class="optional">(optional, JSON)</span></label>
                 <textarea class="input" id="process_parameters" name="process_parameters" rows="3" spellcheck="false">{% if data.process_parameters is string %}{{ data.process_parameters }}{% elif data.process_parameters %}{{ data.process_parameters | tojson(indent=2) }}{% endif %}</textarea>
-                <span class="hint"><code>{"SO2": {"function": "alphasense_als", "p": 1e-8, "lam": 100, "lookback_hours": 168}}</code></span>
-                {% if not readonly %}<label class="check small"><input type="checkbox" name="reprocess"> Reprocess devices posted with other parameters</label>{% endif %}
+                <span class="hint">Example: <code>{"SO2": {"function": "alphasense_als", "p": 1e-8, "lam": 100, "lookback_hours": 168}}</code></span>
+                {% if not readonly %}
+                <div class="alert info reprocess">
+                    <label class="check"><input type="checkbox" name="reprocess"> When saving, reprocess from the start the devices posted with other parameters</label>
+                    <p class="small">When selected, the devices of this hardware whose data was posted with different processing parameters are processed again from their first hardware version, in consecutive runs up to their last reading. Readings for which the new processing produces no value (for instance, the six hours following a data gap with <code>alphasense_als</code>) retain their previous values, since the Smart Citizen API does not allow readings to be deleted. When not selected, only new readings are processed with these parameters, and the affected devices are listed after saving.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

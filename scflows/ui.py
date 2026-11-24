@@ -164,7 +164,7 @@ def render_hardware(name, data, check=None, new=False):
                            blueprints=blueprints, readonly=not current_user.is_admin,
                            devices=[] if new else devices.devices(current_user.identity, [name]),
                            attachments=[] if new else attachments.attachments_of(name),
-                           max_attachment_mb=attachments.MAX_BYTES // (1024 * 1024), extensions=attachments.EXTENSIONS,
+                           extensions=attachments.EXTENSIONS,
                            uncalibrated=devices.uncalibrated([hardware])[name] if hardware else [])
 
 

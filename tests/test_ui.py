@@ -216,7 +216,7 @@ def test_delete_confirmation_is_escaped(client):
     sign_in(client, 'admin')
 
     page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
-    assert 'data-confirm="Delete hardware SCAS_TEST1?"' in page
+    assert 'data-confirm="Delete hardware SCAS_TEST1? Devices that use it' in page
 
 
 def test_delete_requires_admin(client):
@@ -445,6 +445,12 @@ def test_long_parameters_and_jobs_follow_the_blueprints(client, monkeypatch):
 
     page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
     assert 'data-shown-with="long" hidden' in page and 'data-kind="long"' in page
+    assert 'data-shown-with="process" hidden' not in page
+
+    # Without its process blueprint (before saving), no processing parameters
+    page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_long'], action='add_version'),
+                       follow_redirects=True).get_data(as_text=True)
+    assert 'data-shown-with="process" hidden' in page and 'data-shown-with="long" hidden' not in page
 
     page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_air', 'test_long']),
                        follow_redirects=True).get_data(as_text=True)

@@ -29,7 +29,6 @@
             <div class="field full">
                 <label for="name">Name</label>
                 <input class="input mono" id="name" name="name" value="{{ name }}" placeholder="SCAS220001" required>
-                <span class="hint">Letters, numbers, "_" and "-". Devices refer to it in their postprocessing hardware url.</span>
             </div>
             {% endif %}
             <div class="field full">
@@ -39,7 +38,6 @@
                     <label class="check"><input type="checkbox" name="blueprints" value="{{ blueprint.name }}" data-kind="{{ blueprint.kind }}" {% if blueprint.name in data.blueprints %}checked{% endif %}> <span class="mono">{{ blueprint.name }}</span> <span class="badge plain">{{ blueprint.kind }}</span></label>
                     {% endfor %}
                 </div>
-                <span class="hint">Its devices get a job for each kind: a long blueprint adds long and backup jobs.</span>
             </div>
             <div class="field">
                 <label for="description">Description</label>
@@ -49,17 +47,18 @@
                 <label for="comment">Comment <span class="optional">(optional)</span></label>
                 <input class="input" id="comment" name="comment" value="{{ data.comment or '' }}">
             </div>
+            {# The parameters of a kind of blueprint: only with one of that kind, or with parameters to remove #}
             {% set long_names = blueprints | selectattr('kind', 'equalto', 'long') | map(attribute='name') | list %}
-            {# Only with a long blueprint, or parameters to remove #}
+            {% set process_names = blueprints | selectattr('kind', 'equalto', 'process') | map(attribute='name') | list %}
             <div class="field full" data-shown-with="long" {% if not (data.blueprints | select('in', long_names) | list) and not data.parameters %}hidden{% endif %}>
                 <label for="parameters">Long processing parameters <span class="optional">(optional, JSON)</span></label>
-                <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false" placeholder='{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}'>{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
-                <span class="hint">Per channel, over its sensor types. <code>function</code>: algorithm.</span>
+                <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false">{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
+                <span class="hint"><code>{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}</code></span>
             </div>
-            <div class="field full">
+            <div class="field full" data-shown-with="process" {% if not (data.blueprints | select('in', process_names) | list) and not data.process_parameters %}hidden{% endif %}>
                 <label for="process_parameters">Processing parameters <span class="optional">(optional, JSON)</span></label>
-                <textarea class="input" id="process_parameters" name="process_parameters" rows="3" spellcheck="false" placeholder='{"NO2": {"function": "alphasense_803_04"}}'>{% if data.process_parameters is string %}{{ data.process_parameters }}{% elif data.process_parameters %}{{ data.process_parameters | tojson(indent=2) }}{% endif %}</textarea>
-                <span class="hint">Per channel, over the process blueprint. <code>function</code>: algorithm, <code>lookback_hours</code>: hours loaded before the new readings.</span>
+                <textarea class="input" id="process_parameters" name="process_parameters" rows="3" spellcheck="false">{% if data.process_parameters is string %}{{ data.process_parameters }}{% elif data.process_parameters %}{{ data.process_parameters | tojson(indent=2) }}{% endif %}</textarea>
+                <span class="hint"><code>{"SO2": {"function": "alphasense_als", "p": 1e-8, "lam": 100, "lookback_hours": 168}}</code></span>
                 {% if not readonly %}<label class="check small"><input type="checkbox" name="reprocess"> Reprocess devices posted with other parameters</label>{% endif %}
             </div>
         </div>
@@ -155,7 +154,6 @@
                 <input class="input" name="description" placeholder="Description (optional)" maxlength="255" aria-label="Description">
                 <button class="btn primary" type="submit">Attach</button>
             </form>
-            <p class="hint">{{ extensions | join(', ') }}, up to {{ max_attachment_mb }} MB.</p>
         </div>
         {% endif %}
     </div>
@@ -167,9 +165,8 @@
     <div class="card-body">
         <div>
             <h3>Delete hardware</h3>
-            <p class="hint">Devices that use {{ name }} can no longer be processed. The history is kept.</p>
         </div>
-        <form method="POST" action="{{ url_for('ui.delete', kind='hardware', key=name) }}" data-confirm="Delete hardware {{ name }}?">
+        <form method="POST" action="{{ url_for('ui.delete', kind='hardware', key=name) }}" data-confirm="Delete hardware {{ name }}? Devices that use it can no longer be processed. The history is kept.">
             {{ csrf() }}
             <button class="btn danger" type="submit">Delete</button>
         </form>

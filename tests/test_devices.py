@@ -70,7 +70,8 @@ def test_device_page(client):
     assert f'href="/jobs/runs/{run.id}"' in text and 'DATA_POSTING_FAILED' in text
 
     sign_in(client, 'researcher', hardware=['SCAS_TEST2'], devices=[2])
-    page(client, '/jobs/devices/2', 403)
+    page(client, '/jobs/devices/2')
+    page(client, '/jobs/devices/1', 403)
 
 
 def test_hardware_page_lists_its_devices(client):
@@ -234,3 +235,44 @@ def test_jobs_and_health_tables_show_the_owner(client):
     for path in ('/jobs/', '/health/'):
         text = page(client, path)
         assert '<th data-sort>User</th>' in text and '>maaberge</td>' in text, path
+
+
+def test_researchers_only_see_the_jobs_of_their_devices(client):
+    process, other_process = jobs.find_job(1, 'process'), jobs.find_job(2, 'process')
+    run = JobRun(job=process, device_id=1, task='process', state='success', message='PROCESSED AND UPLOADED')
+    other = JobRun(job=other_process, device_id=2, task='process', state='success')
+    db.session.add_all([run, other])
+    db.session.commit()
+    sign_in(client, 'researcher', ['SCAS_TEST1'], [1])
+
+    text = page(client, '/jobs/')
+    assert 'href="/jobs/devices/1"' in text and 'href="/jobs/devices/2"' not in text and 'read only' in text
+    assert 'Sync now' not in text and 'Run now' not in text and 'Pause' not in text
+
+    text = page(client, '/jobs/devices/1')
+    assert 'PROCESSED AND UPLOADED' in text
+    assert 'Run now' not in text and 'Reprocess' not in text and 'Last sync' not in text
+    assert 'PROCESSED AND UPLOADED' in page(client, f'/jobs/runs/{run.id}')
+
+    page(client, '/jobs/devices/2', 403)
+    page(client, f'/jobs/runs/{other.id}', 403)
+
+
+def test_researchers_cannot_run_jobs(client):
+    process = jobs.find_job(1, 'process')
+    sign_in(client, 'researcher', ['SCAS_TEST1'], [1])
+
+    for path in [f'/jobs/{process.id}/run', f'/jobs/{process.id}/pause', f'/jobs/{process.id}/reprocess', '/jobs/sync']:
+        assert client.post(path, data={'csrf': 'token'}).status_code == 403, path
+    assert not process.paused and process.reprocess is None
+
+
+def test_overview_counts_the_jobs_of_researchers(client):
+    jobs.find_job(2, 'process').paused = True
+    db.session.commit()
+    sign_in(client, 'researcher', ['SCAS_TEST1'], [1])
+
+    text = page(client, '/')
+
+    # Device 1: process and backup, both active. Device 2 is not theirs
+    assert '2 active' in text and '0 paused' in text and 'your devices' in text

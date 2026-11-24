@@ -31,6 +31,7 @@
     </div>
 </div>
 
+{% if current_user.is_admin %}
 <section class="section">
     <div class="card">
         <div class="card-header"><h2>Last sync</h2></div>
@@ -52,6 +53,7 @@
         </div>
     </div>
 </section>
+{% endif %}
 
 <section class="section">
     <div class="card">
@@ -70,7 +72,7 @@
     <div class="card">
         <div class="table-wrap">
             <table class="table">
-                <thead><tr><th>Task</th><th>Status</th><th class="num">Every</th><th>Next run</th><th>Last run</th><th class="actions"><span class="sr-only">Actions</span></th></tr></thead>
+                <thead><tr><th>Task</th><th>Status</th><th class="num">Every</th><th>Next run</th><th>Last run</th>{% if current_user.is_admin %}<th class="actions"><span class="sr-only">Actions</span></th>{% endif %}</tr></thead>
                 <tbody>
                 {% for job in jobs %}
                     {% set last = latest.get(job.id) %}
@@ -80,14 +82,15 @@
                         <td class="num">{{ job.interval_hours }} h</td>
                         <td class="nowrap">{{ datetime(job.next_run_at) }}</td>
                         <td>{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
-                        <td class="actions">{{ job_actions(job, next=request.path) }}</td>
+                        {% if current_user.is_admin %}<td class="actions">{{ job_actions(job, next=request.path) }}</td>{% endif %}
                     </tr>
                 {% else %}
-                    <tr><td colspan="6" class="empty">No jobs for this device</td></tr>
+                    <tr><td colspan="{{ 6 if current_user.is_admin else 5 }}" class="empty">No jobs for this device</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
+        {% if current_user.is_admin %}
         {# Any task, also without a job (e.g. a dry run before adding one) #}
         <div class="card-body">
             <form class="inline-form" method="POST" action="{{ url_for('jobs_ui.run_device') }}">
@@ -106,6 +109,7 @@
             {% if stale and not process_job.reprocess %}
             <div class="alert warning">Posted with other parameters than its hardware has now, for: {{ stale | join(', ') }}.</div>
             {% endif %}
+            {% if current_user.is_admin %}
             <form class="inline-form" method="POST" action="{{ url_for('jobs_ui.reprocess_job', job_id=process_job.id) }}" data-confirm="Process device {{ device_id }} again? {{ old_readings }}.">
                 {{ csrf() }}
                 <input type="hidden" name="next" value="{{ request.path }}">
@@ -115,7 +119,9 @@
                 <button class="btn warning" type="submit">Reprocess</button>
             </form>
             <p class="hint">From that date (empty: the first hardware version) to the last reading. {{ old_readings }}.</p>
+            {% endif %}
         </div>
+        {% endif %}
         {% endif %}
     </div>
 </section>

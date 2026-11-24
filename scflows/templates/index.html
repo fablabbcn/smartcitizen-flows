@@ -15,7 +15,7 @@
     {% if jobs is not none %}
     <a class="card section-card" href="{{ url_for('jobs_ui.index') }}">
         <h2>Jobs</h2>
-        <p>Processing and backups per device.</p>
+        <p>{% if current_user.is_admin %}Processing and backups per device.{% else %}Processing and backups of your devices.{% endif %}</p>
         <div class="figures">
             {{ badge('active', jobs.active ~ ' active') }}
             {{ badge('paused', jobs.paused ~ ' paused') }}

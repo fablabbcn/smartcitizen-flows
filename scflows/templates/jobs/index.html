@@ -5,20 +5,27 @@
 <div class="page-header">
     <div>
         <h1>Jobs</h1>
+        {% if current_user.is_admin %}
         <p class="hint">
             {% if sync_running %}{{ badge('running', 'sync running') }} New and changed jobs appear when it finishes.
             {% elif last_sync %}{% if last_sync.run_id %}<a href="{{ url_for('jobs_ui.run', run_id=last_sync.run_id) }}">Last sync</a>{% else %}Last sync{% endif %} {{ last_sync.finished_at[:16] | replace('T', ' ') }} UTC ({{ last_sync.source }}){% if last_sync.error %}: <span class="badge failed">failed</span> {{ last_sync.error }}{% elif last_sync.report %}: {{ last_sync.report | sync_summary }}{% endif %}
             {% else %}No sync recorded yet.{% endif %}
         </p>
+        {% else %}
+        <p class="hint">Jobs of your devices (read only)</p>
+        {% endif %}
     </div>
+    {% if current_user.is_admin %}
     <div class="actions">
         <form method="POST" action="{{ url_for('jobs_ui.sync_now') }}">
             {{ csrf() }}
             <button class="btn" type="submit" {% if sync_running %}disabled{% endif %} title="Create, enable and disable jobs from the Smart Citizen API now">Sync now</button>
         </form>
     </div>
+    {% endif %}
 </div>
 
+{% if current_user.is_admin %}
 {% if not posting_enabled %}
 <div class="alerts"><div class="alert warning">Posting is disabled: <code>SC_BEARER</code> is not set. Processing runs without "Dry run" are aborted (<code>NO_TOKEN</code>).</div></div>
 {% endif %}
@@ -44,6 +51,7 @@
         </form>
     </div></div>
 </div>
+{% endif %}
 
 <section class="section">
     <div class="card" data-table>
@@ -56,6 +64,7 @@
             </nav>
         </div>
         {{ table_tools('Filter by device, hardware or status') }}
+        {% if current_user.is_admin %}
         <form id="selection" class="table-tools selection" method="POST" action="{{ url_for('jobs_ui.pause_selection') }}">
             {{ csrf() }}
             {% if task %}<input type="hidden" name="task" value="{{ task }}">{% endif %}
@@ -65,18 +74,19 @@
                 <button class="btn sm success" type="submit" name="action" value="resume">Resume selected</button>
             </span>
         </form>
+        {% endif %}
         <div class="table-wrap scroll">
             <table class="table compact">
                 <thead><tr>
-                    <th class="select"><input type="checkbox" data-select-all aria-label="Select the jobs shown" title="Select the jobs shown (after filtering)"></th>
+                    {% if current_user.is_admin %}<th class="select"><input type="checkbox" data-select-all aria-label="Select the jobs shown" title="Select the jobs shown (after filtering)"></th>{% endif %}
                     <th data-sort>Device</th><th data-sort>User</th><th data-sort>Hardware</th><th data-sort>Task</th><th data-sort>Status</th>
-                    <th data-sort>Next run</th><th data-sort>Last run</th><th class="actions"><span class="sr-only">Actions</span></th>
+                    <th data-sort>Next run</th><th data-sort>Last run</th>{% if current_user.is_admin %}<th class="actions"><span class="sr-only">Actions</span></th>{% endif %}
                 </tr></thead>
                 <tbody>
                 {% for job in jobs %}
                     {% set last = latest.get(job.id) %}
                     <tr>
-                        <td class="select"><input type="checkbox" name="job_id" value="{{ job.id }}" form="selection" aria-label="Select {{ job.task }} of device {{ job.device_id }}"></td>
+                        {% if current_user.is_admin %}<td class="select"><input type="checkbox" name="job_id" value="{{ job.id }}" form="selection" aria-label="Select {{ job.task }} of device {{ job.device_id }}"></td>{% endif %}
                         <td class="clip narrow" title="{{ names.get(job.device_id, '') }} #{{ job.device_id }}"><a href="{{ url_for('jobs_ui.device', device_id=job.device_id) }}">{{ names.get(job.device_id) or 'Device' }}</a> <span class="muted small">#{{ job.device_id }}</span></td>
                         <td class="clip narrow" title="{{ job.device_owner or '' }}">{{ job.device_owner or '' }}</td>
                         <td class="nowrap">{% if job.hardware %}{{ hardware_link(job.hardware) if job.hardware in hardware else job.hardware }}
@@ -87,10 +97,10 @@
                         <td class="nowrap">{{ job_status(job) }}</td>
                         <td class="nowrap" data-value="{{ job.next_run_at.isoformat() }}">{{ short_datetime(job.next_run_at) }}</td>
                         <td class="clip narrow" title="{{ last.message if last and last.message else '' }}">{% if last %}<a href="{{ url_for('jobs_ui.run', run_id=last.id) }}">{{ badge(last.state) }}</a> <span class="muted small">{{ last.message or '' }}</span>{% else %}<span class="muted small">never</span>{% endif %}</td>
-                        <td class="actions">{{ job_actions(job) }}</td>
+                        {% if current_user.is_admin %}<td class="actions">{{ job_actions(job) }}</td>{% endif %}
                     </tr>
                 {% else %}
-                    <tr><td colspan="9" class="empty">No jobs yet. Jobs are created by the hourly sync or with "Add job".</td></tr>
+                    <tr><td colspan="{{ 9 if current_user.is_admin else 7 }}" class="empty">No jobs yet. Jobs are created by the hourly sync or with "Add job".</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

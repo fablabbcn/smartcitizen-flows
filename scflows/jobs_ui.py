@@ -1,20 +1,27 @@
-''' Web interface for device jobs, for admins '''
+''' Web interface for device jobs: admins see and run all of them, researchers only see the ones of their devices '''
 from datetime import datetime, timezone
 from urllib.parse import unquote, urlsplit
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from . import db, devices
-from .auth import admin_required
+from . import db, devices, health
+from .auth import admin_required, requires_ui_role
 from .forms import protect
 from .jobs import (OLD_READINGS, request_reprocess, stale_channels, add_manual_job, device_sync, find_job, last_sync, queue_run, queue_sync, set_paused, set_paused_many,
                    sync_running, sync_summary)
 from .config import posting_enabled
+from .identity import EDITORS
 from .models import DeviceHealth, Job, JobRun
 
 jobs_ui = Blueprint('jobs_ui', __name__, url_prefix='/jobs')
 protect(jobs_ui)
+editors_required = requires_ui_role(*EDITORS)
+
+
+def check_device(device_id):
+    if not health.can_see_device(current_user.identity, device_id):
+        abort(403, 'Researchers can only see the jobs of their devices')
 
 
 @jobs_ui.app_template_filter('sync_summary')
@@ -48,27 +55,36 @@ def latest_runs(job_ids):
 
 
 @jobs_ui.get('/')
-@admin_required
+@editors_required
 def index():
     task = request.args.get('task') if request.args.get('task') in Job.TASKS else None
+    # None: all the devices (admins)
+    owned = health.device_ids_of(current_user.identity)
     query = db.select(Job).order_by(Job.task, Job.device_id)
+    counts_query = db.select(Job.task, db.func.count(Job.id)).group_by(Job.task)
+    runs_query = db.select(JobRun).order_by(JobRun.id.desc()).limit(50)
+    if owned is not None:
+        query = query.where(Job.device_id.in_(owned))
+        counts_query = counts_query.where(Job.device_id.in_(owned))
+        runs_query = runs_query.where(JobRun.device_id.in_(owned))
     if task:
         query = query.filter_by(task=task)
     jobs = db.session.execute(query).scalars().all()
-    counts = dict(db.session.execute(db.select(Job.task, db.func.count(Job.id)).group_by(Job.task)).all())
-    runs = db.session.execute(db.select(JobRun).order_by(JobRun.id.desc()).limit(50)).scalars().all()
+    counts = dict(db.session.execute(counts_query).all())
+    runs = db.session.execute(runs_query).scalars().all()
     hardware = devices.hardware_by_name(job.hardware for job in jobs)
     return render_template('jobs/index.html', jobs=jobs, latest=latest_runs([job.id for job in jobs]), runs=runs,
-                           task=task, counts=counts, names=device_names(), last_sync=last_sync(),
+                           task=task, counts=counts, names=device_names(), last_sync=last_sync() if owned is None else None,
                            sync_running=sync_running(), hardware=hardware,
                            posting_enabled=posting_enabled(),
                            uncalibrated=devices.uncalibrated(hardware.values()))
 
 
 @jobs_ui.get('/devices/<int:device_id>')
-@admin_required
+@editors_required
 def device(device_id):
     ''' A device in flows: its jobs, hardware, calibrations, storage and latest runs '''
+    check_device(device_id)
     jobs = db.session.execute(db.select(Job).filter_by(device_id=device_id).order_by(Job.task)).scalars().all()
     runs = db.session.execute(db.select(JobRun).filter_by(device_id=device_id).order_by(JobRun.id.desc())
                               .limit(30)).scalars().all()
@@ -104,11 +120,14 @@ def sync_now():
 
 
 @jobs_ui.get('/runs/<int:run_id>')
-@admin_required
+@editors_required
 def run(run_id):
     item = db.session.get(JobRun, run_id)
     if item is None:
         abort(404)
+    # Syncs have no device: only admins see them
+    if not current_user.is_admin:
+        check_device(item.device_id)
     context = item.context or {}
     # Sensor ids of the hardware as the run saw them: {sensor id: calibrated}
     missing = set(context.get('uncalibrated') or [])

@@ -79,6 +79,8 @@ async def process_device(device, dry_run, task_log, context):
     d = sc.Device(params=sc.APIParams(id=device), blueprint_kind=Blueprint.PROCESS)
     task_state = [None, None]
     health = None
+    # Sensors only for the checks, and the period of the new readings to check them on
+    check_only, checked, new_readings = [], None, config._max_load_amount
 
     if d:
         task_log.append(logger_handler(f'Device {device} Initialized'))
@@ -119,6 +121,11 @@ async def process_device(device, dry_run, task_log, context):
         # Only load the sensors that the blueprint channels need
         d.options.channels = d.required_sensors
         task_log.append(logger_handler(f'Sensors to load: {d.options.channels}'))
+        # The sensors that only the checks name are loaded after posting, for the new readings
+        check_only = [sensor for sensor in check_sensors(d) if sensor not in d.options.channels]
+        context['check_sensors'] = check_only
+        if check_only:
+            task_log.append(logger_handler(f'Sensors for the checks only: {check_only}'))
 
         # The readings of the lookback (one a minute) do not count against the limit of new ones
         new_readings = config._reprocess_load_amount if context.get('reprocess') else config._max_load_amount
@@ -136,6 +143,8 @@ async def process_device(device, dry_run, task_log, context):
             if await d.load():
                 task_log.append(logger_handler(f'Device was loaded: {period(d.data)}'))
                 context.update(rows=len(d.data), loaded_from=iso(d.data.index.min()), loaded_to=iso(d.data.index.max()))
+                if not d.data.empty:
+                    checked = (since if lookback else d.data.index.min(), d.data.index.max())
 
                 # Process it (a channel graph with a cycle raises): the checks run anyway
                 error = None
@@ -204,9 +213,80 @@ async def process_device(device, dry_run, task_log, context):
         task_log.append(logger_handler(f'Device {device} not valid', 'error'))
         task_state = ['ABORTED', 'DEVICE_NOT_VALID']
 
+    if health is not None and check_only and checked is not None:
+        health = await with_check_sensors(d, health, check_only, checked, new_readings, logger_handler, task_log)
+
     task_log.append(logger_handler(f'Concluded job for {device}'))
 
     return task_log, task_state, health
+
+
+def check_sensors(d):
+    '''
+    Sensors (source names) of the device that the checks of its blueprint name: in their kwargs or args, also
+    nested (e.g. the columns of gap_sizes). Not the channels of the blueprint, which processing calculates
+    '''
+    names = set()
+
+    def collect(value):
+        if isinstance(value, str):
+            names.add(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                collect(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                collect(item)
+
+    for check in d.checks or []:
+        collect(getattr(check, 'kwargs', None))
+        collect(getattr(check, 'args', None))
+    sensor_map = d.__sensor_map__()
+    channels = {channel.name for channel in getattr(d, 'channels', [])}
+    return sorted({sensor_map[name] for name in names - channels if name in sensor_map})
+
+
+async def with_check_sensors(d, health, sensors, checked, limit, logger_handler, task_log):
+    '''
+    Loads the sensors that only the checks need, for the new readings (checked: their first and last time), runs
+    the checks on them and adds their columns to the health of the run. The data of the run is kept
+    '''
+    data, options = d.data, d.options
+    saved = {name: getattr(options, name, None) for name in ('channels', 'min_date', 'max_date', 'limit')}
+    start, end = checked
+    options.channels, options.limit = sensors, limit
+    options.min_date, options.max_date = start.isoformat(), end.isoformat()
+    try:
+        loaded = await d.load()
+        extra = d.data if loaded else None
+    except Exception as error:
+        task_log.append(logger_handler(f'Sensors for the checks not loaded: {type(error).__name__}: {error}', 'warning'))
+        extra = None
+    finally:
+        for name, value in saved.items():
+            setattr(options, name, value)
+    if extra is None or extra.empty:
+        d.data = data
+        task_log.append(logger_handler('No readings of the sensors for the checks', 'warning'))
+        return health
+    task_log.append(logger_handler(f'Sensors for the checks loaded: {period(extra)}'))
+    try:
+        extra_health = health_checks(d, logger_handler, task_log)
+    finally:
+        d.data = data
+    if extra_health is None:
+        return health
+    # The columns of each check, by its name
+    checks = {check['name']: check for check in health['checks']}
+    for check in extra_health['checks']:
+        if check['name'] not in checks:
+            health['checks'].append(check)
+            continue
+        checks[check['name']]['columns'].update({column: summary for column, summary in check.get('columns', {}).items()
+                                                 if column not in checks[check['name']]['columns']})
+        if str(check.get('status', '')).startswith('error') and checks[check['name']].get('status') == 'ok':
+            checks[check['name']]['status'] = check['status']
+    return health
 
 
 def health_checks(d, logger_handler, task_log):

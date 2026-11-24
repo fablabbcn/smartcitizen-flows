@@ -41,6 +41,8 @@ class FakeDevice:
         self.processed = False
         self.postprocessing_updated = False
         self.posted = None
+        # What each load asked for, and the order of loads and posts
+        self.loads, self.calls = [], []
         FakeDevice.instance = self
 
     def use_blueprint(self, name, blueprint):
@@ -50,10 +52,18 @@ class FakeDevice:
                                          kwargs=dict(channel.get('kwargs') or {})) for channel in blueprint['channels']]
         return True
 
+    def __sensor_map__(self):
+        return FakeDevice.options.get('sensor_map', {})
+
     async def load(self):
-        self.loaded = FakeDevice.options.get('load', True)
+        self.loads.append({name: getattr(self.options, name, None) for name in ('channels', 'min_date', 'max_date', 'limit')})
+        self.calls.append('load')
+        # The first load is the run's; a second one, the sensors of the checks
+        first = len(self.loads) == 1
+        self.loaded = FakeDevice.options.get('load', True) if first else FakeDevice.options.get('check_load', True)
         if self.loaded:
-            self.data = FakeDevice.options.get('data', pd.DataFrame({'TEMP': [20.0]}))
+            self.data = FakeDevice.options.get('data', pd.DataFrame({'TEMP': [20.0]})) if first \
+                else FakeDevice.options.get('check_data', pd.DataFrame())
         return self.loaded
 
     def process(self):
@@ -66,13 +76,15 @@ class FakeDevice:
         if FakeDevice.options.get('checks_fail'):
             raise ValueError('bad check')
         self.health = {'start': None, 'end': None, 'rows': len(self.data),
-                       'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
+                       'checks': [{'name': 'GAPS', 'status': 'ok',
+                                   'columns': {column: {'status': 'ok', 'rows': len(self.data)} for column in self.data}}]}
 
     def update_postprocessing_date(self):
         self.postprocessing_updated = FakeDevice.options.get('postprocessing_updated', True)
 
     async def post(self, **kwargs):
         self.posted = kwargs
+        self.calls.append('post')
         # What the Smart Citizen API client records
         self.handler.posted = {'SO2': {'id': 123, 'readings': 1000}}
         self.handler.not_posted = {'SO2_WE': 'no sensor id', 'SO2_AE': 'no sensor id'}
@@ -187,7 +199,7 @@ def test_health_checks_are_returned(run):
     _, device = run()
 
     assert device.returned_health == {'start': None, 'end': None, 'rows': 1, 'device_name': 'Kit 1',
-                                      'blueprint': 'test_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {}}]}
+                                      'blueprint': 'test_air', 'checks': [{'name': 'GAPS', 'status': 'ok', 'columns': {'TEMP': {'status': 'ok', 'rows': 1}}}]}
 
 
 def test_health_checks_also_when_processing_fails(run):
@@ -325,3 +337,55 @@ def test_not_processed_without_a_process_blueprint_in_flows(run, hardware_name):
 
     assert state == ['ABORTED', 'NO_PROCESS_BLUEPRINT']
     assert device.used_blueprint is None and device.loaded is False and device.posted is None
+
+
+# Sensors that only the checks name
+
+CHECKS = [SimpleNamespace(name='FLAT', kwargs={'columns': ['SEN5X_PM_25', 'TEMP', 'NO2']}),
+          SimpleNamespace(name='GAPS', kwargs={'gap_sizes': [{'columns': ['NOISE_A'], 'gap_size_minutes': 10}]})]
+SENSOR_MAP = {'SEN5X_PM_25': 'SEN5X PM2.5', 'NOISE_A': 'ICS43432 Noise', 'TEMP': 'TEMP', 'NO2': 'Alphasense NO2'}
+
+
+def readings(start, hours, **columns):
+    return pd.DataFrame(columns or {'TEMP': 20.0}, index=pd.date_range(start, periods=hours, freq='1h'))
+
+
+def test_the_sensors_of_the_checks_are_loaded_after_posting_for_the_new_readings(run):
+    data = readings(LATEST, 5)
+    check_data = readings(LATEST, 5, **{'SEN5X_PM_25': 3.0, 'NOISE_A': 50.0})
+
+    state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data, check_data=check_data)
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    # TEMP is loaded for processing, NO2 is a channel of the blueprint (as posted, not a sensor to check)
+    assert device.loads[1] == {'channels': ['ICS43432 Noise', 'SEN5X PM2.5'], 'min_date': data.index.min().isoformat(),
+                               'max_date': data.index.max().isoformat(), 'limit': config._max_load_amount}
+    assert device.calls == ['load', 'post', 'load']
+    assert set(device.returned_health['checks'][0]['columns']) == {'TEMP', 'SEN5X_PM_25', 'NOISE_A'}
+    # The run keeps its data and options
+    assert list(device.data.columns) == ['TEMP'] and device.options.channels == ['ADC_48_2', 'TEMP']
+
+
+def test_with_a_lookback_the_sensors_of_the_checks_are_loaded_from_the_new_readings(run):
+    lookback_of(24)
+    data = readings(LATEST - pd.Timedelta(hours=24), 30)
+
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=data,
+                    check_data=readings(LATEST, 6, **{'SEN5X_PM_25': 3.0}))
+
+    assert pd.Timestamp(device.loads[1]['min_date']) == LATEST
+    assert pd.Timestamp(device.loads[1]['max_date']) == data.index.max()
+    assert device.loads[1]['limit'] == config._max_load_amount
+
+
+def test_without_sensors_only_for_the_checks_there_is_one_load(run):
+    _, device = run(dry_run=True, checks=CHECKS, sensor_map={'TEMP': 'TEMP'})
+
+    assert len(device.loads) == 1
+
+
+def test_the_health_is_kept_if_the_sensors_of_the_checks_are_not_loaded(run):
+    state, device = run(dry_run=True, checks=CHECKS, sensor_map=SENSOR_MAP, data=readings(LATEST, 5), check_load=False)
+
+    assert state == ['SUCCESS', 'PROCESSED AND UPLOADED']
+    assert set(device.returned_health['checks'][0]['columns']) == {'TEMP'}

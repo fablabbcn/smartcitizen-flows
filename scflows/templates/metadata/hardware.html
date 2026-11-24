@@ -36,9 +36,10 @@
                 <span class="label-text">Blueprints</span>
                 <div class="row">
                     {% for blueprint in blueprints %}
-                    <label class="check"><input type="checkbox" name="blueprints" value="{{ blueprint.name }}" {% if blueprint.name in data.blueprints %}checked{% endif %}> <span class="mono">{{ blueprint.name }}</span> <span class="badge plain">{{ blueprint.kind }}</span></label>
+                    <label class="check"><input type="checkbox" name="blueprints" value="{{ blueprint.name }}" data-kind="{{ blueprint.kind }}" {% if blueprint.name in data.blueprints %}checked{% endif %}> <span class="mono">{{ blueprint.name }}</span> <span class="badge plain">{{ blueprint.kind }}</span></label>
                     {% endfor %}
                 </div>
+                <span class="hint">Its devices get a job for each kind: a long blueprint adds long and backup jobs.</span>
             </div>
             <div class="field">
                 <label for="description">Description</label>
@@ -48,7 +49,9 @@
                 <label for="comment">Comment <span class="optional">(optional)</span></label>
                 <input class="input" id="comment" name="comment" value="{{ data.comment or '' }}">
             </div>
-            <div class="field full">
+            {% set long_names = blueprints | selectattr('kind', 'equalto', 'long') | map(attribute='name') | list %}
+            {# Only with a long blueprint, or parameters to remove #}
+            <div class="field full" data-shown-with="long" {% if not (data.blueprints | select('in', long_names) | list) and not data.parameters %}hidden{% endif %}>
                 <label for="parameters">Long processing parameters <span class="optional">(optional, JSON)</span></label>
                 <textarea class="input" id="parameters" name="parameters" rows="3" spellcheck="false" placeholder='{"O3": {"function": "alphasense_803_04"}, "NO2": {"lam": 1e9}}'>{% if data.parameters is string %}{{ data.parameters }}{% elif data.parameters %}{{ data.parameters | tojson(indent=2) }}{% endif %}</textarea>
                 <span class="hint">Per channel, over its sensor types. <code>function</code>: algorithm.</span>

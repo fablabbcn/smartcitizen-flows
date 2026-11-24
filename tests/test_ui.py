@@ -429,3 +429,28 @@ def test_jobs_page_shows_device_names(client):
     page = client.get('/jobs/').get_data(as_text=True)
 
     assert '>Rooftop</a>' in page and '>Balcony</a>' in page and 'Old name' not in page
+
+
+def test_long_parameters_and_jobs_follow_the_blueprints(client, monkeypatch):
+    import scflows.ui as ui
+    from scflows import editing
+
+    body = editing.find('blueprint', 'test_air').body
+    editing.save_blueprint('test_long', dict(body, meta={'kind': 'long'}))
+    db.session.commit()
+    syncs = []
+    monkeypatch.setattr(ui, 'sync_running', lambda: False)
+    monkeypatch.setattr(ui, 'queue_sync', lambda username: syncs.append(username) or type('Run', (), {'id': 1}))
+    sign_in(client, 'admin')
+
+    page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
+    assert 'data-shown-with="long" hidden' in page and 'data-kind="long"' in page
+
+    page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_air', 'test_long']),
+                       follow_redirects=True).get_data(as_text=True)
+    assert syncs == ['admin'] and 'sync queued' in page
+    assert 'data-shown-with="long" hidden' not in page
+
+    # Saved again without changing the blueprints: no sync
+    client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_air', 'test_long'], comment='Again'))
+    assert syncs == ['admin']

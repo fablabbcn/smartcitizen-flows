@@ -18,7 +18,7 @@ from .auth import admin_required, requires_ui_role
 from .forms import protect
 from .identity import EDITORS
 from .models import Blueprint as BlueprintModel, Calibration, ParameterSet, SensorName
-from .jobs import after_hardware_change
+from .jobs import after_hardware_change, queue_sync, sync_running
 from .parameters import sensor_types
 from .names import used_by_blueprints
 from . import attachments, calibrations, runlog
@@ -200,9 +200,18 @@ def save_hardware_form(name, new=False):
     if action != 'save' or not check.valid:
         return render_hardware(name, data, check, new=new)
 
+    previous = editing.find('hardware', name)
+    kinds = set(previous.kinds) if previous is not None else set()
     item, _ = editing.save_hardware(name, check.hardware, identity=current_user.identity)
     db.session.commit()
     flash(f'Hardware {name} saved' + (f' with {len(check.warnings)} warnings' if check.warnings else ''))
+    # The jobs of its devices follow its blueprints: a sync creates or disables them now, not in the next hour
+    if not new and set(item.kinds) != kinds:
+        if sync_running():
+            flash('Its blueprints changed: the sync running now, or the next one, updates the jobs of its devices', 'info')
+        else:
+            run = queue_sync(current_user.username)
+            flash(f'Its blueprints changed: sync queued (run {run.id}) to update the jobs of its devices', 'info')
     # Devices posted with the previous processing
     message, _ = after_hardware_change(item, reprocess=bool(request.form.get('reprocess')) and current_user.is_admin)
     if message:

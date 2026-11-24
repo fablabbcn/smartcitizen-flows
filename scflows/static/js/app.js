@@ -435,6 +435,17 @@
     });
   });
 
+  // Fields of a kind of blueprint (hardware form): shown when one of that kind is selected, or if they have a value
+  document.querySelectorAll('[data-shown-with]').forEach(function (field) {
+    var boxes = document.querySelectorAll('input[data-kind="' + field.getAttribute('data-shown-with') + '"]');
+    var input = field.querySelector('textarea, input');
+    var update = function () {
+      var selected = Array.prototype.some.call(boxes, function (box) { return box.checked; });
+      field.hidden = !selected && !(input && input.value.trim());
+    };
+    boxes.forEach(function (box) { box.addEventListener('change', update); });
+  });
+
   // Confirmation for destructive actions
   document.querySelectorAll('form[data-confirm]').forEach(function (form) {
     form.addEventListener('submit', function (event) {

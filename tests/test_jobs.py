@@ -557,9 +557,10 @@ def test_overview_figures(app, client):
     page = client.get('/').get_data(as_text=True)
     assert '2 active' in page and '1 paused' in page and '1 failed in 24 h' in page
 
+    # Researchers: the jobs of their devices (none here)
     sign_in(client, 'researcher')
     page = client.get('/').get_data(as_text=True)
-    assert 'active' not in page and 'hardware' in page
+    assert '0 active' in page and '0 paused' in page and 'failed in 24 h' not in page and 'hardware' in page
 
 
 def test_sync_stores_device_names(app, monkeypatch):

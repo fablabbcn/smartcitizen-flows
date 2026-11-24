@@ -18,11 +18,15 @@ def count(query):
 
 
 def job_figures():
+    ''' Jobs of the devices the user can see (admins all, researchers their own) '''
+    owned = health.device_ids_of(current_user.identity)
     jobs = db.select(db.func.count(Job.id)).filter_by(enabled=True)
-    return {'active': count(jobs.filter_by(paused=False)),
-            'paused': count(jobs.filter_by(paused=True)),
-            'failed': count(db.select(db.func.count(JobRun.id)).where(
-                JobRun.state == JobRun.FAILED, JobRun.finished_at >= now() - timedelta(hours=24)))}
+    failed = db.select(db.func.count(JobRun.id)).where(JobRun.state == JobRun.FAILED,
+                                                       JobRun.finished_at >= now() - timedelta(hours=24))
+    if owned is not None:
+        jobs, failed = jobs.where(Job.device_id.in_(owned)), failed.where(JobRun.device_id.in_(owned))
+    return {'active': count(jobs.filter_by(paused=False)), 'paused': count(jobs.filter_by(paused=True)),
+            'failed': count(failed)}
 
 
 def health_figures():
@@ -44,12 +48,12 @@ def index():
     hardware = visible_hardware(current_user.identity)
     metadata = {'hardware': len(hardware), 'calibrations': len(visible_calibrations(current_user.identity)),
                 'blueprints': len({blueprint.id for item in hardware for blueprint in item.blueprints})}
-    return render_template('index.html', metadata=metadata, jobs=None, health=health_figures())
+    return render_template('index.html', metadata=metadata, jobs=job_figures(), health=health_figures())
 
 
 # Messages for the web interface. Others show the description of the error
 MESSAGES = {
-    403: 'Your account cannot open this page. Jobs are for Smart Citizen admins only.',
+    403: 'Your account cannot open this page: it is for Smart Citizen admins only.',
     404: 'This page does not exist, or the item was deleted.',
     500: 'Something went wrong on our side. Try again, and check the web logs if it keeps failing.',
 }

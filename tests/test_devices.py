@@ -265,3 +265,14 @@ def test_researchers_cannot_run_jobs(client):
     for path in [f'/jobs/{process.id}/run', f'/jobs/{process.id}/pause', f'/jobs/{process.id}/reprocess', '/jobs/sync']:
         assert client.post(path, data={'csrf': 'token'}).status_code == 403, path
     assert not process.paused and process.reprocess is None
+
+
+def test_overview_counts_the_jobs_of_researchers(client):
+    jobs.find_job(2, 'process').paused = True
+    db.session.commit()
+    sign_in(client, 'researcher', ['SCAS_TEST1'], [1])
+
+    text = page(client, '/')
+
+    # Device 1: process and backup, both active. Device 2 is not theirs
+    assert '2 active' in text and '0 paused' in text and 'your devices' in text

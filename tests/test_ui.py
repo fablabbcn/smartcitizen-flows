@@ -6,7 +6,7 @@ from flask import g
 
 from scflows import db
 from scflows.metadata import import_metadata
-from scflows.models import Calibration, Hardware, Revision, SensorName
+from scflows.models import Calibration, Hardware, JobRun, Revision, SensorName
 
 from conftest import DATA, USERS
 
@@ -440,7 +440,7 @@ def test_long_parameters_and_jobs_follow_the_blueprints(client, monkeypatch):
     db.session.commit()
     syncs = []
     monkeypatch.setattr(ui, 'sync_running', lambda: False)
-    monkeypatch.setattr(ui, 'queue_sync', lambda username: syncs.append(username) or type('Run', (), {'id': 1}))
+    monkeypatch.setattr(ui, 'queue_sync', lambda username: syncs.append(username) or JobRun(id=1, state=JobRun.QUEUED))
     sign_in(client, 'admin')
 
     page = client.get('/metadata/hardware/SCAS_TEST1').get_data(as_text=True)
@@ -460,3 +460,37 @@ def test_long_parameters_and_jobs_follow_the_blueprints(client, monkeypatch):
     # Saved again without changing the blueprints: no sync
     client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_air', 'test_long'], comment='Again'))
     assert syncs == ['admin']
+
+
+def test_a_sync_that_cannot_be_queued_is_reported(client, monkeypatch):
+    import scflows.ui as ui
+    from scflows import editing
+
+    body = editing.find('blueprint', 'test_air').body
+    editing.save_blueprint('test_long', dict(body, meta={'kind': 'long'}))
+    db.session.commit()
+    monkeypatch.setattr(ui, 'sync_running', lambda: False)
+    monkeypatch.setattr(ui, 'queue_sync', lambda username: JobRun(id=1, state=JobRun.FAILED, message='NOT_QUEUED: no broker'))
+    sign_in(client, 'admin')
+
+    page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_air', 'test_long']),
+                       follow_redirects=True).get_data(as_text=True)
+
+    assert 'could not be queued (NOT_QUEUED: no broker)' in page and 'Use Sync now in Jobs' in page
+    assert 'sync queued' not in page
+
+
+def test_blueprints_changed_during_a_sync_wait_for_the_next_one(client, monkeypatch):
+    import scflows.ui as ui
+    from scflows import editing
+
+    body = editing.find('blueprint', 'test_air').body
+    editing.save_blueprint('test_long', dict(body, meta={'kind': 'long'}))
+    db.session.commit()
+    monkeypatch.setattr(ui, 'sync_running', lambda: True)
+    sign_in(client, 'admin')
+
+    page = client.post('/metadata/hardware/SCAS_TEST1', data=hardware_form(blueprints=['test_air', 'test_long']),
+                       follow_redirects=True).get_data(as_text=True)
+
+    assert 'the next hourly sync updates the jobs' in page

@@ -444,6 +444,8 @@
       field.hidden = !selected && !(input && input.value.trim());
     };
     boxes.forEach(function (box) { box.addEventListener('change', update); });
+    // Cleared while its blueprint is not selected: hidden
+    if (input) input.addEventListener('input', update);
   });
 
   // Confirmation for destructive actions

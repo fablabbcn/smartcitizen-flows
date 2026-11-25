@@ -58,7 +58,7 @@ def device(device_id):
                            hardware_name=hardware_name,
                            can_see_hardware=bool(hardware_name) and can_see(current_user.identity, 'hardware', hardware_name)
                            and editing.find('hardware', hardware_name) is not None,
-                           latest=items[0], problem_ratio=health.PROBLEM_RATIO, keep_days=health.KEEP_DAYS,
+                           latest=items[0], problem_ratio=health.PROBLEM_RATIO,
                            long_latest=long_latest, long_items=long_items,
                            long_run=storage.read_run_info(device_id, long_latest.blueprint) if long_latest else None,
                            charts=long_charts(device_id, long_latest.blueprint) if long_latest else [])

@@ -306,7 +306,7 @@ def test_device_page_shows_long_results(app, client, stored):
     page = client.get('/health/1').get_data(as_text=True)
 
     assert 'Long processing' in page and 'test_long' in page
-    assert page.count('<svg class="chart"') == 2 and '2026-08-01 to 2026-08-04' in page
+    assert page.count('<svg class="chart"') == 2
     assert 'Parameters of the last run' in page
 
 

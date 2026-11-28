@@ -6,7 +6,7 @@ Flows is the ata processing toolset for the [Smart Citizen](https://smartcitizen
 
 ## Processing
 
-A device is processed when its postprocessing in the Smart Citizen API has a `hardware_url`. Each unit has processing blueprint attached including:
+A device is processed when its postprocessing in the Smart Citizen API has a valid `hardware_url`. Each unit has processing blueprint attached, that specifies what transformations or checks we do:
 
 | Blueprint | Job | Description |
 |---|---|---|
@@ -14,7 +14,7 @@ A device is processed when its postprocessing in the Smart Citizen API has a `ha
 | `long` | `long`, weekly (`meta.every_days`) | Backs the device up, processes the last `meta.window_days` (90 by default) of its backups with algorithms that need months of data (baselines), and stores the results in S3. Nothing is posted |
 | `backup` | `backup`, every 6 hours | Backs the data up to S3, in periods of 20 days |
 
-Every run also runs the health checks of its blueprint (gaps, implausible, flat and outlier values).
+Valid `hardware_urls` are available in flows.smartcitizen.me. Every `process` or `long` data processing run also checks for gaps, implausible, flat and outlier values on each device.
 
 ## Web interface
 
